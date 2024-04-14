@@ -5,6 +5,8 @@
 #include <Wire.h>
 #include <VL53L1X.h>
 #include "wrapper_bno08x.h"
+#include "roboFace.h"
+#include "motorControl.h"
 
 // Audio streaming
 #include "AudioFileSourceICYStream.h"
@@ -14,11 +16,7 @@
 
 // Icecast stream URL
 const char *URL="http://xavier01.local:8000/speech.mp3";
-
-AudioGeneratorMP3 *audio;
-AudioFileSourceICYStream *file;
-AudioFileSourceBuffer *buff;
-AudioOutputI2S *out;
+bool audioStreamRunning = false;
 
 const int I2S_BCLK_pin = 16;
 const int I2S_WCLK_pin = 17;
@@ -28,6 +26,13 @@ const int I2S_DOUT_pin = 21;
 VL53L1X vl53l1x_sensor;
 wrapper_bno08x wrapper_bno08x;
 
+// LED Display
+roboFace roboFace;
+String displayText;
+
+// Motor control
+motorControl motorControl;
+
 #define FILESYSTEM LittleFS
 FSWebServer WebServer(FILESYSTEM, 80);
 bool apMode = false;
@@ -35,16 +40,24 @@ bool apMode = false;
 TaskHandle_t Webserver;
 TaskHandle_t wrapper_bno08xUpdate;
 TaskHandle_t AudioStream;
+TaskHandle_t motor;
+TaskHandle_t face;
 
 void setup(){
   Serial.begin(115200);
   Serial.println("Booting Sappie\n");
   
-  Serial.println("Start I2C\n");
+  // XAIO Sense/Camera wake up ping
+  pinMode(25, OUTPUT);
+  digitalWrite(25, LOW);
+
+  roboFace.begin();
+  
   Wire.begin();
   Wire.setClock(400000); // use 400 kHz I2C
 
-  Serial.println("Booting Webserver\n");
+  motorControl.begin(Wire);
+  
   startWebserver();
 
   // Starting wrapper_bno08x
@@ -65,26 +78,15 @@ void setup(){
       Serial.println("Failed to detect and initialize wrapper_bno08x (gyro) sensor!");
   }
 
-  Serial.println("Starting audio stream\n");
-
-  // Audio stream
-  audioLogger = &Serial;
-  file = new AudioFileSourceICYStream(URL);
-  buff = new AudioFileSourceBuffer(file, 4096);
-  buff->RegisterStatusCB(StatusCallback, (void*)"buffer");
-  out = new AudioOutputI2S();
-  out->SetOutputModeMono(true);
-
-  out->SetPinout(I2S_BCLK_pin, I2S_WCLK_pin, I2S_DOUT_pin);
-
-  audio = new AudioGeneratorMP3();
-  audio->RegisterStatusCB(StatusCallback, (void*)"audio");
-  audio->begin(buff, out);
-
   Serial.println("Boot complete...\n");
 
   // Starting tasks
   Serial.println("Tasks starting\n");
+
+  motorControl.bothArmsDown();
+
+  Serial.println("Display start task starting\n");
+  xTaskCreatePinnedToCore(displayTextTask, "displayText", 5000, NULL, 10, &face, 0);
 
   Serial.println("Webserver task starting\n");
   xTaskCreatePinnedToCore(WebServerTask, "Webserver", 10000, NULL, 5, &Webserver, 0);
@@ -92,8 +94,7 @@ void setup(){
   Serial.println("wrapper_bno08x update task starting\n");
   xTaskCreatePinnedToCore(bno08xUpdateTask, "wrapper_bno08x", 5000, NULL, 10, &wrapper_bno08xUpdate, 0);
 
-  Serial.println("Audio streaming starting\n");
-  xTaskCreatePinnedToCore(audioStreamTask, "AudioStream", 5000, NULL, 5, &AudioStream, 1);
+  roboFace.face_smile();
 
   vTaskDelete(NULL);
 
@@ -121,10 +122,19 @@ void bno08xUpdateTask(void* pvParameters) {
 }
 
 void audioStreamTask(void* pvParameters) {
+
+  AudioGeneratorMP3 *audio;
+  AudioFileSourceICYStream *file;
+  AudioFileSourceBuffer *buff;
+  AudioOutputI2S *out;
+  
+  audio = new AudioGeneratorMP3();
+
   for(;;){ 
    static int lastms = 0;
 
     if (audio->isRunning()) {
+      
       if (millis()-lastms > 1000) {
         lastms = millis();
       }
@@ -147,15 +157,25 @@ void audioStreamTask(void* pvParameters) {
 
       delay(1000);
     }
+    delay(500);
   }
-  delay(500);
+  vTaskDelete( NULL );
 }
 
+void motorTestTask(void* pvParameters) {
+  motorControl.test();
+  vTaskDelete( NULL );
+}
+
+void displayTextTask(void* pvParameters) {
+  roboFace.displayText(displayText);
+  vTaskDelete( NULL );
+}
 
 ////////////////////////////////  Web handlers  /////////////////////////////////////////
 
+// Handler to get vl53l1x values
 void webhandler_VL53L1X_Info() {
-
   vl53l1x_sensor.read();
   
   uint16_t range_mm = vl53l1x_sensor.ranging_data.range_mm;
@@ -169,6 +189,7 @@ void webhandler_VL53L1X_Info() {
   WebServer.send(200, "application/json", json);
  }
 
+// Handler to get bno08x values
 void webhandler_wrapper_bno08xInfo() {
 
   String json = "{\"geoMagRotationVector_real\":" + String(wrapper_bno08x.geoMagRotationVector_real) 
@@ -188,6 +209,7 @@ void webhandler_wrapper_bno08xInfo() {
   WebServer.send(200, "application/json", json);
 }
 
+// Handler to show LittleFS stats
 void FileSystemInfoPage() {
   File f = LittleFS.open("/FileSystemInfo.html", "r");
   String html = f.readString();
@@ -200,6 +222,75 @@ void FileSystemInfoPage() {
   WebServer.send(200, "text/HTML", html);
 }
 
+// Handler to enable/disable audiostream
+void audiostream_handler() {
+
+  if(WebServer.hasArg("on")) {
+    
+    int value = WebServer.arg("on").toInt();
+    
+    if (value == 1 && !audioStreamRunning) {
+      Serial.println("Audio streaming starting\n");
+
+      audioStreamRunning = true;
+      xTaskCreatePinnedToCore(audioStreamTask, "AudioStream", 5000, NULL, 5, &AudioStream, 1);
+
+      WebServer.send(200, "text/plain", "Audiostream task started");
+      return;
+    } 
+    
+    if (value == 0 && audioStreamRunning) {
+      Serial.println("Audio streaming stopping\n");
+
+      audioStreamRunning = false;
+      vTaskDelete(AudioStream);
+
+      WebServer.send(200, "text/plain", "Audiostream task stopped");
+      return;
+    }
+
+    WebServer.send(200, "text/plain", "Invalid argument");
+
+  } else {
+    WebServer.send(422, "application/json", "Missing argument");
+  }
+
+ }
+
+// Handler for motor test task
+void motortest_handler() {
+  if (eTaskGetState(&motor) != eRunning) {
+    xTaskCreatePinnedToCore(motorTestTask, "MotorTest", 5000, NULL, 5, &motor, 0);
+    WebServer.send(200, "text/plain", "Motor Test started");
+  } else {
+    WebServer.send(200, "text/plain", "Motor Test already running");
+  }
+
+}
+
+// Handler for motor test task
+void displaytext_handler() {
+  if (eTaskGetState(&face) != eRunning) {
+    if(WebServer.hasArg("text")) {
+      displayText = WebServer.arg("text");
+      xTaskCreatePinnedToCore(displayTextTask, "displayText", 5000, NULL, 10, &face, 0);
+      WebServer.send(200, "text/plain", "Text display starting.");
+    } else {
+      WebServer.send(200, "text/plain", "No text");
+    }
+  } else {
+    WebServer.send(200, "text/plain", "Text display already running");
+  }
+}
+
+void wakeupsense_handler() {
+  
+  digitalWrite(25, HIGH);
+  delay(200);
+  digitalWrite(25, LOW);
+  WebServer.send(200, "text/plain", "Wake up sent.");
+
+}
 
 ////////////////////////////////  Webserver  /////////////////////////////////////////
 
@@ -218,6 +309,10 @@ void startWebserver() {
   WebServer.on("/FileSystemInfo", HTTP_GET, FileSystemInfoPage);
   WebServer.on("/VL53L1X_Info", HTTP_GET, webhandler_VL53L1X_Info);
   WebServer.on("/BNO08X_Info", HTTP_GET, webhandler_wrapper_bno08xInfo);
+  WebServer.on("/audiostream", HTTP_GET, audiostream_handler );
+  WebServer.on("/motortest", HTTP_GET, motortest_handler );
+  WebServer.on("/displaytext", HTTP_GET, displaytext_handler );
+  WebServer.on("/wakeupsense", HTTP_GET, wakeupsense_handler );
 
   Serial.println("Starting Webserver\n");
   // Start webserver
@@ -231,7 +326,7 @@ void startWebserver() {
 
 }
 
-////////////////////////////////  Filesystem  /////////////////////////////////////////
+////////////////////////////////  Filesystem for webserver /////////////////////////////////////////
 void startFilesystem() {
   // FILESYSTEM INIT
   if ( !FILESYSTEM.begin()) {
@@ -261,9 +356,9 @@ void getFsInfo(fsInfo_t* fsInfo) {
 }
 #endif
 
-
+//////////////////////////////////////////////////////////////////////////////////
 // Audio streaming
-
+//////////////////////////////////////////////////////////////////////////////////
 // Called when a metadata event occurs (i.e. an ID3 tag, an ICY block, etc.
 void MDCallback(void *cbData, const char *type, bool isUnicode, const char *string)
 {

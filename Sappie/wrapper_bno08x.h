@@ -1,9 +1,8 @@
 // Wrapper for Adafruit_BNO08x
 // 
 
-#ifndef WRAPPER_BNO08X
-#define WRAPPER_BNO08X
-
+#ifndef WRAPPER_BNO08X_H
+#define WRAPPER_BNO08X_H
 #include <Adafruit_BNO08x.h>
 
 class wrapper_bno08x
@@ -16,25 +15,25 @@ class wrapper_bno08x
     
     float accelerometer_x;
     float accelerometer_y;
-	float accelerometer_z;
+	  float accelerometer_z;
 
-	float gyroscope_x; 
-	float gyroscope_y; 
-	float gyroscope_z;
+	  float gyroscope_x; 
+	  float gyroscope_y; 
+	  float gyroscope_z;
     
     float geoMagRotationVector_real;
-	float geoMagRotationVector_i; 
-	float geoMagRotationVector_j; 
-	float geoMagRotationVector_k; 
+	  float geoMagRotationVector_i; 
+	  float geoMagRotationVector_j; 
+	  float geoMagRotationVector_k; 
     
     String stability;
     String shake;
 
    private:
-	void getValues();
+    void getValues();
 
-	Adafruit_BNO08x bno08x;
-	sh2_SensorValue_t sensorValue;
+    Adafruit_BNO08x bno08x;
+    sh2_SensorValue_t sensorValue;
 };
 
 #endif

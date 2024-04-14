@@ -74,86 +74,93 @@ setInterval("update_BNO08X()",500);
 		</div>
 		<br>
 		<div class="container">
-		  <h2> Distance sensor (VL53L1X)</h2>
-		  <div class="row">
-			<div class="column column-25">Distance</div>
-			<div class="column" id='ph_distance'></div>
-		  </div>
-		  <div class="row">
-			<div class="column column-25">Ambient</div>
-			<div class="column" id='ph_ambient'></div>
-		  </div>
-		  <div class="row">
-			<div class="column column-25">Peak signal</div>
-			<div class="column" id='ph_peak'></div>
-		  </div>
-		  <div class="row">
-			<div class="column column-25">Status</div>
-			<div class="column" id='ph_status'></div>
-		  </div>
+			  <div class="row">
+		 <div class="column  column-50 ">
+	
+			<div class="container">
+			  <h2> Distance sensor (VL53L1X)</h2>
+			  <div class="row">
+				<div class="column">Distance</div>
+				<div class="column" id='ph_distance'></div>
+			  </div>
+			  <div class="row">
+				<div class="column">Ambient</div>
+				<div class="column" id='ph_ambient'></div>
+			  </div>
+			  <div class="row">
+				<div class="column">Peak signal</div>
+				<div class="column" id='ph_peak'></div>
+			  </div>
+			  <div class="row">
+				<div class="column">Status</div>
+				<div class="column" id='ph_status'></div>
+			  </div>
+			</div>
+		</div>		
+		<div class="column column-50">
+			<div class="container">
+			  <h2> Gyro sensor (BNO08X)</h2>
+			  <div class="row">
+				<div class="column">Shake</div>
+				<div class="column" id='shake'></div>
+			  </div>
+			  <div class="row">
+				<div class="column  ">Stability</div>
+				<div class="column" id='stability'></div>
+			  </div>
+			  <div class="row">
+				  <br>
+			  </div>
+			  <div class="row">
+				<div class="column  ">GEO Mag. Rot. vector real</div>
+				<div class="column" id='geoMagRotationVector_real'></div>
+			  </div>
+			  <div class="row">
+				<div class="column  ">GEO Mag. Rot. vector i</div>
+				<div class="column" id='geoMagRotationVector_i'></div>
+			  </div>
+			  <div class="row">
+				<div class="column  ">GEO Mag. Rot. vector j</div>
+				<div class="column" id='geoMagRotationVector_j'></div>
+			  </div>
+			  <div class="row">
+				<div class="column  ">GEO Mag. Rot. vector k</div>
+				<div class="column" id='geoMagRotationVector_k'></div>
+			  </div>
+			  <div class="row">
+				  <br>
+			  </div>
+			  <div class="row">
+				<div class="column  ">Accelerometer x</div>
+				<div class="column" id='accelerometer_x'></div>
+			  </div>
+			  <div class="row">
+				<div class="column  ">Accelerometer y</div>
+				<div class="column" id='accelerometer_y'></div>
+			  </div>
+			  <div class="row">
+				<div class="column  ">Accelerometer z</div>
+				<div class="column" id='accelerometer_z'></div>
+			  </div>
+			  <div class="row">
+				  <br>
+			  </div>
+			  <div class="row">
+				<div class="column  ">Gyroscope x</div>
+				<div class="column" id='gyroscope_x'></div>
+			  </div>
+			  <div class="row">
+				<div class="column  ">Gyroscope y</div>
+				<div class="column" id='gyroscope_y'></div>
+			  </div>
+			  <div class="row">
+				<div class="column  ">Gyroscope z</div>
+				<div class="column" id='gyroscope_z'></div>
+			  </div>
+			</div>
 		</div>
-		
-		
-		<div class="container">
-		  <h2> Gyro sensor (BNO08X)</h2>
-		  <div class="row">
-			<div class="column column-25">Shake</div>
-			<div class="column" id='shake'></div>
-		  </div>
-		  <div class="row">
-			<div class="column column-25">Stability</div>
-			<div class="column" id='stability'></div>
-		  </div>
-		  <div class="row">
-			  <br>
-		  </div>
-		  <div class="row">
-			<div class="column column-25">GEO Mag. Rot. vector real</div>
-			<div class="column" id='geoMagRotationVector_real'></div>
-		  </div>
-		  <div class="row">
-			<div class="column column-25">GEO Mag. Rot. vector i</div>
-			<div class="column" id='geoMagRotationVector_i'></div>
-		  </div>
-		  <div class="row">
-			<div class="column column-25">GEO Mag. Rot. vector j</div>
-			<div class="column" id='geoMagRotationVector_j'></div>
-		  </div>
-		  <div class="row">
-			<div class="column column-25">GEO Mag. Rot. vector k</div>
-			<div class="column" id='geoMagRotationVector_k'></div>
-		  </div>
-		  <div class="row">
-			  <br>
-		  </div>
-		  <div class="row">
-			<div class="column column-25">Accelerometer x</div>
-			<div class="column" id='accelerometer_x'></div>
-		  </div>
-		  <div class="row">
-			<div class="column column-25">Accelerometer y</div>
-			<div class="column" id='accelerometer_y'></div>
-		  </div>
-		  <div class="row">
-			<div class="column column-25">Accelerometer z</div>
-			<div class="column" id='accelerometer_z'></div>
-		  </div>
-		  <div class="row">
-			  <br>
-		  </div>
-		  <div class="row">
-			<div class="column column-25">Gyroscope x</div>
-			<div class="column" id='gyroscope_x'></div>
-		  </div>
-		  <div class="row">
-			<div class="column column-25">Gyroscope y</div>
-			<div class="column" id='gyroscope_y'></div>
-		  </div>
-		  <div class="row">
-			<div class="column column-25">Gyroscope z</div>
-			<div class="column" id='gyroscope_z'></div>
-		  </div>
 		</div>
+	 </div>
 	</div>
 	<br>
 	<br>

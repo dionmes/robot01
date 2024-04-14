@@ -1,0 +1,133 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+	<title>Welcome to Sappie - Your Robotic Assistant</title>
+</head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="stylesheet" href="milligram.min.css">
+
+<script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
+<script>
+
+function audio_control(on) {
+	$("#startaudio").html("");
+	$("#stopaudio").html("");
+	$.ajax({
+		url: "/audiostream?on=" + on,
+		type: 'GET',
+    	dataType: 'text',
+    	async: false})
+    	.done(function (result) {
+			$( "#audiostream_result" ).html( result );
+		})
+		.fail(function (xhr, status) {
+			console.log(status);
+		})
+		.always(function() {
+			$("#startaudio").html("Start audio");
+			$("#stopaudio").html("Stop audio");			
+		});
+
+}
+function motortest() {
+	$.ajax({
+		url: "/motortest",
+		type: 'GET',
+    	dataType: 'text',
+    	async: false})
+    	.done(function (result) {
+		})
+		.fail(function (xhr, status) {
+			console.log(status);
+		})
+		.always(function() {
+		});
+}
+
+function sendText() {
+	var text = $("#textField").val();
+	$.ajax({
+		url: "/displaytext?text=" + text,
+		type: 'GET',
+    	dataType: 'text',
+    	async: false})
+    	.done(function (result) {
+		})
+		.fail(function (xhr, status) {
+			console.log(status);
+		})
+		.always(function() {
+		});
+}
+
+function wakeUpSense() {
+	$.ajax({
+		url: "/wakeupsense",
+		type: 'GET',
+    	dataType: 'text',
+    	async: false})
+    	.done(function (result) {
+		})
+		.fail(function (xhr, status) {
+			console.log(status);
+		})
+		.always(function() {
+		});
+}
+  
+</script>
+
+<body>
+
+<div class="container">
+	<div class="row">
+		<div class="column">
+			<h1 class="centered">Sappie Sensor info</h1>
+		</div>
+		<div class="column">
+			<a class="button button-outline" href='index.html'>Back</a>
+		</div>
+	</div>
+</div>
+
+<div class="container">
+	<div class="row">
+		<div class="column">
+			<div id="startaudio" class="button button-outline" onClick="audio_control('1');">Start audio</div>
+		</div>
+		<div class="column">
+			<div id="stopaudio" class="button button-outline" onClick="audio_control('0');">Stop audio</div>
+		</div>
+		<div class="column" id="audiostream_result">
+		</div>
+	</div>
+	<div class="row">
+		<div class="column">
+			<div id="motortest" class="button button-outline" onClick="motortest();">Motor test</div>
+		</div>
+	</div>
+	<div class="row">
+		<div class="column">
+			<form>
+			  <fieldset>
+				<label for="textField">Text to display</label>
+				<input type="text" placeholder="Hello" id="textField">
+				<div class="button button-primary" onClick="sendText();">Send text</div>
+			  </fieldset>
+			</form>
+		</div>
+	</div>
+	<div class="row">
+		<div class="column">
+				<div class="button button-primary" onClick="wakeUpSense();">Wake up Sense.</div>
+		</div>
+	</div>
+</div>
+
+<br>
+<br>
+<br>
+
+</body>
+</html>
