@@ -1,12 +1,23 @@
-#include <esp-fs-webserver.h>  // https://github.com/cotestatnt/esp-fs-webserver
-
+// for webserver
 #include <FS.h>
 #include <LittleFS.h>
+#include <esp-fs-webserver.h>  // https://github.com/cotestatnt/esp-fs-webserver
+
+// for Robo hardware
 #include <Wire.h>
 #include <VL53L1X.h>
 #include "wrapper_bno08x.h"
 #include "roboFace.h"
 #include "motorControl.h"
+
+// SD Card
+#include "SdFat.h"
+#include "sdios.h"
+#define SPI_CLOCK SD_SCK_MHZ(25)
+#define SD_CONFIG SdSpiConfig(14, SHARED_SPI, SPI_CLOCK)
+SdFat32 sd;
+File32 file;
+File32 root;
 
 // Audio streaming
 #include "AudioFileSourceICYStream.h"
@@ -15,7 +26,7 @@
 #include "AudioOutputI2S.h"
 
 // Icecast stream URL
-const char *URL="http://xavier01.local:8000/speech.mp3";
+const char *URL="http://www.mp3streams.nl/zender/veronica/stream/11-mp3-128";
 bool audioStreamRunning = false;
 
 const int I2S_BCLK_pin = 16;
@@ -27,8 +38,8 @@ VL53L1X vl53l1x_sensor;
 wrapper_bno08x wrapper_bno08x;
 
 // LED Display
+Adafruit_SSD1306 ledMatrix(128, 64, &Wire, -1);
 roboFace roboFace;
-String displayText;
 
 // Motor control
 motorControl motorControl;
@@ -37,29 +48,43 @@ motorControl motorControl;
 FSWebServer WebServer(FILESYSTEM, 80);
 bool apMode = false;
 
-TaskHandle_t Webserver;
-TaskHandle_t wrapper_bno08xUpdate;
-TaskHandle_t AudioStream;
-TaskHandle_t motor;
-TaskHandle_t face;
+TaskHandle_t WebserverTaskHandle;
+TaskHandle_t wrapper_bno08xUpdateTaskHandle;
+TaskHandle_t AudioStreamTaskHandle;
+TaskHandle_t motorTaskHandle;
 
 void setup(){
+
   Serial.begin(115200);
   Serial.println("Booting Sappie\n");
-  
+
+  Wire.begin();
+  Wire.setClock(400000); // use 400 kHz I2C
+
+  roboFace.begin();
+  roboFace.exec( faceAction::DISPLAYTEXTLARGE, "Boot");
+
   // XAIO Sense/Camera wake up ping
   pinMode(25, OUTPUT);
   digitalWrite(25, LOW);
 
-  roboFace.begin();
-  
-  Wire.begin();
-  Wire.setClock(400000); // use 400 kHz I2C
+  //Random seed
+  randomSeed(analogRead(0));
 
+  roboFace.exec( faceAction::DISPLAYTEXTLARGE, "Motor");
   motorControl.begin(Wire);
+  
+  roboFace.exec( faceAction::DISPLAYTEXTLARGE, "Server");
   
   startWebserver();
 
+  roboFace.exec( faceAction::DISPLAYTEXTLARGE, "SD Card");
+  // Initialize the SD card.
+  if (!sd.begin(SD_CONFIG)) {
+    sd.initErrorHalt();
+  }
+
+  roboFace.exec( faceAction::DISPLAYTEXTLARGE, "Sensors");
   // Starting wrapper_bno08x
   Serial.println("Booting vl53l1x (range) sensor\n");
 
@@ -78,29 +103,36 @@ void setup(){
       Serial.println("Failed to detect and initialize wrapper_bno08x (gyro) sensor!");
   }
 
-  Serial.println("Boot complete...\n");
-
+  roboFace.exec( faceAction::DISPLAYTEXTLARGE, "Tasks");
   // Starting tasks
   Serial.println("Tasks starting\n");
 
   motorControl.bothArmsDown();
 
-  Serial.println("Display start task starting\n");
-  xTaskCreatePinnedToCore(displayTextTask, "displayText", 5000, NULL, 10, &face, 0);
-
   Serial.println("Webserver task starting\n");
-  xTaskCreatePinnedToCore(WebServerTask, "Webserver", 10000, NULL, 5, &Webserver, 0);
+  xTaskCreatePinnedToCore(WebServerTask, "Webserver", 8192, NULL, 5, &WebserverTaskHandle, 0);
   
   Serial.println("wrapper_bno08x update task starting\n");
-  xTaskCreatePinnedToCore(bno08xUpdateTask, "wrapper_bno08x", 5000, NULL, 10, &wrapper_bno08xUpdate, 0);
+  xTaskCreatePinnedToCore(bno08xUpdateTask, "wrapper_bno08x", 4096, NULL, 10, &wrapper_bno08xUpdateTaskHandle, 0);
 
-  roboFace.face_smile();
+  Serial.println("Boot complete...\n");
 
-  vTaskDelete(NULL);
+  delay(1000);
+  
+  //roboFace.exec(faceAction::STARTUP);
+  //vTaskDelete( NULL );
 
 }
 
 void loop() {
+
+  int wait = int(random(3000, 8000));
+
+  delay(wait);
+  int action = int(random(4,12));
+  int actionWait = int(random(50,200));
+  roboFace.exec(action,"",actionWait);
+
 }
 
 ////////////////////////////////  Tasks  /////////////////////////////////////////
@@ -138,15 +170,18 @@ void audioStreamTask(void* pvParameters) {
       if (millis()-lastms > 1000) {
         lastms = millis();
       }
+      delay(20);
       if (!audio->loop()) audio->stop();
     } else {
       Serial.printf("audio done\n");
+      delay(3000);
+      Serial.printf("audio retry\n");
 
       file = new AudioFileSourceICYStream(URL);
-      buff = new AudioFileSourceBuffer(file, 4096);
+      buff = new AudioFileSourceBuffer(file, 8192);
       buff->RegisterStatusCB(StatusCallback, (void*)"buffer");
       out = new AudioOutputI2S();
-      out->SetGain(50);
+      out->SetGain(1);
       out->SetOutputModeMono(true);
 
       out->SetPinout(I2S_BCLK_pin, I2S_WCLK_pin, I2S_DOUT_pin);
@@ -155,20 +190,13 @@ void audioStreamTask(void* pvParameters) {
       audio->RegisterStatusCB(StatusCallback, (void*)"audio");
       audio->begin(buff, out);
 
-      delay(1000);
     }
-    delay(500);
   }
   vTaskDelete( NULL );
 }
 
 void motorTestTask(void* pvParameters) {
   motorControl.test();
-  vTaskDelete( NULL );
-}
-
-void displayTextTask(void* pvParameters) {
-  roboFace.displayText(displayText);
   vTaskDelete( NULL );
 }
 
@@ -233,7 +261,7 @@ void audiostream_handler() {
       Serial.println("Audio streaming starting\n");
 
       audioStreamRunning = true;
-      xTaskCreatePinnedToCore(audioStreamTask, "AudioStream", 5000, NULL, 5, &AudioStream, 1);
+      xTaskCreatePinnedToCore(audioStreamTask, "AudioStream", 4096, NULL, 5, &AudioStreamTaskHandle, 1);
 
       WebServer.send(200, "text/plain", "Audiostream task started");
       return;
@@ -243,7 +271,7 @@ void audiostream_handler() {
       Serial.println("Audio streaming stopping\n");
 
       audioStreamRunning = false;
-      vTaskDelete(AudioStream);
+      vTaskDelete(AudioStreamTaskHandle);
 
       WebServer.send(200, "text/plain", "Audiostream task stopped");
       return;
@@ -259,8 +287,8 @@ void audiostream_handler() {
 
 // Handler for motor test task
 void motortest_handler() {
-  if (eTaskGetState(&motor) != eRunning) {
-    xTaskCreatePinnedToCore(motorTestTask, "MotorTest", 5000, NULL, 5, &motor, 0);
+  if (eTaskGetState(&motorTaskHandle) != eRunning) {
+    xTaskCreatePinnedToCore(motorTestTask, "MotorTest", 4096, NULL, 5, &motorTaskHandle, 0);
     WebServer.send(200, "text/plain", "Motor Test started");
   } else {
     WebServer.send(200, "text/plain", "Motor Test already running");
@@ -268,28 +296,21 @@ void motortest_handler() {
 
 }
 
-// Handler for motor test task
+// Handler for displaying text
 void displaytext_handler() {
-  if (eTaskGetState(&face) != eRunning) {
     if(WebServer.hasArg("text")) {
-      displayText = WebServer.arg("text");
-      xTaskCreatePinnedToCore(displayTextTask, "displayText", 5000, NULL, 10, &face, 0);
       WebServer.send(200, "text/plain", "Text display starting.");
     } else {
       WebServer.send(200, "text/plain", "No text");
     }
-  } else {
-    WebServer.send(200, "text/plain", "Text display already running");
-  }
 }
 
+// Handler waking up XAIO sense/camera from sleep
 void wakeupsense_handler() {
-  
   digitalWrite(25, HIGH);
   delay(200);
   digitalWrite(25, LOW);
   WebServer.send(200, "text/plain", "Wake up sent.");
-
 }
 
 ////////////////////////////////  Webserver  /////////////////////////////////////////
