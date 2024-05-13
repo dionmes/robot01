@@ -9,6 +9,7 @@
 #include "roboFace.h"
 #include "sap_img.h"
 
+// Face coordinates
 #define rectX1 0
 #define rectY1 0
 #define rectX2 127
@@ -52,9 +53,11 @@ void roboFace::exec( int action, String text, int time) {
 
     // Recover time and procedure before starting next task after sudden break
     sleep(200);
+    
     ledMatrix.clearDisplay();
     ledMatrix.stopscroll();
     ledMatrix.display();
+
     sleep(200);
   }
   
@@ -62,7 +65,7 @@ void roboFace::exec( int action, String text, int time) {
 
 };
 
-void roboFace::displayTask(void * actionParams){
+static void roboFace::displayTask(void * actionParams){
 
     faceActionParams* _actionParams = (faceActionParams*)actionParams;
 
@@ -106,6 +109,10 @@ void roboFace::displayTask(void * actionParams){
       testfillrect(_actionParams->time);
       break;
 
+    case faceAction::DISPLAYIMG:
+      drawbitmap(_actionParams->time);
+      break;
+
     case faceAction::CYLON:
       cylon(_actionParams->time);
       break;
@@ -121,23 +128,21 @@ void roboFace::displayTask(void * actionParams){
 
 };
 
-void roboFace::startUp() {
+static void roboFace::startUp() {
 
+  wink(50);
+  delay(1000);  
   lookLeftAni(50);
   delay(100);
-  lookRightAni(50);
-  
+  lookRightAni(50);  
   delay(500);
   neutral();
   delay(1000);  
-  wink(50);
-  delay(1000);  
-  
   smile(1000);
 
 };
 
-void roboFace::displayText(String text,int size) {
+static void roboFace::displayText(String text, int size) {
 
   ledMatrix.clearDisplay();
   ledMatrix.setTextSize(0.5);
@@ -148,7 +153,7 @@ void roboFace::displayText(String text,int size) {
 
 };
 
-void roboFace::scrollText(String text) {
+static void roboFace::scrollText(String text) {
   ledMatrix.stopscroll();
   ledMatrix.clearDisplay();
   ledMatrix.setTextSize(2); // Draw 2X-scale text
@@ -158,12 +163,11 @@ void roboFace::scrollText(String text) {
   ledMatrix.startscrollleft(0x00, 0x0F);
 };
 
-void roboFace::drawbitmap(String name, int wait) {
+static void roboFace::drawbitmap(int wait) {
   ledMatrix.stopscroll();
   ledMatrix.clearDisplay();
   
-  //ledMatrix.drawBitmap(0,0, img1, 128, 64);
-  
+  ledMatrix.drawBitmap(0, 0, *&stars, 128, 63, 1,0);
   ledMatrix.display();
 
   if (wait > 0) {
@@ -173,7 +177,7 @@ void roboFace::drawbitmap(String name, int wait) {
 
 };
 
-void roboFace::neutral(){
+static void roboFace::neutral(){
 
   ledMatrix.stopscroll();
   ledMatrix.clearDisplay();
@@ -186,7 +190,7 @@ void roboFace::neutral(){
 
 };
 
-void roboFace::smile(int wait){
+static void roboFace::smile(int wait){
 
   neutral();
   ledMatrix.fillTriangle(leftEyeX + 17, leftEyeY + 18, rightEyeX - 17 , rightEyeY + 18, leftEyeX + ((rightEyeX - leftEyeX) / 2) , leftEyeY + 25, 0);
@@ -195,11 +199,12 @@ void roboFace::smile(int wait){
 
   if (wait > 0 ) {
     delay(wait);
-    neutral();  }
+    neutral();  
+  }
 
 };
 
-void roboFace::lookLeftAni(int wait) {
+static void roboFace::lookLeftAni(int wait) {
 
   neutral();
 
@@ -215,10 +220,9 @@ void roboFace::lookLeftAni(int wait) {
     delay(wait);
 
   }
-
 };
 
-void roboFace::lookRightAni(int wait) {
+static void roboFace::lookRightAni(int wait) {
 
   neutral();
   
@@ -237,7 +241,7 @@ void roboFace::lookRightAni(int wait) {
 
 };
 
-void roboFace::blink(int wait) {
+static void roboFace::blink(int wait) {
 
   ledMatrix.stopscroll();
   ledMatrix.clearDisplay();
@@ -251,7 +255,7 @@ void roboFace::blink(int wait) {
 };
 
 
-void roboFace::wink(int wait) {
+static void roboFace::wink(int wait) {
   ledMatrix.stopscroll();
   ledMatrix.clearDisplay();
 
@@ -264,7 +268,7 @@ void roboFace::wink(int wait) {
   neutral();
 };
 
-void roboFace::shake(int wait) {
+static void roboFace::shake(int wait) {
 
   neutral();
   bool left = true;
@@ -293,14 +297,14 @@ void roboFace::shake(int wait) {
 
 };
 
-void roboFace::cylon(int wait) {
+static void roboFace::cylon(int wait) {
 
   ledMatrix.stopscroll();
   ledMatrix.clearDisplay();
 
 }
 
-void roboFace::testfillrect(int wait) {
+static void roboFace::testfillrect(int wait) {
   ledMatrix.clearDisplay();
 
   for(int16_t i=0; i<ledMatrix.height()/2; i+=3) {
@@ -312,6 +316,3 @@ void roboFace::testfillrect(int wait) {
 
   delay(wait);
 }
-
-
-

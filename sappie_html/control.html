@@ -1,0 +1,194 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+	<title>Welcome to Sappie - Your Robotic Assistant</title>
+</head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="stylesheet" href="milligram.min.css">
+
+<script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
+<script>
+
+function audio_control(on) {
+	$("#startaudio").html("");
+	$("#stopaudio").html("");
+	$.ajax({
+		url: "/audiostream?on=" + on,
+		type: 'GET',
+    	dataType: 'text',
+    	async: false})
+    	.done(function (result) {
+			$( "#audiostream_result" ).html( result );
+		})
+		.fail(function (xhr, status) {
+			console.log(status);
+		})
+		.always(function() {
+			$("#startaudio").html("Start audio");
+			$("#stopaudio").html("Stop audio");			
+		});
+
+}
+
+function bodyaction(bodypart, direction) {
+	/**
+	  LEFTUPPERARM = 1,
+	  RIGHTUPPERARM = 2,
+	  LEFTLOWERARM = 3,
+	  RIGHTLOWERARM = 4,
+	  LEFTLEG = 5,
+	  RIGHTLEG = 6,
+	  HIP = 7,
+	  LEFTHANDLIGHT = 8,
+	  RIGHTHANDLIGHT = 9,
+	**/
+	var url = "/bodyaction?bodypart=" + bodypart + "&direction=" + direction + "&duration=" + $("#moveduration").val(); 	
+	$.ajax({
+		url: url,
+		type: 'GET',
+    	dataType: 'text',
+    	async: false})
+    	.done(function (result) {
+		})
+		.fail(function (xhr, status) {
+			console.log(status);
+		})
+		.always(function() {
+		});
+}
+
+function bodytest() {
+	$.ajax({
+		url: "/bodyaction",
+		type: 'GET',
+    	dataType: 'text',
+    	async: false})
+    	.done(function (result) {
+		})
+		.fail(function (xhr, status) {
+			console.log(status);
+		})
+		.always(function() {
+		});
+}
+
+function wakeUpSense() {
+	$.ajax({
+		url: "/wakeupsense",
+		type: 'GET',
+    	dataType: 'text',
+    	async: false})
+    	.done(function (result) {
+		})
+		.fail(function (xhr, status) {
+			console.log(status);
+		})
+		.always(function() {
+		});
+}
+  
+</script>
+
+<body>
+
+<div class="container">
+	<div class="row">
+		<div class="column">
+			<h1 class="centered">Sappie Control</h1>
+		</div>
+		<div class="column">
+			<a class="button button-primary" href='index.html'>Back</a>
+		</div>
+	</div>
+</div>
+
+<div class="container">
+	<div class="row">
+		<div class="column column-25">
+			<div id="startaudio" class="button button-outline" onClick="audio_control('1');">Start audio receive</div>
+			<div id="startaudio" class="button button-outline" onClick="audio_control('0');">Stop audio receive</div>
+		</div>
+		<div class="column column-25" id="audiostream_result">
+		</div>
+	</div>
+	<div class="row">
+		<div class="column column-25">
+			<div class="button button-outline" onClick="wakeUpSense();">Wake up Sense/Camera</div>
+		</div>
+		<div class="column column-25">
+			<div class="button button-outline" onClick="bodytest();">Body test</div>
+		</div>
+	</div>
+</div>
+<br>
+<br>
+<div class="container">
+	<div class="row">
+		<div class="column column-25">
+			<div class="button button-outline" onClick="bodyaction(9,1);" >Left hand light on</div>
+			<div class="button button-outline" onClick="bodyaction(9,0);" >Left hand light off</div>
+		</div>
+		<div class="column column-25">
+			<div class="button button-outline" onClick="bodyaction(8,1);">Right hand light on</div>
+			<div class="button button-outline" onClick="bodyaction(8,0);">Right hand light off</div>
+		</div>
+	</div>
+</div>
+<br>
+<br>
+<div class="container">
+	<div class="row">
+		<form>
+		  <label for="moveduration">Move duration between 10-2000</label>
+		  <input type="number" id="moveduration" name="quantity" min="10" max="2000">
+		</form>
+	</div>
+</div>
+<div class="container">
+	<div class="row">
+		<div class="column column-25">
+			<div class="button button-outline" onClick="bodyaction(1,1);" >Left upper arm up</div>
+			<div class="button button-outline" onClick="bodyaction(1,0);" >Left upper arm down</div>
+		</div>
+		<div class="column column-25">
+			<div class="button button-outline" onClick="bodyaction(2,1);">Right upper arm up</div>
+			<div class="button button-outline" onClick="bodyaction(2,0);">Right upper arm down</div>
+		</div>
+	</div>
+	<div class="row">
+		<div class="column column-25">
+			<div class="button button-outline" onClick="bodyaction(3,1);">Left lower arm up</div>
+			<div class="button button-outline" onClick="bodyaction(3,0);">Left lower arm down</div>
+		</div>
+		<div class="column column-25">
+			<div class="button button-outline" onClick="bodyaction(4,1);">Right lower arm up</div>
+			<div class="button button-outline" onClick="bodyaction(4,0);">Right lower arm down</div>
+		</div>
+	</div>
+	<div class="row">
+		<div class="column column-25">
+			<div class="button button-outline" onClick="bodyaction(7,0);">Hip left</div>
+		</div>
+		<div class="column column-25">
+			<div class="button button-outline" onClick="bodyaction(7,1);">Hip right</div>
+		</div>
+	</div>
+	<div class="row">
+		<div class="column column-25">
+			<div class="button button-outline" onClick="bodyaction(5,1);">Left leg forward</div>
+			<div class="button button-outline" onClick="bodyaction(5,0);">Left leg backward</div>
+		</div>
+		<div class="column column-25">
+			<div class="button button-outline" onClick="bodyaction(6,1);">Right leg forward</div>
+			<div class="button button-outline" onClick="bodyaction(6,0);">Right leg backward</div>
+		</div>
+	</div>
+</div>
+
+<br>
+<br>
+<br>
+
+</body>
+</html>
