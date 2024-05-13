@@ -5,9 +5,11 @@
 #include <Wire.h>
 #include <Adafruit_GFX.h>
 #include <Adafruit_SSD1306.h>
+#include <Fonts/FreeSans9pt7b.h>
 #include <Fonts/FreeSansBold12pt7b.h>
 #include "roboFace.h"
-#include "sap_img.h"
+#include "images.h"
+#include "animations.h"
 
 // Face coordinates
 #define rectX1 0
@@ -21,227 +23,298 @@
 #define rightEyeY 32
 #define eyeRadius 20
 
-roboFace::roboFace()
-{
-};
+roboFace::roboFace(){};
 
 void roboFace::begin() {
 
- // SSD1306_SWITCHCAPVCC = generate display voltage from 3.3V internally
-  if(!ledMatrix.begin(SSD1306_SWITCHCAPVCC, 0x3C, true, true)) {
+  // SSD1306_SWITCHCAPVCC = generate display voltage from 3.3V internally
+  if (!ledMatrix.begin(SSD1306_SWITCHCAPVCC, 0x3C, true, true)) {
     Serial.println(F("SSD1306 allocation failed"));
-  } 
+  }
 
   ledMatrix.clearDisplay();
   ledMatrix.stopscroll();
   ledMatrix.display();
   ledMatrix.setTextColor(SSD1306_WHITE);
+  ledMatrix.setTextWrap(false);
 
   delay(200);
 };
 
-void roboFace::exec( int action, String text, int time) {
+void roboFace::exec(int action, String text, int intValue) {
 
-  faceActionParams actionParams;
+  if (this->actionRunning) {
+    return;
 
-  actionParams.action = action;
-  actionParams.text = text;
-  actionParams.time = time;
+    if( faceTaskHandle != NULL ) {
+      Serial.println("Deleting display task.");
+      vTaskDelete(faceTaskHandle);
 
-  if (eTaskGetState(&faceTaskHandle) == eRunning) {
-    vTaskDelete( &faceTaskHandle );
+      // Recover time and procedure before starting next task after sudden break
+      delay(200);
+      ledMatrix.clearDisplay();
+      ledMatrix.stopscroll();
+      ledMatrix.display();
+      delay(200);
+    }
 
-    // Recover time and procedure before starting next task after sudden break
-    sleep(200);
-    
-    ledMatrix.clearDisplay();
-    ledMatrix.stopscroll();
-    ledMatrix.display();
-
-    sleep(200);
   }
-  
-  xTaskCreatePinnedToCore(this->displayTask, "displayTask", 4096, (void*)&actionParams, 10, &faceTaskHandle, 1);  
 
+  _action = action;
+  _text = text;
+  _intValue = intValue;
+
+  xTaskCreatePinnedToCore(this->displayTask, "displayTask", 8192, (void*)this, 10, &faceTaskHandle, 1);
 };
 
-static void roboFace::displayTask(void * actionParams){
+void roboFace::displayTask(void* roboFaceInstance) {
 
-    faceActionParams* _actionParams = (faceActionParams*)actionParams;
+  roboFace* roboFaceRef = (roboFace*)roboFaceInstance;
+  roboFaceRef->actionRunning = true;
 
-    switch (_actionParams->action) {
+  switch (roboFaceRef->_action) {
     case faceAction::DISPLAYTEXTSMALL:
-      roboFace::displayText(_actionParams->text,2);
-      break;   
+      roboFaceRef->displayText(roboFaceRef->_text, 1);
+      break;
+
     case faceAction::DISPLAYTEXTLARGE:
-      roboFace::displayText(_actionParams->text,3);
-      break;   
+      roboFaceRef->displayText(roboFaceRef->_text, 2);
+      break;
+
+    case faceAction::SCROLLTEXT:
+      roboFaceRef->scrollText(roboFaceRef->_text, 1);
+      break;
 
     case faceAction::NEUTRAL:
-      neutral();
+      roboFaceRef->neutral();
       break;
 
     case faceAction::SMILE:
-      smile(_actionParams->time);
+      roboFaceRef->smile(roboFaceRef->_intValue);
       break;
 
     case faceAction::LOOKLEFT:
-      lookLeftAni(_actionParams->time);
+      roboFaceRef->lookLeftAni(roboFaceRef->_intValue);
       break;
 
     case faceAction::LOOKRIGHT:
-      lookRightAni(_actionParams->time);
+      roboFaceRef->lookRightAni(roboFaceRef->_intValue);
       break;
-    
+
     case faceAction::STARTUP:
-      startUp();
+      roboFaceRef->startUp();
       break;
 
     case faceAction::BLINK:
-      blink(_actionParams->time);
+      roboFaceRef->blink(roboFaceRef->_intValue);
       break;
-      
+
+    case faceAction::WINK:
+      roboFaceRef->wink(roboFaceRef->_intValue);
+      break;
+
     case faceAction::SHAKE:
-      shake(_actionParams->time);
+      roboFaceRef->shake(roboFaceRef->_intValue);
       break;
 
     case faceAction::TESTFILLRECT:
-      testfillrect(_actionParams->time);
+      roboFaceRef->testfillrect(roboFaceRef->_intValue);
       break;
 
     case faceAction::DISPLAYIMG:
-      drawbitmap(_actionParams->time);
+      roboFaceRef->drawbitmap(roboFaceRef->_intValue);
       break;
 
     case faceAction::CYLON:
-      cylon(_actionParams->time);
+      roboFaceRef->cylon(roboFaceRef->_intValue);
+      break;
+
+    case faceAction::SCROLLLEFT:
+      roboFaceRef->scrollScreenLeft();
+      break;
+
+    case faceAction::SCROLLRIGHT:
+      roboFaceRef->scrollScreenRight();
+      break;
+
+    case faceAction::STOPSCROLL:
+      roboFaceRef->stopScrolling();
+      break;
+
+    case faceAction::GEAR_ANIMATION:
+      roboFaceRef->animation(gear_frames,roboFaceRef->_intValue);
+      break;
+
+    case faceAction::RECORD_ANIMATION:
+      roboFaceRef->animation(  record_frames,roboFaceRef->_intValue);
+      break;
+
+    case faceAction::HOURGLASS_ANIMATION:
+      roboFaceRef->animation(hourglass_frames,roboFaceRef->_intValue);
+      break;
+
+    case faceAction::LOADER_ANIMATION:
+      roboFaceRef->animation(loader_frames,roboFaceRef->_intValue);
+      break;
+
+    case faceAction::BELL_ANIMATION:
+      roboFaceRef->animation(bell_frames,roboFaceRef->_intValue);
+      break;
+
+    case faceAction::CHAT_ANIMATION:
+      roboFaceRef->animation(chat_frames,roboFaceRef->_intValue);
       break;
 
     default:
-      neutral();
+      roboFaceRef->neutral();
       break;
+  };
 
-    };
-
-  sleep(200);
+  delay(5);
   vTaskDelete(NULL);
-
 };
 
-static void roboFace::startUp() {
+void roboFace::startUp() {
+  actionRunning = true;
 
   wink(50);
-  delay(1000);  
+  delay(1000);
   lookLeftAni(50);
   delay(100);
-  lookRightAni(50);  
+  lookRightAni(50);
   delay(500);
   neutral();
-  delay(1000);  
+  delay(1000);
   smile(1000);
 
+  actionRunning = false;
 };
 
-static void roboFace::displayText(String text, int size) {
+void roboFace::displayText(String text, int size) {
+  actionRunning = true;
 
+  ledMatrix.stopscroll();
   ledMatrix.clearDisplay();
-  ledMatrix.setTextSize(0.5);
-  ledMatrix.setCursor(2, 30);
-  ledMatrix.setFont(&FreeSansBold12pt7b);
+  ledMatrix.setTextSize(1);
+  ledMatrix.setTextWrap(true);
+
+  if (size == 1) {
+    ledMatrix.setCursor(0, 12);
+    ledMatrix.setFont(&FreeSans9pt7b);
+  } else {
+    ledMatrix.setCursor(0, 18);
+    ledMatrix.setFont(&FreeSansBold12pt7b);
+  }
   ledMatrix.print(text);
   ledMatrix.display();
 
+  actionRunning = false;
 };
 
-static void roboFace::scrollText(String text) {
+void roboFace::scrollText(String text, int wait) {
+  actionRunning = true;
+
   ledMatrix.stopscroll();
   ledMatrix.clearDisplay();
-  ledMatrix.setTextSize(2); // Draw 2X-scale text
-  ledMatrix.setCursor(0, 0);
-  ledMatrix.println(text);
-  ledMatrix.display();
-  ledMatrix.startscrollleft(0x00, 0x0F);
-};
+  ledMatrix.setTextWrap(false);
 
-static void roboFace::drawbitmap(int wait) {
-  ledMatrix.stopscroll();
-  ledMatrix.clearDisplay();
-  
-  ledMatrix.drawBitmap(0, 0, *&stars, 128, 63, 1,0);
-  ledMatrix.display();
+  ledMatrix.setTextSize(1);
+  ledMatrix.setFont(&FreeSans9pt7b);
 
-  if (wait > 0) {
+  int len = (text.length() * 9);
+
+  for (int x = 128; x > -len; x = x - 2) {
+    ledMatrix.clearDisplay();
+    ledMatrix.setCursor(x, 32);
+    ledMatrix.print(text);
+    ledMatrix.display();
     delay(wait);
-    neutral(); 
   }
 
+  actionRunning = false;
 };
 
-static void roboFace::neutral(){
+void roboFace::drawbitmap(int index) {
+  actionRunning = true;
 
   ledMatrix.stopscroll();
   ledMatrix.clearDisplay();
-  
+
+  ledMatrix.drawBitmap(0, 0, bmp_allArray[index], 128, 63, 1, 0);
+  ledMatrix.display();
+
+  actionRunning = false;
+};
+
+void roboFace::neutral() {
+  actionRunning = true;
+
+  ledMatrix.stopscroll();
+  ledMatrix.clearDisplay();
+
   ledMatrix.fillRoundRect(rectX1, rectY1, rectX2, rectY2, rectRadius, 1);
   ledMatrix.fillCircle(leftEyeX, leftEyeY, eyeRadius, 0);
   ledMatrix.fillCircle(rightEyeX, rightEyeY, eyeRadius, 0);
 
   ledMatrix.display();
-
+  actionRunning = false;
 };
 
-static void roboFace::smile(int wait){
+void roboFace::smile(int wait) {
+  actionRunning = true;
 
   neutral();
-  ledMatrix.fillTriangle(leftEyeX + 17, leftEyeY + 18, rightEyeX - 17 , rightEyeY + 18, leftEyeX + ((rightEyeX - leftEyeX) / 2) , leftEyeY + 25, 0);
+  ledMatrix.fillTriangle(leftEyeX + 17, leftEyeY + 18, rightEyeX - 17, rightEyeY + 18, leftEyeX + ((rightEyeX - leftEyeX) / 2), leftEyeY + 25, 0);
 
   ledMatrix.display();
 
-  if (wait > 0 ) {
+  if (wait > 0) {
     delay(wait);
-    neutral();  
+    neutral();
   }
-
+  actionRunning = false;
 };
 
-static void roboFace::lookLeftAni(int wait) {
+void roboFace::lookLeftAni(int wait) {
+  actionRunning = true;
 
   neutral();
 
-  for (int i = 0; i < 15 ; i++) {
+  for (int i = 0; i < 15; i++) {
 
     ledMatrix.clearDisplay();
-    
+
     ledMatrix.fillRoundRect(rectX1, rectY1, rectX2, rectY2, rectRadius, 1);
     ledMatrix.fillCircle(leftEyeX - i, leftEyeY, eyeRadius, 0);
     ledMatrix.fillCircle(rightEyeX - i, rightEyeY, eyeRadius, 0);
     ledMatrix.display();
 
     delay(wait);
-
   }
+  actionRunning = false;
 };
 
-static void roboFace::lookRightAni(int wait) {
+void roboFace::lookRightAni(int wait) {
+  actionRunning = true;
 
   neutral();
-  
-  for (int i = 0; i < 15 ; i++) {
+
+  for (int i = 0; i < 15; i++) {
 
     ledMatrix.clearDisplay();
-    
+
     ledMatrix.fillRoundRect(rectX1, rectY1, rectX2, rectY2, rectRadius, 1);
     ledMatrix.fillCircle(leftEyeX + i, leftEyeY, eyeRadius, 0);
     ledMatrix.fillCircle(rightEyeX + i, rightEyeY, eyeRadius, 0);
     ledMatrix.display();
 
     delay(wait);
-
   }
-
+  actionRunning = false;
 };
 
-static void roboFace::blink(int wait) {
+void roboFace::blink(int wait) {
+  actionRunning = true;
 
   ledMatrix.stopscroll();
   ledMatrix.clearDisplay();
@@ -252,10 +325,13 @@ static void roboFace::blink(int wait) {
   delay(wait);
 
   neutral();
+  actionRunning = false;
 };
 
 
-static void roboFace::wink(int wait) {
+void roboFace::wink(int wait) {
+  actionRunning = true;
+  int _wait = wait == 0 ? 50 : wait;
   ledMatrix.stopscroll();
   ledMatrix.clearDisplay();
 
@@ -263,17 +339,19 @@ static void roboFace::wink(int wait) {
   ledMatrix.fillCircle(rightEyeX, rightEyeY, eyeRadius, 0);
   ledMatrix.display();
 
-  delay(wait);
+  delay(_wait);
 
   neutral();
+  actionRunning = false;
 };
 
-static void roboFace::shake(int wait) {
+void roboFace::shake(int wait) {
+  actionRunning = true;
 
   neutral();
   bool left = true;
 
-  for (int i = 0; i < 15 ; i++) {
+  for (int i = 0; i < 15; i++) {
 
     ledMatrix.clearDisplay();
     if (left) {
@@ -282,37 +360,92 @@ static void roboFace::shake(int wait) {
       ledMatrix.fillCircle(rightEyeX - i, rightEyeY, eyeRadius, 0);
       ledMatrix.display();
       left = false;
-    }  else {
+    } else {
       ledMatrix.fillRoundRect(rectX1, rectY1, rectX2, rectY2, rectRadius, 1);
       ledMatrix.fillCircle(leftEyeX + i, leftEyeY, eyeRadius, 0);
       ledMatrix.fillCircle(rightEyeX + i, rightEyeY, eyeRadius, 0);
       ledMatrix.display();
       left = true;
-    } 
+    }
 
     delay(wait);
     neutral();
     delay(wait);
   }
 
+  actionRunning = false;
 };
 
-static void roboFace::cylon(int wait) {
-
+void roboFace::cylon(int wait) {
+  actionRunning = true;
+  
   ledMatrix.stopscroll();
   ledMatrix.clearDisplay();
+  int _wait = wait == 0 ? 10 : wait;
 
+  // Three times
+  for (int i = 0; i <= 3; i++) {
+    for (int x = 0; x <= 110; x = x + 10) {
+      ledMatrix.clearDisplay();
+      ledMatrix.fillRect(x, 20, 18, 24, 1);
+      ledMatrix.display();
+      delay(wait);
+    }
+
+    for (int x = 110; x > 0; x = x - 10) {
+      ledMatrix.clearDisplay();
+      ledMatrix.fillRect(x, 20, 18, 24, 1);
+      ledMatrix.display();
+      delay(wait);
+    }
+  }
+
+  ledMatrix.clearDisplay();
+  ledMatrix.display();
+
+  actionRunning = false;
 }
 
-static void roboFace::testfillrect(int wait) {
+void roboFace::testfillrect(int wait) {
+  actionRunning = true;
+
   ledMatrix.clearDisplay();
 
-  for(int16_t i=0; i<ledMatrix.height()/2; i+=3) {
+  for (int16_t i = 0; i < ledMatrix.height() / 2; i += 3) {
     // The INVERSE color is used so rectangles alternate white/black
-    ledMatrix.fillRect(i, i, ledMatrix.width()-i*2, ledMatrix.height()-i*2, SSD1306_INVERSE);
-    ledMatrix.display(); // Update screen with each newly-drawn rectangle
+    ledMatrix.fillRect(i, i, ledMatrix.width() - i * 2, ledMatrix.height() - i * 2, SSD1306_INVERSE);
+    ledMatrix.display();  // Update screen with each newly-drawn rectangle
     delay(1);
   }
 
   delay(wait);
+  actionRunning = false;
+}
+
+void roboFace::scrollScreenLeft() {
+  ledMatrix.startscrollleft(0, 63);
+  actionRunning = false;
+}
+
+void roboFace::scrollScreenRight() {
+  ledMatrix.startscrollright(0, 63);
+  actionRunning = false;
+}
+
+void roboFace::stopScrolling() {
+  ledMatrix.stopscroll();
+  actionRunning = false;
+}
+
+void roboFace::animation(const byte frames[][512], int loop) {
+  int frame_count = 27;
+  for(int n = 0; n<=loop; n++) {
+    for(int frame = 0; frame <= frame_count; frame++ ) {
+    ledMatrix.clearDisplay();
+    ledMatrix.drawBitmap(32, 0, frames[frame], 64, 64, 1);
+    ledMatrix.display();
+    delay(42);
+    }
+  }
+  actionRunning = false;
 }

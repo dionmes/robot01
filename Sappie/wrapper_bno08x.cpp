@@ -59,15 +59,16 @@ void wrapper_bno08x::getValues() {
   switch (sensorValue.sensorId) {
 
   case SH2_ACCELEROMETER:
-  	accelerometer_x = sensorValue.un.accelerometer.x;
-    accelerometer_y = sensorValue.un.accelerometer.y;
-	accelerometer_z = sensorValue.un.accelerometer.z;
+
+    gyroscope_x = sensorValue.un.accelerometer.x;
+    gyroscope_y = sensorValue.un.accelerometer.y;
+    gyroscope_z = sensorValue.un.accelerometer.z;
     break;
 
   case SH2_GYROSCOPE_CALIBRATED:
-	gyroscope_x = sensorValue.un.gyroscope.x;
-	gyroscope_y = sensorValue.un.gyroscope.y;
-	gyroscope_z = sensorValue.un.gyroscope.z;
+  	accelerometer_x = sensorValue.un.gyroscope.x;
+    accelerometer_y = sensorValue.un.gyroscope.y;
+	  accelerometer_z = sensorValue.un.gyroscope.z;
     break;
     
   case SH2_GEOMAGNETIC_ROTATION_VECTOR:

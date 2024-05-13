@@ -13,7 +13,7 @@
 // Refer to initialized LED matrix in main
 extern Adafruit_SSD1306 ledMatrix;
 
-// Actions
+// Action
 enum faceAction { 
   DISPLAYTEXTSMALL = 1, 
   DISPLAYTEXTLARGE = 2,
@@ -27,7 +27,17 @@ enum faceAction {
   SHAKE = 10,
   TESTFILLRECT = 11,
   DISPLAYIMG = 12,
-  CYLON = 13
+  CYLON = 13,
+  SCROLLTEXT=14,
+  SCROLLLEFT=15,
+  SCROLLRIGHT=16,
+  STOPSCROLL=17,
+  GEAR_ANIMATION=18,
+  RECORD_ANIMATION=19,
+  HOURGLASS_ANIMATION=20,
+  LOADER_ANIMATION=21,
+  BELL_ANIMATION=22,
+  CHAT_ANIMATION=23,
 };
 
 class roboFace {
@@ -35,50 +45,56 @@ class roboFace {
     roboFace();
     void begin();
     // Action - enum faceAction, String (optional text if Action requires it), Int optional delay dependent on action.
-    void exec( int action, String text = "", int time = 0);
+    void exec( int action, String text = "", int intValue = 0);
+    // Boolean to see if task is running.
+    bool actionRunning;
 
   private:
     // Task handler for actions
     TaskHandle_t faceTaskHandle;
-
-    // Struct to pass params to tasks
-    struct faceActionParams {
-      int action;
-      String text;
-      int time;
-    };
+    // Values for tasks
+    int _action;
+    String _text;
+    int _intValue;
 
     // Task function to call. Pass struct faceActionParams for action parameters.
-    static void displayTask(void * parameters);
-    
+    void static displayTask(void * parameters);
+
     // display Text with size 2 - medium, or 3 - Large. (to be called from displayTask inside a vtask)
-    static void displayText(String text, int size);
+    void displayText(String text, int size);
     //  Scrolling text. To be implemented. (to be called from displayTask inside a vtask)
-    static void scrollText(String text);
+    void scrollText(String text, int size);
     // Smile.(to be called from displayTask inside a vtask)
-    static void smile(int wait);
+    void smile(int wait);
     // Set Face neutral. (to be called from displayTask inside a vtask)
-    static void neutral();
+    void neutral();
     // drawbitmap. (to be called from displayTask inside a vtask)
-    static void drawbitmap(int wait);
+    void drawbitmap(int index);
     // Look Left Animation. (to be called from displayTask inside a vtask)
-    static void lookLeftAni(int wait);
+    void lookLeftAni(int wait);
     // Look Right animation. (to be called from displayTask inside a vtask)
-    static void lookRightAni(int wait);
+    void lookRightAni(int wait);
     // Startup sequence of multiple animations. (to be called from displayTask inside a vtask)
-    static void startUp();
+    void startUp();
     // Blink eyes. (to be called from displayTask inside a vtask)
-    static void blink(int wait);
+    void blink(int wait);
     // Wink left eye. (to be called from displayTask inside a vtask)
-    static void wink(int wait);
+    void wink(int wait);
     // Shake eyes left to right and right to left. (to be called from displayTask inside a vtask)
-    static void shake(int wait);
+    void shake(int wait);
     // Cylon function, moving leds from left to righ and vice versa. To be implemented.(to be called from displayTask inside a vtask)
-    static void cylon(int wait);
+    void cylon(int wait);
     // Fill rectangle patter for test purposes. (to be called from displayTask inside a vtask)
-    static void testfillrect(int wait);
+    void testfillrect(int wait);
+    // Scroll screen left (to be called from displayTask inside a vtask)
+    void scrollScreenLeft();
+    // Scroll screen right (to be called from displayTask inside a vtask)
+    void scrollScreenRight();
+    // Stop scrolling
+    void stopScrolling();
+    // Animation
+    void animation(const byte frames[][512], int loop);
 
 };
-
 
 #endif
