@@ -106,6 +106,10 @@ void bodyControl::bodyActionTask(void* bodyControlInstance) {
       bodyControlRef->rightHandLight(bodyControlRef->_direction, bodyControlRef->_duration);
       break;
 
+    case bodyAction::TURN:
+      bodyControlRef->turn(bodyControlRef->_direction, bodyControlRef->_duration);
+      break;
+
     default:
       break;
   };
@@ -142,11 +146,11 @@ void bodyControl::rightUpperArm(bool up, int duration) {
   up ? RIGHT_MCP.digitalWrite(RIGHTUPPERARM_UP_PIN, 0) : RIGHT_MCP.digitalWrite(RIGHTUPPERARM_DOWN_PIN, 0);
 };
 
-void bodyControl::leftLeg(bool up, int duration) {
+void bodyControl::leftLeg(bool forward, int duration) {
   int _duration = duration == 0 ? 100 : duration;
-  up ? LEFT_MCP.digitalWrite(LEFTLEG_FORWARD_PIN, 1) : LEFT_MCP.digitalWrite(LEFTLEG_BACK_PIN, 1);
+  forward ? LEFT_MCP.digitalWrite(LEFTLEG_FORWARD_PIN, 1) : LEFT_MCP.digitalWrite(LEFTLEG_BACK_PIN, 1);
   delay(_duration);
-  up ? LEFT_MCP.digitalWrite(LEFTLEG_FORWARD_PIN, 0) : LEFT_MCP.digitalWrite(LEFTLEG_BACK_PIN, 0);
+  forward ? LEFT_MCP.digitalWrite(LEFTLEG_FORWARD_PIN, 0) : LEFT_MCP.digitalWrite(LEFTLEG_BACK_PIN, 0);
 };
 
 void bodyControl::rightLeg(bool forward, int duration) {
@@ -178,3 +182,56 @@ void bodyControl::rightHandLight(bool on, int duration) {
     HANDLIGHTS_MCP.digitalWrite(RIGHTHAND_LIGHT_PIN, 0);
   } 
 }
+
+void bodyControl::turn(bool left, int duration) {
+
+  if(left) {
+
+    LEFT_MCP.digitalWrite(LEFTLEG_BACK_PIN, 0);
+    LEFT_MCP.digitalWrite(LEFTLEG_FORWARD_PIN, 1);
+
+    RIGHT_MCP.digitalWrite(RIGHTLEG_FORWARD_PIN, 0);
+    RIGHT_MCP.digitalWrite(RIGHTLEG_BACK_PIN, 1);
+
+    HIP_MCP.digitalWrite(HIP_LEFT_PIN, 1);
+    HIP_MCP.digitalWrite(HIP_RIGHT_PIN, 0);
+    delay(300);
+
+    LEFT_MCP.digitalWrite(LEFTLEG_BACK_PIN, 0);
+    LEFT_MCP.digitalWrite(LEFTLEG_FORWARD_PIN, 0);
+
+    RIGHT_MCP.digitalWrite(RIGHTLEG_FORWARD_PIN, 0);
+    RIGHT_MCP.digitalWrite(RIGHTLEG_BACK_PIN, 0);
+    
+    HIP_MCP.digitalWrite(HIP_LEFT_PIN, 0);
+    HIP_MCP.digitalWrite(HIP_RIGHT_PIN, 0);
+
+    delay(100);
+
+  } else {
+    LEFT_MCP.digitalWrite(LEFTLEG_BACK_PIN, 1);
+    LEFT_MCP.digitalWrite(LEFTLEG_FORWARD_PIN, 0);
+
+    RIGHT_MCP.digitalWrite(RIGHTLEG_FORWARD_PIN, 1);
+    RIGHT_MCP.digitalWrite(RIGHTLEG_BACK_PIN, 0);
+
+    HIP_MCP.digitalWrite(HIP_LEFT_PIN, 0);
+    HIP_MCP.digitalWrite(HIP_RIGHT_PIN, 1);
+    delay(300);
+
+    LEFT_MCP.digitalWrite(LEFTLEG_BACK_PIN, 0);
+    LEFT_MCP.digitalWrite(LEFTLEG_FORWARD_PIN, 0);
+
+    RIGHT_MCP.digitalWrite(RIGHTLEG_FORWARD_PIN, 0);
+    RIGHT_MCP.digitalWrite(RIGHTLEG_BACK_PIN, 0);
+
+    HIP_MCP.digitalWrite(HIP_LEFT_PIN, 0);
+    HIP_MCP.digitalWrite(HIP_RIGHT_PIN, 0);
+
+    delay(100);
+  
+  }
+
+}
+
+  

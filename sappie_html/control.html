@@ -42,6 +42,7 @@ function bodyaction(bodypart, direction) {
 	  HIP = 7,
 	  LEFTHANDLIGHT = 8,
 	  RIGHTHANDLIGHT = 9,
+	  TURN = 10,
 	**/
 	var url = "/bodyaction?bodypart=" + bodypart + "&direction=" + direction + "&duration=" + $("#moveduration").val(); 	
 	$.ajax({
@@ -73,21 +74,6 @@ function bodytest() {
 		});
 }
 
-function wakeUpSense() {
-	$.ajax({
-		url: "/wakeupsense",
-		type: 'GET',
-    	dataType: 'text',
-    	async: false})
-    	.done(function (result) {
-		})
-		.fail(function (xhr, status) {
-			console.log(status);
-		})
-		.always(function() {
-		});
-}
-  
 </script>
 
 <body>
@@ -106,15 +92,14 @@ function wakeUpSense() {
 <div class="container">
 	<div class="row">
 		<div class="column column-25">
-			<div id="startaudio" class="button button-outline" onClick="audio_control('1');">Start audio receive</div>
-			<div id="startaudio" class="button button-outline" onClick="audio_control('0');">Stop audio receive</div>
+			<div id="startaudio" class="button button-outline" onClick="audio_control('1');">Start UDP audio receive</div>
 		</div>
 		<div class="column column-25" id="audiostream_result">
 		</div>
 	</div>
 	<div class="row">
 		<div class="column column-25">
-			<div class="button button-outline" onClick="wakeUpSense();">Wake up Sense/Camera</div>
+			<div id="startaudio" class="button button-outline" onClick="audio_control('0');">Stop UDP audio receive</div>
 		</div>
 		<div class="column column-25">
 			<div class="button button-outline" onClick="bodytest();">Body test</div>
@@ -146,6 +131,16 @@ function wakeUpSense() {
 	</div>
 </div>
 <div class="container">
+	<div class="row">
+		<div class="column column-25">
+			<div class="button button-outline" onClick="bodyaction(10,1);" >Turn left</div>
+			<div class="button button-outline" onClick="bodyaction(10,0);" >Turn right</div>
+		</div>
+		<div class="column column-25">
+		</div>
+	</div>
+	<br>
+	<br>
 	<div class="row">
 		<div class="column column-25">
 			<div class="button button-outline" onClick="bodyaction(1,1);" >Left upper arm up</div>

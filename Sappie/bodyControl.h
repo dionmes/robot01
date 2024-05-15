@@ -7,6 +7,7 @@ Also handles the switches and leds in the Robosapien body.
 
 #include <Wire.h>
 #include <MCP23017.h>
+#include "bodyControl.h"
 
 // Refer to initialized LED matrix in main
 extern TwoWire wire;
@@ -22,6 +23,7 @@ enum bodyAction {
   HIP = 7,
   LEFTHANDLIGHT = 8,
   RIGHTHANDLIGHT = 9,
+  TURN = 10,
 };
 
 class bodyControl {
@@ -62,6 +64,8 @@ private:
   void leftHandLight(bool on, int duration = 0);
   // right Hand ligt, on = true, duration of staying on, 0 is indifinite
   void rightHandLight(bool on, int duration = 0);
+  // Turn body , left = true
+  void turn(bool left, int duration);
 
 };
 
