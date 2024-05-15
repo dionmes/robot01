@@ -59,7 +59,7 @@ void bodyControl::exec(int action, bool direction, int duration) {
 
   if (eTaskGetState(&bodyTaskHandle) == eRunning) {
     vTaskDelete(&bodyTaskHandle);
-    delay(200);
+    vTaskDelay(200);
   }
 
   xTaskCreatePinnedToCore(bodyActionTask, "bodyActionTask", 4096, (void*)this, 10, &bodyTaskHandle, 1);
@@ -114,63 +114,63 @@ void bodyControl::bodyActionTask(void* bodyControlInstance) {
       break;
   };
 
-  delay(100);
+  vTaskDelay(100);
   vTaskDelete(NULL);
 };
 
 void bodyControl::leftLowerArm(bool up, int duration) {
   int _duration = duration == 0 ? 100 : duration;
   up ? LEFT_MCP.digitalWrite(LEFTLOWERARM_UP_PIN, 1) : LEFT_MCP.digitalWrite(LEFTLOWERARM_DOWN_PIN, 1);
-  delay(_duration);
+  vTaskDelay(_duration);
   up ? LEFT_MCP.digitalWrite(LEFTLOWERARM_UP_PIN, 0) : LEFT_MCP.digitalWrite(LEFTLOWERARM_DOWN_PIN, 0);
 };
 
 void bodyControl::leftUpperArm(bool up, int duration) {
   int _duration = duration == 0 ? 100 : duration;
   up ? LEFT_MCP.digitalWrite(LEFTUPPERARM_UP_PIN, 1) : LEFT_MCP.digitalWrite(LEFTUPPERARM_DOWN_PIN, 1);
-  delay(_duration);
+  vTaskDelay(_duration);
   up ? LEFT_MCP.digitalWrite(LEFTUPPERARM_UP_PIN, 0) : LEFT_MCP.digitalWrite(LEFTUPPERARM_DOWN_PIN, 0);
 };
 
 void bodyControl::rightLowerArm(bool up, int duration) {
   int _duration = duration == 0 ? 100 : duration;
   up ? RIGHT_MCP.digitalWrite(RIGHTLOWERARM_UP_PIN, 1) : RIGHT_MCP.digitalWrite(RIGHTLOWERARM_DOWN_PIN, 1);
-  delay(_duration);
+  vTaskDelay(_duration);
   up ? RIGHT_MCP.digitalWrite(RIGHTLOWERARM_UP_PIN, 0) : RIGHT_MCP.digitalWrite(RIGHTLOWERARM_DOWN_PIN, 0);
 };
 
 void bodyControl::rightUpperArm(bool up, int duration) {
   int _duration = duration == 0 ? 100 : duration;
   up ? RIGHT_MCP.digitalWrite(RIGHTUPPERARM_UP_PIN, 1) : RIGHT_MCP.digitalWrite(RIGHTUPPERARM_DOWN_PIN, 1);
-  delay(_duration);
+  vTaskDelay(_duration);
   up ? RIGHT_MCP.digitalWrite(RIGHTUPPERARM_UP_PIN, 0) : RIGHT_MCP.digitalWrite(RIGHTUPPERARM_DOWN_PIN, 0);
 };
 
 void bodyControl::leftLeg(bool forward, int duration) {
   int _duration = duration == 0 ? 100 : duration;
   forward ? LEFT_MCP.digitalWrite(LEFTLEG_FORWARD_PIN, 1) : LEFT_MCP.digitalWrite(LEFTLEG_BACK_PIN, 1);
-  delay(_duration);
+  vTaskDelay(_duration);
   forward ? LEFT_MCP.digitalWrite(LEFTLEG_FORWARD_PIN, 0) : LEFT_MCP.digitalWrite(LEFTLEG_BACK_PIN, 0);
 };
 
 void bodyControl::rightLeg(bool forward, int duration) {
   int _duration = duration == 0 ? 100 : duration;
   forward ? RIGHT_MCP.digitalWrite(RIGHTLEG_FORWARD_PIN, 1) : RIGHT_MCP.digitalWrite(RIGHTLEG_BACK_PIN, 1);
-  delay(_duration);
+  vTaskDelay(_duration);
   forward ? RIGHT_MCP.digitalWrite(RIGHTLEG_FORWARD_PIN, 0) : RIGHT_MCP.digitalWrite(RIGHTLEG_BACK_PIN, 0);
 };
 
 void bodyControl::hip(bool left, int duration) {
   int _duration = duration == 0 ? 100 : duration;
   left ? HIP_MCP.digitalWrite(HIP_LEFT_PIN, 1) : HIP_MCP.digitalWrite(HIP_RIGHT_PIN, 1);
-  delay(_duration);
+  vTaskDelay(_duration);
   left ? HIP_MCP.digitalWrite(HIP_LEFT_PIN, 0) : HIP_MCP.digitalWrite(HIP_RIGHT_PIN, 0);
 };
 
 void bodyControl::leftHandLight(bool on, int duration) {
   on ? HANDLIGHTS_MCP.digitalWrite(LEFTHAND_LIGHT_PIN, 1) : HANDLIGHTS_MCP.digitalWrite(LEFTHAND_LIGHT_PIN, 0);
   if (duration > 0) {
-    delay(duration);
+    vTaskDelay(duration);
     HANDLIGHTS_MCP.digitalWrite(LEFTHAND_LIGHT_PIN, 0);
   } 
 }
@@ -178,7 +178,7 @@ void bodyControl::leftHandLight(bool on, int duration) {
 void bodyControl::rightHandLight(bool on, int duration) {
   on ? HANDLIGHTS_MCP.digitalWrite(RIGHTHAND_LIGHT_PIN, 1) : HANDLIGHTS_MCP.digitalWrite(RIGHTHAND_LIGHT_PIN, 0);
   if (duration > 0) {
-    delay(duration);
+    vTaskDelay(duration);
     HANDLIGHTS_MCP.digitalWrite(RIGHTHAND_LIGHT_PIN, 0);
   } 
 }
@@ -195,7 +195,7 @@ void bodyControl::turn(bool left, int duration) {
 
     HIP_MCP.digitalWrite(HIP_LEFT_PIN, 1);
     HIP_MCP.digitalWrite(HIP_RIGHT_PIN, 0);
-    delay(300);
+    vTaskDelay(300);
 
     LEFT_MCP.digitalWrite(LEFTLEG_BACK_PIN, 0);
     LEFT_MCP.digitalWrite(LEFTLEG_FORWARD_PIN, 0);
@@ -206,7 +206,7 @@ void bodyControl::turn(bool left, int duration) {
     HIP_MCP.digitalWrite(HIP_LEFT_PIN, 0);
     HIP_MCP.digitalWrite(HIP_RIGHT_PIN, 0);
 
-    delay(100);
+    vTaskDelay(100);
 
   } else {
     LEFT_MCP.digitalWrite(LEFTLEG_BACK_PIN, 1);
@@ -217,7 +217,7 @@ void bodyControl::turn(bool left, int duration) {
 
     HIP_MCP.digitalWrite(HIP_LEFT_PIN, 0);
     HIP_MCP.digitalWrite(HIP_RIGHT_PIN, 1);
-    delay(300);
+    vTaskDelay(300);
 
     LEFT_MCP.digitalWrite(LEFTLEG_BACK_PIN, 0);
     LEFT_MCP.digitalWrite(LEFTLEG_FORWARD_PIN, 0);
@@ -228,7 +228,7 @@ void bodyControl::turn(bool left, int duration) {
     HIP_MCP.digitalWrite(HIP_LEFT_PIN, 0);
     HIP_MCP.digitalWrite(HIP_RIGHT_PIN, 0);
 
-    delay(100);
+    vTaskDelay(100);
   
   }
 

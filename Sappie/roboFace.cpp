@@ -38,7 +38,7 @@ void roboFace::begin() {
   ledMatrix.setTextColor(SSD1306_WHITE);
   ledMatrix.setTextWrap(false);
 
-  delay(200);
+  vTaskDelay(200);
 };
 
 void roboFace::exec(int action, String text, int intValue) {
@@ -51,11 +51,11 @@ void roboFace::exec(int action, String text, int intValue) {
       vTaskDelete(faceTaskHandle);
 
       // Recover time and procedure before starting next task after sudden break
-      delay(200);
+      vTaskDelay(200);
       ledMatrix.clearDisplay();
       ledMatrix.stopscroll();
       ledMatrix.display();
-      delay(200);
+      vTaskDelay(200);
     }
 
   }
@@ -170,7 +170,7 @@ void roboFace::displayTask(void* roboFaceInstance) {
       break;
   };
 
-  delay(5);
+  vTaskDelay(5);
   vTaskDelete(NULL);
 };
 
@@ -178,13 +178,13 @@ void roboFace::startUp() {
   actionRunning = true;
 
   wink(50);
-  delay(1000);
+  vTaskDelay(1000);
   lookLeftAni(50);
-  delay(100);
+  vTaskDelay(100);
   lookRightAni(50);
-  delay(500);
+  vTaskDelay(500);
   neutral();
-  delay(1000);
+  vTaskDelay(1000);
   smile(1000);
 
   actionRunning = false;
@@ -228,7 +228,7 @@ void roboFace::scrollText(String text, int wait) {
     ledMatrix.setCursor(x, 32);
     ledMatrix.print(text);
     ledMatrix.display();
-    delay(wait);
+    vTaskDelay(wait);
   }
 
   actionRunning = false;
@@ -269,7 +269,7 @@ void roboFace::smile(int wait) {
   ledMatrix.display();
 
   if (wait > 0) {
-    delay(wait);
+    vTaskDelay(wait);
     neutral();
   }
   actionRunning = false;
@@ -289,7 +289,7 @@ void roboFace::lookLeftAni(int wait) {
     ledMatrix.fillCircle(rightEyeX - i, rightEyeY, eyeRadius, 0);
     ledMatrix.display();
 
-    delay(wait);
+    vTaskDelay(wait);
   }
   actionRunning = false;
 };
@@ -308,7 +308,7 @@ void roboFace::lookRightAni(int wait) {
     ledMatrix.fillCircle(rightEyeX + i, rightEyeY, eyeRadius, 0);
     ledMatrix.display();
 
-    delay(wait);
+    vTaskDelay(wait);
   }
   actionRunning = false;
 };
@@ -322,7 +322,7 @@ void roboFace::blink(int wait) {
   ledMatrix.fillRoundRect(rectX1, rectY1, rectX2, rectY2, rectRadius, 1);
   ledMatrix.display();
 
-  delay(wait);
+  vTaskDelay(wait);
 
   neutral();
   actionRunning = false;
@@ -339,7 +339,7 @@ void roboFace::wink(int wait) {
   ledMatrix.fillCircle(rightEyeX, rightEyeY, eyeRadius, 0);
   ledMatrix.display();
 
-  delay(_wait);
+  vTaskDelay(_wait);
 
   neutral();
   actionRunning = false;
@@ -368,9 +368,9 @@ void roboFace::shake(int wait) {
       left = true;
     }
 
-    delay(wait);
+    vTaskDelay(wait);
     neutral();
-    delay(wait);
+    vTaskDelay(wait);
   }
 
   actionRunning = false;
@@ -389,14 +389,14 @@ void roboFace::cylon(int wait) {
       ledMatrix.clearDisplay();
       ledMatrix.fillRect(x, 20, 18, 24, 1);
       ledMatrix.display();
-      delay(wait);
+      vTaskDelay(wait);
     }
 
     for (int x = 110; x > 0; x = x - 10) {
       ledMatrix.clearDisplay();
       ledMatrix.fillRect(x, 20, 18, 24, 1);
       ledMatrix.display();
-      delay(wait);
+      vTaskDelay(wait);
     }
   }
 
@@ -415,10 +415,10 @@ void roboFace::testfillrect(int wait) {
     // The INVERSE color is used so rectangles alternate white/black
     ledMatrix.fillRect(i, i, ledMatrix.width() - i * 2, ledMatrix.height() - i * 2, SSD1306_INVERSE);
     ledMatrix.display();  // Update screen with each newly-drawn rectangle
-    delay(1);
+    vTaskDelay(1);
   }
 
-  delay(wait);
+  vTaskDelay(wait);
   actionRunning = false;
 }
 
@@ -444,7 +444,7 @@ void roboFace::animation(const byte frames[][512], int loop) {
     ledMatrix.clearDisplay();
     ledMatrix.drawBitmap(32, 0, frames[frame], 64, 64, 1);
     ledMatrix.display();
-    delay(42);
+    vTaskDelay(42);
     }
   }
   actionRunning = false;

@@ -30,7 +30,7 @@ bool wrapper_bno08x::begin() {
   // Try to initialize!
   if (!bno08x.begin_I2C()) {
 	for (int i = 0; i <= 10; i++) {
-	  delay(500);	
+	  vTaskDelay(500);	
 	}
 	return false;
   }
@@ -49,7 +49,7 @@ bool wrapper_bno08x::begin() {
 void wrapper_bno08x::update() {
   while (bno08x.getSensorEvent(&sensorValue)) {
 	  getValues();
-	  delay(50);
+	  vTaskDelay(50);
   }
   return;  
 }
