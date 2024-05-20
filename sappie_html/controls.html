@@ -27,8 +27,7 @@ function audio_control(on) {
 		.always(function() {
 			$("#startaudio").html("Start audio");
 			$("#stopaudio").html("Stop audio");			
-		});
-
+		}); 
 }
 
 function bodyaction(bodypart, direction) {
@@ -77,18 +76,6 @@ function bodytest() {
 </script>
 
 <body>
-
-<div class="container">
-	<div class="row">
-		<div class="column">
-			<h1 class="centered">Sappie Control</h1>
-		</div>
-		<div class="column">
-			<a class="button button-primary" href='index.html'>Back</a>
-		</div>
-	</div>
-</div>
-
 <div class="container">
 	<div class="row">
 		<div class="column column-25">
@@ -126,7 +113,7 @@ function bodytest() {
 	<div class="row">
 		<form>
 		  <label for="moveduration">Move duration between 10-2000</label>
-		  <input type="number" id="moveduration" name="quantity" min="10" max="2000">
+		  <input type="number" id="moveduration" name="quantity" min="10" max="2000" value="100">
 		</form>
 	</div>
 </div>
@@ -180,10 +167,6 @@ function bodytest() {
 		</div>
 	</div>
 </div>
-
-<br>
-<br>
-<br>
 
 </body>
 </html>

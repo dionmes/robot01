@@ -13,7 +13,7 @@
 */
 #include <FS.h>
 #include <LittleFS.h>
-#include <esp-fs-webserver.h>
+#include <AsyncFsWebServer.h>
 
 /*
 * SD Card
@@ -76,7 +76,7 @@ roboFace roboFace;
 bodyControl bodyControl;
 
 #define FILESYSTEM LittleFS
-FSWebServer WebServer(FILESYSTEM, 80);
+AsyncFsWebServer WebServer(80, FILESYSTEM ,"Sappie server");
 bool apMode = false;
 
 /*
@@ -118,6 +118,7 @@ void setup() {
 
   // Webserver init.
   roboFace.exec(faceAction::DISPLAYTEXTLARGE, "Server");
+  Serial.println("Webserver starting\n");
   startWebserver();
   delay(100);
 
@@ -167,8 +168,6 @@ void setup() {
   // Starting tasks
   Serial.println("Tasks starting\n");
 
-  Serial.println("Webserver task starting\n");
-  xTaskCreatePinnedToCore(WebServerTask, "Webserver", 8192, NULL, 5, &WebserverTaskHandle, 0);
   Serial.println("wrapper_bno08x update task starting\n");
   xTaskCreatePinnedToCore(bno08xUpdateTask, "wrapper_bno08x", 4096, NULL, 10, &wrapper_bno08xUpdateTaskHandle, 0);
   Serial.println("Boot complete...\n");
@@ -196,18 +195,6 @@ void loop() {
 ////////////////////////////////  Tasks  /////////////////////////////////////////
 
 /*
-* Webserver continues running, executing as vtask
-*/
-void WebServerTask(void* pvParameters) {
-  Serial.print("Webserver running on core ");
-  Serial.println(xPortGetCoreID());
-  for (;;) {
-    WebServer.run();
-    delay(200);
-  }
-}
-
-/*
 * bno08x continues updates, executing as vtask
 */
 void bno08xUpdateTask(void* pvParameters) {
@@ -222,7 +209,7 @@ void bno08xUpdateTask(void* pvParameters) {
 /*
 * Handler to get vl53l1x values
 */
-void webhandler_VL53L1X_Info() {
+void webhandler_VL53L1X_Info(AsyncWebServerRequest *request) {
   vl53l1x_sensor.read();
 
   uint16_t range_mm = vl53l1x_sensor.ranging_data.range_mm;
@@ -233,13 +220,13 @@ void webhandler_VL53L1X_Info() {
   String json = "{\"range_mm\": " + String(range_mm) + ",\"range_status\": " + String(range_status) + ",\"peak_signal\": " + String(peak_signal)
                 + ",\"ambient_count\" : " + String(ambient_count) + " }";
 
-  WebServer.send(200, "application/json", json);
+  request->send(200, "application/json", json);
 }
 
 /*
 * Handler to get bno08x values
 */
-void webhandler_wrapper_bno08xInfo() {
+void webhandler_wrapper_bno08xInfo(AsyncWebServerRequest *request) {
 
   String json = "{\"geoMagRotationVector_real\":" + String(wrapper_bno08x.geoMagRotationVector_real)
                 + ",\"geoMagRotationVector_i\":" + String(wrapper_bno08x.geoMagRotationVector_i)
@@ -255,13 +242,13 @@ void webhandler_wrapper_bno08xInfo() {
                 + ",\"shake\":\"" + String(wrapper_bno08x.shake) + "\""
                 + " }";
 
-  WebServer.send(200, "application/json", json);
+  request->send(200, "application/json", json);
 }
 
 /*
 * Handler to show LittleFS stats
 */
-void FileSystemInfoPage() {
+void FileSystemInfoPage(AsyncWebServerRequest *request) {
   File f = LittleFS.open("/FileSystemInfo.html", "r");
   String html = f.readString();
   f.close();
@@ -270,83 +257,83 @@ void FileSystemInfoPage() {
   html.replace("usedBytes", String(LittleFS.usedBytes()));
   html.replace("freeBytes", String(LittleFS.totalBytes() - LittleFS.usedBytes()));
 
-  WebServer.send(200, "text/HTML", html);
+  request->send(200, "text/HTML", html);
 }
 
 /*
 * Handler to enable/disable audiostream
 */
-void audiostream_handler() {
-  if (WebServer.hasArg("on")) {
-    int value = WebServer.arg("on").toInt();
+void audiostream_handler(AsyncWebServerRequest *request) {
+  if (request->hasArg("on")) {
+    int value = request->arg("on").toInt();
     if (value == 1 && !audioStreamRunning) {
       Serial.println("Audio streaming starting\n");
       startAudio(true);
-      WebServer.send(200, "text/plain", "Audiostream task started");
+      request->send(200, "text/plain", "Audiostream task started");
       return;
     }
     if (value == 0 && audioStreamRunning) {
       Serial.println("Audio streaming stopping\n");
       startAudio(false);
-      WebServer.send(200, "text/plain", "Audiostream task stopped");
+      request->send(200, "text/plain", "Audiostream task stopped");
       return;
     }
-    WebServer.send(200, "text/plain", "Invalid argument");
+    request->send(200, "text/plain", "Invalid argument");
   } else {
-    WebServer.send(422, "application/json", "Missing argument");
+    request->send(422, "application/json", "Missing argument");
   }
 }
 
 /*
 * Handler for body test task
 */
-void body_action_handler() {
-  if (WebServer.hasArg("bodypart")) {
+void body_action_handler(AsyncWebServerRequest *request) {
+  if (request->hasArg("bodypart")) {
     
-    int bodyPart = WebServer.arg("bodypart").toInt();
+    int bodyPart = request->arg("bodypart").toInt();
     
     int direction = 0;
-    if (WebServer.hasArg("direction")) { direction = WebServer.arg("direction").toInt();}
+    if (request->hasArg("direction")) { direction = request->arg("direction").toInt();}
     
     int duration = 0;
-    if (WebServer.hasArg("duration")) { duration = WebServer.arg("duration").toInt(); }
+    if (request->hasArg("duration")) { duration = request->arg("duration").toInt(); }
     
     bodyControl.exec(bodyPart,direction,duration);
 
   } else {
       xTaskCreatePinnedToCore(bodyTestRoutine, "BodyTestRoutine", 4096, NULL, 5, &robotRoutineTask, 1);
   }
-  WebServer.send(200, "text/plain", "Body Test started");
+  request->send(200, "text/plain", "Body Test started");
 }
 
 /*
 * Handler for display action
 */
-void display_action_handler() {
-  if (WebServer.hasArg("action")) {
-    int index = WebServer.hasArg("index") ? WebServer.arg("index").toInt() : 0;
-    String text = WebServer.hasArg("text") ?  WebServer.arg("text") : "";
+void display_action_handler(AsyncWebServerRequest *request) {
+  if (request->hasArg("action")) {
+    int index = request->hasArg("index") ? request->arg("index").toInt() : 0;
+    String text = request->hasArg("text") ?  request->arg("text") : "";
 
-    roboFace.exec(WebServer.arg("action").toInt(),text,index);
-    WebServer.send(200, "text/plain", "Display starting.");
+    roboFace.exec(request->arg("action").toInt(),text,index);
+    request->send(200, "text/plain", "Display starting.");
   } else {
     // Test routine
     for (int i = 0; i <= 60; i++) {
       roboFace.exec(faceAction::DISPLAYIMG, "", i);
       delay(800);
     }
-    WebServer.send(200, "text/plain", "No text");
+    request->send(200, "text/plain", "No text");
   }
 }
 
 /*
 * Handler waking up XAIO sense/camera from sleep
 */
-void wakeupsense_handler() {
+void wakeupsense_handler(AsyncWebServerRequest *request) {
   digitalWrite(25, HIGH);
   delay(200);
   digitalWrite(25, LOW);
-  WebServer.send(200, "text/plain", "Wake up sent.");
+  request->send(200, "text/plain", "Wake up sent.");
 }
 
 ////////////////////////////////  Services  /////////////////////////////////////////
@@ -392,6 +379,7 @@ void startAudio(bool start) {
 /*
 * Start Webserver
 */
+
 void startWebserver() {
 
   Serial.println("Webserver -> Booting Filesystem\n");
@@ -399,9 +387,14 @@ void startWebserver() {
   startFilesystem();
 
   // Try to connect to stored SSID, start AP if fails after timeout
-  WebServer.setAP("ESP_AP", "123456789");
-  IPAddress myIP = WebServer.startWiFi(15000);
+  IPAddress myIP = WebServer.startWiFi(15000, "ESP32_AP1234", "123456789");
+
   Serial.println("\n");
+
+  // send a file when /index is requested
+  WebServer.on("/", HTTP_ANY, [](AsyncWebServerRequest *request){
+    request->send(FILESYSTEM, "/Index.html");
+  });
 
   // Add custom request handlers to webserver
   WebServer.on("/FileSystemInfo", HTTP_GET, FileSystemInfoPage);
@@ -412,18 +405,19 @@ void startWebserver() {
   WebServer.on("/displayaction", HTTP_GET, display_action_handler);
   WebServer.on("/wakeupsense", HTTP_GET, wakeupsense_handler);
 
+  WebServer.enableFsCodeEditor();
 
   Serial.println("Starting Webserver\n");
   // Start webserver
-  WebServer.begin();
+  WebServer.init();
+
   Serial.print(F("ESP Web Server started on IP Address: "));
   Serial.println(myIP);
   Serial.println(F("Open /setup page to configure optional parameters"));
 
   // Enable content editor
-  WebServer.enableFsCodeEditor(getFsInfo);
+  WebServer.enableFsCodeEditor();
 }
-
 ////////////////////////////////  Robot Functions  /////////////////////////////////////////
 
 /*
@@ -506,7 +500,6 @@ void startFilesystem() {
     FILESYSTEM.format();
     ESP.restart();
   }
-  WebServer.printFileList(LittleFS, Serial, "/", 2);
 }
 
 /*
