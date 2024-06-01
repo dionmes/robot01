@@ -82,7 +82,6 @@ bool apMode = false;
 /*
 * Task handlers
 */
-TaskHandle_t WebserverTaskHandle;
 TaskHandle_t wrapper_bno08xUpdateTaskHandle;
 TaskHandle_t AudioStreamTaskHandle;
 TaskHandle_t robotRoutineTask;
@@ -128,9 +127,9 @@ void setup() {
   if (i2s_driver_install((i2s_port_t)i2sPortNo, &i2s_config, 0, NULL) != ESP_OK) {
     Serial.print("I2S Failure to initialize");
   }
+
   i2s_set_pin((i2s_port_t)i2sPortNo, &i2s_pins);
 
-  startAudio(true);
   delay(100);
 
   // SD Card init.
@@ -220,7 +219,9 @@ void webhandler_VL53L1X_Info(AsyncWebServerRequest *request) {
   String json = "{\"range_mm\": " + String(range_mm) + ",\"range_status\": " + String(range_status) + ",\"peak_signal\": " + String(peak_signal)
                 + ",\"ambient_count\" : " + String(ambient_count) + " }";
 
-  request->send(200, "application/json", json);
+  AsyncWebServerResponse *response = request->beginResponse(200,  "application/json", json);
+  response->addHeader("Access-Control-Allow-Origin", "*");
+  request->send(response);
 }
 
 /*
@@ -242,7 +243,9 @@ void webhandler_wrapper_bno08xInfo(AsyncWebServerRequest *request) {
                 + ",\"shake\":\"" + String(wrapper_bno08x.shake) + "\""
                 + " }";
 
-  request->send(200, "application/json", json);
+  AsyncWebServerResponse *response = request->beginResponse(200, "application/json", json);
+  response->addHeader("Access-Control-Allow-Origin", "*");
+  request->send(response);
 }
 
 /*
@@ -264,23 +267,27 @@ void FileSystemInfoPage(AsyncWebServerRequest *request) {
 * Handler to enable/disable audiostream
 */
 void audiostream_handler(AsyncWebServerRequest *request) {
+  
+  AsyncWebServerResponse *response = request->beginResponse(200, "text/plain", "Request received");
+  response->addHeader("Access-Control-Allow-Origin", "*");
+
   if (request->hasArg("on")) {
     int value = request->arg("on").toInt();
     if (value == 1 && !audioStreamRunning) {
       Serial.println("Audio streaming starting\n");
       startAudio(true);
-      request->send(200, "text/plain", "Audiostream task started");
+      request->send(response);
       return;
     }
     if (value == 0 && audioStreamRunning) {
       Serial.println("Audio streaming stopping\n");
       startAudio(false);
-      request->send(200, "text/plain", "Audiostream task stopped");
+      request->send(response);
       return;
     }
-    request->send(200, "text/plain", "Invalid argument");
+    request->send(response);
   } else {
-    request->send(422, "application/json", "Missing argument");
+    request->send(response);
   }
 }
 
@@ -288,6 +295,7 @@ void audiostream_handler(AsyncWebServerRequest *request) {
 * Handler for body test task
 */
 void body_action_handler(AsyncWebServerRequest *request) {
+
   if (request->hasArg("bodypart")) {
     
     int bodyPart = request->arg("bodypart").toInt();
@@ -303,7 +311,10 @@ void body_action_handler(AsyncWebServerRequest *request) {
   } else {
       xTaskCreatePinnedToCore(bodyTestRoutine, "BodyTestRoutine", 4096, NULL, 5, &robotRoutineTask, 1);
   }
-  request->send(200, "text/plain", "Body Test started");
+  
+  AsyncWebServerResponse *response = request->beginResponse(200, "text/plain", "Body Test started");
+  response->addHeader("Access-Control-Allow-Origin", "*");
+  request->send(response);
 }
 
 /*
@@ -315,14 +326,10 @@ void display_action_handler(AsyncWebServerRequest *request) {
     String text = request->hasArg("text") ?  request->arg("text") : "";
 
     roboFace.exec(request->arg("action").toInt(),text,index);
-    request->send(200, "text/plain", "Display starting.");
-  } else {
-    // Test routine
-    for (int i = 0; i <= 60; i++) {
-      roboFace.exec(faceAction::DISPLAYIMG, "", i);
-      delay(800);
-    }
-    request->send(200, "text/plain", "No text");
+
+    AsyncWebServerResponse *response = request->beginResponse(200, "text/plain", "Display starting.");
+    response->addHeader("Access-Control-Allow-Origin", "*");
+    request->send(response);
   }
 }
 
@@ -333,7 +340,10 @@ void wakeupsense_handler(AsyncWebServerRequest *request) {
   digitalWrite(25, HIGH);
   delay(200);
   digitalWrite(25, LOW);
-  request->send(200, "text/plain", "Wake up sent.");
+
+  AsyncWebServerResponse *response = request->beginResponse(200, "text/plain", "Wake up sent.");
+  response->addHeader("Access-Control-Allow-Origin", "*");
+  request->send(response);
 }
 
 ////////////////////////////////  Services  /////////////////////////////////////////
@@ -390,7 +400,6 @@ void startWebserver() {
   IPAddress myIP = WebServer.startWiFi(15000, "ESP32_AP1234", "123456789");
 
   Serial.println("\n");
-
   // send a file when /index is requested
   WebServer.on("/", HTTP_ANY, [](AsyncWebServerRequest *request){
     request->send(FILESYSTEM, "/Index.html");

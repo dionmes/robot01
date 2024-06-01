@@ -38,6 +38,7 @@ enum faceAction {
   LOADER_ANIMATION=21,
   BELL_ANIMATION=22,
   CHAT_ANIMATION=23,
+  IMG_LOOP=24
 };
 
 class roboFace {
@@ -70,6 +71,8 @@ class roboFace {
     void neutral();
     // drawbitmap. (to be called from displayTask inside a vtask)
     void drawbitmap(int index);
+    // IMG Loop(to be called from displayTask inside a vtask)
+    void imgloop();
     // Look Left Animation. (to be called from displayTask inside a vtask)
     void lookLeftAni(int wait);
     // Look Right animation. (to be called from displayTask inside a vtask)

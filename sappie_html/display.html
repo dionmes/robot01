@@ -59,11 +59,11 @@ function displayAction(action) {
 
 function imgloop() {
 	$.ajax({
-		url: "/displayaction",
+		url: "/displayaction?action=24",
 		type: 'GET',
-    	dataType: 'text',
-    	async: false})
-    	.done(function (result) {
+		dataType: 'text',
+		async: false})
+		.done(function (result) {
 		})
 		.fail(function (xhr, status) {
 			console.log(status);

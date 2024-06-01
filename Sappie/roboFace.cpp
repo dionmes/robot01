@@ -165,6 +165,10 @@ void roboFace::displayTask(void* roboFaceInstance) {
       roboFaceRef->animation(chat_frames,roboFaceRef->_intValue);
       break;
 
+    case faceAction::IMG_LOOP:
+      roboFaceRef->imgloop();
+      break;
+
     default:
       roboFaceRef->neutral();
       break;
@@ -189,6 +193,18 @@ void roboFace::startUp() {
 
   actionRunning = false;
 };
+
+
+void roboFace::imgloop() {
+  // Test routine
+  actionRunning = true;
+
+  for (int i = 0; i <= 60; i++) {
+    drawbitmap(i);
+    delay(800);
+  }
+  actionRunning = false;
+}
 
 void roboFace::displayText(String text, int size) {
   actionRunning = true;
