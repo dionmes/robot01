@@ -1,0 +1,36 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+	<title>Welcome to Sappie - Your Robotic Assistant</title>
+</head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="stylesheet" href="css/milligram.min.css">
+
+<script src="js/jquery-3.7.1.min.js"></script>
+<script>
+</script>
+<style>
+    iframe {display: block; height: 100vh; width: 100vw; border: none; }
+</style>
+
+<body>
+<div>
+	<div class="container">
+		<div class="row">
+			<div class="column">
+				<h1 class="centered">Sappie Sensor info</h1>
+			</div>
+			<div class="column">
+				<a class="button button-primary" href='index.html'>Back</a>
+			</div>
+		</div>
+	</div>
+</div>
+
+<iframe src="http://{{context.sappie_ip}}/sensors.html">
+
+<br>
+
+</body>
+</html>
