@@ -16,7 +16,6 @@ def index(context=context):
 @app.route('/<path:filename>')
 def serve_html(filename,context=context):
     return render_template(filename,context=context) 
-
 # Serve CSS files
 @app.route('/css/<path:filename>')
 def serve_css(filename):
@@ -33,17 +32,16 @@ def serve_images(filename):
 
 # API Endpoints
 @app.route('/api/register_sappie', methods=['GET'])
-def register():
+def register_sappie():
     sappie_ip = request.args.get('ip')
     context['sappie_ip'] = sappie_ip
     return "ok"
 
 @app.route('/api/register_sense', methods=['GET'])
-def register():
+def register_sense():
     sense_ip = request.args.get('ip')
     context['sappiesense_ip'] = sense_ip
     return "ok"
-
 
 # Example API endpoint that echoes posted JSON data
 @app.route('/api/echo', methods=['POST'])
