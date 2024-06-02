@@ -1,0 +1,66 @@
+<!DOCTYPE html>
+<!-- 
+Flask/Jinja2 template variables used  
+-->
+
+<html lang="en">
+<head>
+	<title>Welcome to Sappie - Your Robotic Assistant</title>
+</head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="stylesheet" href=" css/milligram.min.css">
+
+<script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
+<script>
+
+function tts() {
+
+	var text = $("#textField").val(); 	
+	var url = "/api/tts"; 	
+	$.ajax({
+		url: url,
+		data : JSON.stringify({"text" : text}),
+		type: 'POST',
+		dataType: 'application/json',
+		contentType : 'application/json' })
+		.done(function (result) {
+			$( "#tts_result" ).text( "ok" );
+		})
+		.fail(function (xhr, status) {
+			$( "#tts_result" ).text( status );
+		});
+
+}
+</script>
+
+<body> 
+
+<div class="container">
+	<div class="row">
+		<div class="column">
+			<h1 class="centered">Sappie Master functions</h1>
+		</div>
+		<div class="column">
+			<a class="button button-primary" href='index.html'>Back</a>
+		</div>
+	</div>
+</div>
+
+<div class="container">
+	<form>
+	  <fieldset>
+		<label for="textField">Text to speak</label>
+		<input type="text" placeholder="Hello" id="textField">
+		<div class="button button-outline" onClick="tts();">Say text</div>
+	  	<div id="tts_result"></div>
+	  </fieldset>
+	</form>
+</div>
+<div class="container">
+	<p> Sappie IP : {{context.sappie_ip}} <br>
+	Sense IP  : {{context.sappiesense_ip}} </p>
+</div>
+
+</body>
+</html>

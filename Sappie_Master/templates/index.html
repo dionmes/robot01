@@ -18,6 +18,7 @@ Flask/Jinja2 template variables used
 	<h3 class="">Your Robotic Assistant</h3>
 	<div class="row">
 		<div class="column column-25">
+			<div class=".button-clear"><a href='masterPage.html'>Master functions</a></div>
 			<div class=".button-clear"><a href='sensorsPage.html'>Sensor Information</a></div>
 			<div class=".button-clear"><a href='controlsPage.html'>Controls</a></div>
 			<div class=".button-clear"><a href='displayPage.html'>Face/Display</a></div>
@@ -27,6 +28,8 @@ Flask/Jinja2 template variables used
 			<img class="img_centered" src="images/robosapienv1.jpg" />
 		</div>
 	</div>
+	<p> Sappie IP : {{context.sappie_ip}} <br>
+	Sense IP  : {{context.sappiesense_ip}} </p>
 </div>
 </body>
 </html>
