@@ -12,7 +12,7 @@ Also handles the switches and leds in the Robosapien body.
 // Refer to initialized LED matrix in main
 extern TwoWire wire;
 
-// Actions
+// Body Actions
 enum bodyAction {
   LEFTUPPERARM = 1,
   RIGHTUPPERARM = 2,
@@ -26,6 +26,10 @@ enum bodyAction {
   TURN = 10,
 };
 
+/*
+* Class bodyControl for movement actions & hand LEDs
+*
+*/
 class bodyControl {
 public:
   bodyControl();

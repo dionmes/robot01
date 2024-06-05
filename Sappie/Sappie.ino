@@ -15,17 +15,8 @@
 #include <LittleFS.h>
 #include <AsyncFsWebServer.h>
 
-/*
-* SD Card
-*/
-#include "SdFat.h"
-#include "sdios.h"
-#define SPI_CLOCK SD_SCK_MHZ(25)
-#define SD_CONFIG SdSpiConfig(14, SHARED_SPI, SPI_CLOCK)
-
-SdFat32 sd;
-File32 file;
-File32 root;
+// http client
+#include <ArduinoHttpClient.h>
 
 /*
 * I2S - UDP
@@ -50,13 +41,15 @@ i2s_driver_config_t i2s_config = {
   .communication_format = I2S_COMM_FORMAT_STAND_PCM_SHORT,
   .intr_alloc_flags = ESP_INTR_FLAG_LEVEL1,
   .dma_buf_count = 8,
-  .dma_buf_len = 128,
+  .dma_buf_len = 512,
   .use_apll = false,
   .tx_desc_auto_clear = true,
-  .bits_per_chan = I2S_BITS_PER_CHAN_DEFAULT,
+  .bits_per_chan = I2S_BITS_PER_CHAN_16BIT,
 };
 
 int i2sPortNo = 0;
+// Set divider for I2S output multiplier
+int i2sGainDivider = 20;
 
 /*
 * Sensors assignments
@@ -68,15 +61,19 @@ wrapper_bno08x wrapper_bno08x;
 * LED Display
 */
 Adafruit_SSD1306 ledMatrix(128, 64, &Wire, -1);
+/*
+* Instance of roboFace, for methods for display actions on LED display
+*/
 roboFace roboFace;
 
 /*
-* Body control
+* Instance of bodyControl for movement actions & hand LEDs
 */
 bodyControl bodyControl;
 
 #define FILESYSTEM LittleFS
-AsyncFsWebServer WebServer(80, FILESYSTEM ,"Sappie server");
+// AsyncFsWebServer WebServer instance
+AsyncFsWebServer WebServer(80, FILESYSTEM, "Sappie server");
 bool apMode = false;
 
 /*
@@ -117,8 +114,43 @@ void setup() {
 
   // Webserver init.
   roboFace.exec(faceAction::DISPLAYTEXTLARGE, "Server");
-  Serial.println("Webserver starting\n");
-  startWebserver();
+  Serial.println("Webserver starting");
+
+  startFilesystem();
+
+  // Try to connect to stored SSID, start AP if fails after timeout
+  IPAddress myIP = WebServer.startWiFi(15000, "ESP32_SAPPIE", "123456789");
+
+  // HTML server
+  WebServer.on("/", HTTP_ANY, [](AsyncWebServerRequest *request) {
+    request->send(FILESYSTEM, "/Index.html");
+  });
+
+  // Add request handlers to webserver
+  WebServer.on("/VL53L1X_Info", HTTP_GET, webhandler_VL53L1X_Info);
+  WebServer.on("/BNO08X_Info", HTTP_GET, webhandler_wrapper_bno08xInfo);
+  WebServer.on("/audiostream", HTTP_GET, audiostream_handler);
+  WebServer.on("/volume", HTTP_GET, volume_handler);
+  WebServer.on("/bodyaction", HTTP_GET, body_action_handler);
+  WebServer.on("/displayaction", HTTP_GET, display_action_handler);
+  WebServer.on("/wakeupsense", HTTP_GET, wakeupsense_handler);
+
+  WebServer.enableFsCodeEditor();
+  String config_master_ip;
+  WebServer.addOptionBox("Sappie Options");
+  WebServer.addOption("Remote-Master-IP-Address", config_master_ip);
+  Serial.println("Starting Webserver");
+  // Start webserver
+  WebServer.init();
+  WebServer.getOptionValue("Remote-Master-IP-Address", config_master_ip);
+
+  Serial.print(F("ESP Web Server started on IP Address: "));
+  Serial.println(myIP);
+  Serial.println(F("Open /setup page to configure optional parameters"));
+
+  // Enable content editor
+  WebServer.enableFsCodeEditor();
+
   delay(100);
 
   // Audio / I2S init.
@@ -130,13 +162,6 @@ void setup() {
 
   i2s_set_pin((i2s_port_t)i2sPortNo, &i2s_pins);
 
-  delay(100);
-
-  // SD Card init.
-  roboFace.exec(faceAction::DISPLAYTEXTLARGE, "SD Card");
-  if (!sd.begin(SD_CONFIG)) {
-    sd.initErrorHalt();
-  }
   delay(100);
 
   // Starting VL53L1X
@@ -165,20 +190,33 @@ void setup() {
   roboFace.exec(faceAction::DISPLAYTEXTLARGE, "Tasks");
 
   // Starting tasks
-  Serial.println("Tasks starting\n");
+  Serial.println("Tasks starting");
 
-  Serial.println("wrapper_bno08x update task starting\n");
+  Serial.println("wrapper_bno08x update task starting");
   xTaskCreatePinnedToCore(bno08xUpdateTask, "wrapper_bno08x", 4096, NULL, 10, &wrapper_bno08xUpdateTaskHandle, 0);
-  Serial.println("Boot complete...\n");
 
+  // Register with remote master
+  Serial.printf("Registering with remote master : %s \n", config_master_ip.c_str());
+  roboFace.exec(faceAction::DISPLAYTEXTLARGE, "Master registration " + WiFi.localIP().toString());
+
+  WiFiClient httpWifiInstance;
+  HttpClient http(httpWifiInstance, config_master_ip, 5000);
+
+  String httpPath = "/api/register_sappie?ip=" + WiFi.localIP().toString();
+
+  int http_err = http.get(httpPath);
+  if (http_err == 0) {
+    Serial.println(http.responseBody());
+  } else {
+    Serial.printf("Got status code: %u \n", http_err);
+  }
+
+  // Boot complete
+  Serial.println("Boot complete...");
   delay(100);
-
-  roboFace.exec(faceAction::SCROLLTEXT, "Hello, I am Sappie.", 100);
-
+  roboFace.exec(faceAction::SCROLLTEXT, "Hello, I am Sappie @ " + WiFi.localIP().toString(), 100);
   delay(500);
-
   while (roboFace.actionRunning) { delay(100); }
-
   roboFace.exec(faceAction::DISPLAYIMG, "", 39);
 
   vTaskDelete(NULL);
@@ -196,7 +234,7 @@ void loop() {
 /*
 * bno08x continues updates, executing as vtask
 */
-void bno08xUpdateTask(void* pvParameters) {
+void bno08xUpdateTask(void *pvParameters) {
   for (;;) {
     wrapper_bno08x.update();
     delay(200);
@@ -209,6 +247,7 @@ void bno08xUpdateTask(void* pvParameters) {
 * Handler to get vl53l1x values
 */
 void webhandler_VL53L1X_Info(AsyncWebServerRequest *request) {
+
   vl53l1x_sensor.read();
 
   uint16_t range_mm = vl53l1x_sensor.ranging_data.range_mm;
@@ -219,8 +258,10 @@ void webhandler_VL53L1X_Info(AsyncWebServerRequest *request) {
   String json = "{\"range_mm\": " + String(range_mm) + ",\"range_status\": " + String(range_status) + ",\"peak_signal\": " + String(peak_signal)
                 + ",\"ambient_count\" : " + String(ambient_count) + " }";
 
-  AsyncWebServerResponse *response = request->beginResponse(200,  "application/json", json);
+
+  AsyncWebServerResponse *response = request->beginResponse(200, "application/json", json);
   response->addHeader("Access-Control-Allow-Origin", "*");
+
   request->send(response);
 }
 
@@ -245,50 +286,56 @@ void webhandler_wrapper_bno08xInfo(AsyncWebServerRequest *request) {
 
   AsyncWebServerResponse *response = request->beginResponse(200, "application/json", json);
   response->addHeader("Access-Control-Allow-Origin", "*");
+
   request->send(response);
-}
-
-/*
-* Handler to show LittleFS stats
-*/
-void FileSystemInfoPage(AsyncWebServerRequest *request) {
-  File f = LittleFS.open("/FileSystemInfo.html", "r");
-  String html = f.readString();
-  f.close();
-  html.replace("filesystem_name", "LittleFS");
-  html.replace("totalBytes", String(LittleFS.totalBytes()));
-  html.replace("usedBytes", String(LittleFS.usedBytes()));
-  html.replace("freeBytes", String(LittleFS.totalBytes() - LittleFS.usedBytes()));
-
-  request->send(200, "text/HTML", html);
 }
 
 /*
 * Handler to enable/disable audiostream
 */
 void audiostream_handler(AsyncWebServerRequest *request) {
-  
-  AsyncWebServerResponse *response = request->beginResponse(200, "text/plain", "Request received");
-  response->addHeader("Access-Control-Allow-Origin", "*");
+
+  String json = "{ \"command\" : \"failed\" }";
 
   if (request->hasArg("on")) {
     int value = request->arg("on").toInt();
     if (value == 1 && !audioStreamRunning) {
       Serial.println("Audio streaming starting\n");
       startAudio(true);
-      request->send(response);
-      return;
+      json = "{\"audiostream\": 1}";
     }
     if (value == 0 && audioStreamRunning) {
       Serial.println("Audio streaming stopping\n");
       startAudio(false);
-      request->send(response);
-      return;
+      json = "{\"audiostream\": 0 }";
     }
-    request->send(response);
-  } else {
-    request->send(response);
   }
+
+  AsyncWebServerResponse *response = request->beginResponse(200, "application/json", json);
+  response->addHeader("Access-Control-Allow-Origin", "*");
+
+  request->send(response);
+}
+
+/*
+* Handler to adjust output volume
+*/
+void volume_handler(AsyncWebServerRequest *request) {
+
+  String json = "{ \"command\" : \"failed\" }";
+
+  if (request->hasArg("power")) {
+    int value = request->arg("power").toInt();
+    if (value >= 0 && value < 30) {
+      i2sGainDivider = value;
+    } 
+    String json = "{ \"command\" : \"succes\" }";
+  }
+
+  AsyncWebServerResponse *response = request->beginResponse(200, "application/json", json);
+  response->addHeader("Access-Control-Allow-Origin", "*");
+
+  request->send(response);
 }
 
 /*
@@ -296,23 +343,29 @@ void audiostream_handler(AsyncWebServerRequest *request) {
 */
 void body_action_handler(AsyncWebServerRequest *request) {
 
-  if (request->hasArg("bodypart")) {
-    
-    int bodyPart = request->arg("bodypart").toInt();
-    
+  String json = "{ \"command\" : \"failed\" }";
+
+  if (request->hasArg("action")) {
+
+    int bodyPart = request->arg("action").toInt();
+
     int direction = 0;
-    if (request->hasArg("direction")) { direction = request->arg("direction").toInt();}
-    
+    if (request->hasArg("direction")) { direction = request->arg("direction").toInt(); }
+
     int duration = 0;
     if (request->hasArg("duration")) { duration = request->arg("duration").toInt(); }
-    
-    bodyControl.exec(bodyPart,direction,duration);
+
+    if (duration < 3000) {
+      bodyControl.exec(bodyPart, direction, duration);
+      String json = "{ \"command\" : \"succes\" }";
+    }
 
   } else {
-      xTaskCreatePinnedToCore(bodyTestRoutine, "BodyTestRoutine", 4096, NULL, 5, &robotRoutineTask, 1);
+    String json = "{ \"command\" : \"succes\" }";
+    xTaskCreatePinnedToCore(bodyTestRoutine, "BodyTestRoutine", 4096, NULL, 5, &robotRoutineTask, 1);
   }
-  
-  AsyncWebServerResponse *response = request->beginResponse(200, "text/plain", "Body Test started");
+
+  AsyncWebServerResponse *response = request->beginResponse(200, "application/json", json);
   response->addHeader("Access-Control-Allow-Origin", "*");
   request->send(response);
 }
@@ -321,29 +374,37 @@ void body_action_handler(AsyncWebServerRequest *request) {
 * Handler for display action
 */
 void display_action_handler(AsyncWebServerRequest *request) {
+
+  String json = "{ \"command\" : \"failed\" }";
+
   if (request->hasArg("action")) {
     int index = request->hasArg("index") ? request->arg("index").toInt() : 0;
-    String text = request->hasArg("text") ?  request->arg("text") : "";
+    String text = request->hasArg("text") ? request->arg("text") : "";
 
-    roboFace.exec(request->arg("action").toInt(),text,index);
+    roboFace.exec(request->arg("action").toInt(), text, index);
 
-    AsyncWebServerResponse *response = request->beginResponse(200, "text/plain", "Display starting.");
-    response->addHeader("Access-Control-Allow-Origin", "*");
-    request->send(response);
+    String json = "{ \"command\" : \"succes\" }";
   }
+
+  AsyncWebServerResponse *response = request->beginResponse(200, "application/json", json);
+  response->addHeader("Access-Control-Allow-Origin", "*");
+  request->send(response);
 }
 
 /*
-* Handler waking up XAIO sense/camera from sleep
+* Handler for waking up XAIO sense/camera from sleep
 */
 void wakeupsense_handler(AsyncWebServerRequest *request) {
+
+  String json = "{ \"command\" : \"succes\" }";
+
+  AsyncWebServerResponse *response = request->beginResponse(200, "application/json", json);
+  response->addHeader("Access-Control-Allow-Origin", "*");
+  request->send(response);
+
   digitalWrite(25, HIGH);
   delay(200);
   digitalWrite(25, LOW);
-
-  AsyncWebServerResponse *response = request->beginResponse(200, "text/plain", "Wake up sent.");
-  response->addHeader("Access-Control-Allow-Origin", "*");
-  request->send(response);
 }
 
 ////////////////////////////////  Services  /////////////////////////////////////////
@@ -362,77 +423,47 @@ void startAudio(bool start) {
 
       udp.onPacket([](AsyncUDPPacket packet) {
         size_t bytes_written;
-        const uint8_t* data = (const uint8_t*)packet.data();
+        int32_t SampleValue;
+        int32_t i2sValue;
+        const uint8_t *data = (const uint8_t *)packet.data();
 
         for (size_t i = 0; i <= packet.length(); i = i + 4) {
           float sample;
-          uint8_t* f_ptr = (uint8_t*)&sample;
+          uint8_t *f_ptr = (uint8_t *)&sample;
           f_ptr[0] = data[i + 0];
           f_ptr[1] = data[i + 1];
           f_ptr[2] = data[i + 2];
           f_ptr[3] = data[i + 3];
 
-          int32_t i2sValue = static_cast<int32_t>((sample * 32767.0f) / 2.0f);
-          esp_err_t err = i2s_write((i2s_port_t)i2sPortNo, (const char*)&i2sValue, sizeof(data), &bytes_written, portMAX_DELAY);
+          if (i2sGainDivider != 0) {
+            SampleValue = static_cast<int32_t>(sample * 32767.0f);
+            i2sValue = SampleValue / (30 - i2sGainDivider);
+          } else {
+            i2sValue = 0;
+          }
+          esp_err_t err = i2s_write((i2s_port_t)i2sPortNo, (const char *)&i2sValue, sizeof(data), &bytes_written, portMAX_DELAY);
+          if (err != 0) {
+            Serial.printf("I2C error : %i \n",err);
+          }
         }
       });
 
       audioStreamRunning = true;
-
-    } else {
-      udp.close();
-      audioStreamRunning = false;
     }
+  } else {
+    Serial.print("UDP stopped Listening");
+    udp.close();
+    audioStreamRunning = false;
   }
 }
 
-/*
-* Start Webserver
-*/
 
-void startWebserver() {
-
-  Serial.println("Webserver -> Booting Filesystem\n");
-  // FILESYSTEM INIT
-  startFilesystem();
-
-  // Try to connect to stored SSID, start AP if fails after timeout
-  IPAddress myIP = WebServer.startWiFi(15000, "ESP32_AP1234", "123456789");
-
-  Serial.println("\n");
-  // send a file when /index is requested
-  WebServer.on("/", HTTP_ANY, [](AsyncWebServerRequest *request){
-    request->send(FILESYSTEM, "/Index.html");
-  });
-
-  // Add custom request handlers to webserver
-  WebServer.on("/FileSystemInfo", HTTP_GET, FileSystemInfoPage);
-  WebServer.on("/VL53L1X_Info", HTTP_GET, webhandler_VL53L1X_Info);
-  WebServer.on("/BNO08X_Info", HTTP_GET, webhandler_wrapper_bno08xInfo);
-  WebServer.on("/audiostream", HTTP_GET, audiostream_handler);
-  WebServer.on("/bodyaction", HTTP_GET, body_action_handler);
-  WebServer.on("/displayaction", HTTP_GET, display_action_handler);
-  WebServer.on("/wakeupsense", HTTP_GET, wakeupsense_handler);
-
-  WebServer.enableFsCodeEditor();
-
-  Serial.println("Starting Webserver\n");
-  // Start webserver
-  WebServer.init();
-
-  Serial.print(F("ESP Web Server started on IP Address: "));
-  Serial.println(myIP);
-  Serial.println(F("Open /setup page to configure optional parameters"));
-
-  // Enable content editor
-  WebServer.enableFsCodeEditor();
-}
 ////////////////////////////////  Robot Functions  /////////////////////////////////////////
 
 /*
 * Body test Routine
 */
-void bodyTestRoutine(void* pVParameters) {
+void bodyTestRoutine(void *pVParameters) {
 
   roboFace.exec(faceAction::DISPLAYTEXTSMALL, "LEFT UPPER ARM");
   bodyControl.exec(bodyAction::LEFTUPPERARM, true, 1000);
@@ -517,13 +548,13 @@ void startFilesystem() {
 * ESP8266 FS implementation has methods for total and used bytes (only label is missing)
 */
 #ifdef ESP32
-void getFsInfo(fsInfo_t* fsInfo) {
+void getFsInfo(fsInfo_t *fsInfo) {
   fsInfo->fsName = "LittleFS";
   fsInfo->totalBytes = LittleFS.totalBytes();
   fsInfo->usedBytes = LittleFS.usedBytes();
 }
 #else
-void getFsInfo(fsInfo_t* fsInfo) {
+void getFsInfo(fsInfo_t *fsInfo) {
   fsInfo->fsName = "LittleFS";
 }
 #endif

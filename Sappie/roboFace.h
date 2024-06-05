@@ -13,7 +13,7 @@
 // Refer to initialized LED matrix in main
 extern Adafruit_SSD1306 ledMatrix;
 
-// Action
+// faceAction Actions
 enum faceAction { 
   DISPLAYTEXTSMALL = 1, 
   DISPLAYTEXTLARGE = 2,
@@ -41,6 +41,10 @@ enum faceAction {
   IMG_LOOP=24
 };
 
+/*
+* roboFace class
+* methods for display actions on LED display
+*/
 class roboFace {
   public:
     roboFace();
