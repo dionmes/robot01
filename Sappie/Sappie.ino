@@ -1,3 +1,4 @@
+
 /*
 * Hardware
 */
@@ -6,7 +7,7 @@
 #include "wrapper_bno08x.h"
 #include "roboFace.h"
 #include "bodyControl.h"
-#include "driver/i2s.h"
+#include <ESP_I2S.h>
 
 /*
 * Webserver
@@ -18,38 +19,30 @@
 // http client
 #include <ArduinoHttpClient.h>
 
+#define FILESYSTEM LittleFS
+// AsyncFsWebServer WebServer instance
+AsyncFsWebServer WebServer(80, FILESYSTEM, "Sappie server");
+bool apMode = false;
+
 /*
 * I2S - UDP
 */
 #include "AsyncUDP.h"
 AsyncUDP udp;
 #define AUDIO_UDP_PORT 9000       // UDP audio over I2S
+
+uint8_t *i2sbuffer = new uint8_t [1500]; // A little over packet length to buffer
+
+#define SAPPIE_I2S_BCK 16
+#define SAPPIE_I2S_WS 17
+#define SAPPIE_I2S_OUT 21
+
 bool audioStreamRunning = false;  // If Audio is listening on udp
+I2SClass I2S;
 
-i2s_pin_config_t i2s_pins = {
-  .bck_io_num = 16,
-  .ws_io_num = 17,
-  .data_out_num = 21,
-  .data_in_num = I2S_PIN_NO_CHANGE
-};
-
-i2s_driver_config_t i2s_config = {
-  .mode = (i2s_mode_t)(I2S_MODE_MASTER | I2S_MODE_TX),
-  .sample_rate = 16000,
-  .bits_per_sample = I2S_BITS_PER_SAMPLE_16BIT,
-  .channel_format = I2S_CHANNEL_FMT_RIGHT_LEFT,
-  .communication_format = I2S_COMM_FORMAT_STAND_PCM_SHORT,
-  .intr_alloc_flags = ESP_INTR_FLAG_LEVEL1,
-  .dma_buf_count = 8,
-  .dma_buf_len = 512,
-  .use_apll = false,
-  .tx_desc_auto_clear = true,
-  .bits_per_chan = I2S_BITS_PER_CHAN_16BIT,
-};
-
-int i2sPortNo = 0;
+#define MAX_VOLUME 6
 // Set divider for I2S output multiplier
-int i2sGainDivider = 20;
+int i2sGainMultiplier = 2;
 
 /*
 * Sensors assignments
@@ -70,11 +63,6 @@ roboFace roboFace;
 * Instance of bodyControl for movement actions & hand LEDs
 */
 bodyControl bodyControl;
-
-#define FILESYSTEM LittleFS
-// AsyncFsWebServer WebServer instance
-AsyncFsWebServer WebServer(80, FILESYSTEM, "Sappie server");
-bool apMode = false;
 
 /*
 * Task handlers
@@ -139,9 +127,9 @@ void setup() {
   String config_master_ip;
   WebServer.addOptionBox("Sappie Options");
   WebServer.addOption("Remote-Master-IP-Address", config_master_ip);
-  Serial.println("Starting Webserver");
+
   // Start webserver
-  WebServer.init();
+  Serial.println("Starting Webserver");
   WebServer.getOptionValue("Remote-Master-IP-Address", config_master_ip);
 
   Serial.print(F("ESP Web Server started on IP Address: "));
@@ -155,12 +143,7 @@ void setup() {
 
   // Audio / I2S init.
   roboFace.exec(faceAction::DISPLAYTEXTLARGE, "AUDIO/I2S");
-
-  if (i2s_driver_install((i2s_port_t)i2sPortNo, &i2s_config, 0, NULL) != ESP_OK) {
-    Serial.print("I2S Failure to initialize");
-  }
-
-  i2s_set_pin((i2s_port_t)i2sPortNo, &i2s_pins);
+  I2S.setPins(SAPPIE_I2S_BCK, SAPPIE_I2S_WS, SAPPIE_I2S_OUT, -1, 0); //SCK, WS, SDOUT, SDIN, MCLK
 
   delay(100);
 
@@ -197,7 +180,7 @@ void setup() {
 
   // Register with remote master
   Serial.printf("Registering with remote master : %s \n", config_master_ip.c_str());
-  roboFace.exec(faceAction::DISPLAYTEXTLARGE, "Master registration " + WiFi.localIP().toString());
+  roboFace.exec(faceAction::DISPLAYTEXTSMALL, "Master registration " + WiFi.localIP().toString());
 
   WiFiClient httpWifiInstance;
   HttpClient http(httpWifiInstance, config_master_ip, 5000);
@@ -218,7 +201,8 @@ void setup() {
   delay(500);
   while (roboFace.actionRunning) { delay(100); }
   roboFace.exec(faceAction::DISPLAYIMG, "", 39);
-
+  delay(1000);
+  roboFace.exec(faceAction::NEUTRAL);
   vTaskDelete(NULL);
 }
 
@@ -326,10 +310,10 @@ void volume_handler(AsyncWebServerRequest *request) {
 
   if (request->hasArg("power")) {
     int value = request->arg("power").toInt();
-    if (value >= 0 && value < 30) {
-      i2sGainDivider = value;
+    if (value >= 0 && value <= MAX_VOLUME) {
+      i2sGainMultiplier = value;
     } 
-    String json = "{ \"command\" : \"succes\" }";
+    json = "{ \"command\" : \"succes\" }";
   }
 
   AsyncWebServerResponse *response = request->beginResponse(200, "application/json", json);
@@ -356,12 +340,12 @@ void body_action_handler(AsyncWebServerRequest *request) {
     if (request->hasArg("duration")) { duration = request->arg("duration").toInt(); }
 
     if (duration < 3000) {
+      json = "{ \"command\" : \"succes\" }";
       bodyControl.exec(bodyPart, direction, duration);
-      String json = "{ \"command\" : \"succes\" }";
     }
 
   } else {
-    String json = "{ \"command\" : \"succes\" }";
+    json = "{ \"command\" : \"succes\" }";
     xTaskCreatePinnedToCore(bodyTestRoutine, "BodyTestRoutine", 4096, NULL, 5, &robotRoutineTask, 1);
   }
 
@@ -383,7 +367,7 @@ void display_action_handler(AsyncWebServerRequest *request) {
 
     roboFace.exec(request->arg("action").toInt(), text, index);
 
-    String json = "{ \"command\" : \"succes\" }";
+    json = "{ \"command\" : \"succes\" }";
   }
 
   AsyncWebServerResponse *response = request->beginResponse(200, "application/json", json);
@@ -410,6 +394,36 @@ void wakeupsense_handler(AsyncWebServerRequest *request) {
 ////////////////////////////////  Services  /////////////////////////////////////////
 
 /*
+* UDP Audio listening callback
+*/
+IRAM_ATTR void udpRXCallBack(AsyncUDPPacket &packet) {
+
+  const uint8_t *packet_data = (const uint8_t *)packet.data();
+  const size_t packet_length = packet.length();
+  float sample;
+  uint8_t *f_ptr = (uint8_t *)&sample;
+  uint32_t i2sValue;
+
+  for (size_t i = 0; i <= packet_length; i = i + 4) {
+
+    f_ptr[0] = packet_data[i + 0];
+    f_ptr[1] = packet_data[i + 1];
+    f_ptr[2] = packet_data[i + 2];
+    f_ptr[3] = packet_data[i + 3];
+    
+    i2sValue = static_cast<int32_t>((sample * 32767.0f) * i2sGainMultiplier);
+
+    i2sbuffer[i] = static_cast<uint8_t>(i2sValue & 0xFF);
+    i2sbuffer[i + 1] = static_cast<uint8_t>((i2sValue >> 8) & 0xFF);
+    i2sbuffer[i + 2] = static_cast<uint8_t>((i2sValue >> 16) & 0xFF);
+    i2sbuffer[i + 3] = static_cast<uint8_t>((i2sValue >> 24) & 0xFF);
+
+  };
+
+  I2S.write((uint8_t *)i2sbuffer, packet_length);
+};
+
+/*
 * Start / Stop Audio UDP listening
 */
 void startAudio(bool start) {
@@ -417,46 +431,28 @@ void startAudio(bool start) {
   if (start) {
 
     if (udp.listen(AUDIO_UDP_PORT)) {
+      
+      I2S.begin(I2S_MODE_STD, 16000, I2S_DATA_BIT_WIDTH_16BIT, I2S_SLOT_MODE_STEREO, I2S_STD_SLOT_LEFT);
 
       Serial.print("UDP Listening on IP: ");
       Serial.println(WiFi.localIP());
 
-      udp.onPacket([](AsyncUDPPacket packet) {
-        size_t bytes_written;
-        int32_t SampleValue;
-        int32_t i2sValue;
-        const uint8_t *data = (const uint8_t *)packet.data();
-
-        for (size_t i = 0; i <= packet.length(); i = i + 4) {
-          float sample;
-          uint8_t *f_ptr = (uint8_t *)&sample;
-          f_ptr[0] = data[i + 0];
-          f_ptr[1] = data[i + 1];
-          f_ptr[2] = data[i + 2];
-          f_ptr[3] = data[i + 3];
-
-          if (i2sGainDivider != 0) {
-            SampleValue = static_cast<int32_t>(sample * 32767.0f);
-            i2sValue = SampleValue / (30 - i2sGainDivider);
-          } else {
-            i2sValue = 0;
-          }
-          esp_err_t err = i2s_write((i2s_port_t)i2sPortNo, (const char *)&i2sValue, sizeof(data), &bytes_written, portMAX_DELAY);
-          if (err != 0) {
-            Serial.printf("I2C error : %i \n",err);
-          }
-        }
-      });
+      udp.onPacket(udpRXCallBack);
 
       audioStreamRunning = true;
+
     }
   } else {
     Serial.print("UDP stopped Listening");
+    udp.flush();
+    delay(100);
     udp.close();
+    delay(500);
+    I2S.end();
+
     audioStreamRunning = false;
   }
 }
-
 
 ////////////////////////////////  Robot Functions  /////////////////////////////////////////
 

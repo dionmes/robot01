@@ -57,10 +57,6 @@ void bodyControl::exec(int action, bool direction, int duration) {
   _direction = direction;
   _duration = duration;
 
-  if (eTaskGetState(&bodyTaskHandle) == eRunning) {
-    vTaskDelete(&bodyTaskHandle);
-    vTaskDelay(200);
-  }
 
   xTaskCreatePinnedToCore(bodyActionTask, "bodyActionTask", 4096, (void*)this, 10, &bodyTaskHandle, 1);
 }
@@ -68,6 +64,8 @@ void bodyControl::exec(int action, bool direction, int duration) {
 void bodyControl::bodyActionTask(void* bodyControlInstance) {
 
   bodyControl* bodyControlRef = (bodyControl*)bodyControlInstance;
+  Serial.printf("Action : %i \n", bodyControlRef->_action);
+  Serial.printf("Direction : %i \n", bodyControlRef->_direction);
 
   switch (bodyControlRef->_action) {
     case bodyAction::LEFTLOWERARM:

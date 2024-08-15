@@ -44,27 +44,20 @@ void roboFace::begin() {
 void roboFace::exec(int action, String text, int intValue) {
 
   if (this->actionRunning) {
-    return;
-
     if( faceTaskHandle != NULL ) {
-      Serial.println("Deleting display task.");
-      vTaskDelete(faceTaskHandle);
-
-      // Recover time and procedure before starting next task after sudden break
-      vTaskDelay(200);
-      ledMatrix.clearDisplay();
-      ledMatrix.stopscroll();
-      ledMatrix.display();
-      vTaskDelay(200);
+      xTaskNotify( faceTaskHandle, 1, eSetValueWithOverwrite );
+      this->actionRunning = false;
     }
-
+    vTaskDelay(500 / portTICK_PERIOD_MS);
+    this->actionRunning = false;
   }
 
   _action = action;
   _text = text;
   _intValue = intValue;
 
-  xTaskCreatePinnedToCore(this->displayTask, "displayTask", 8192, (void*)this, 10, &faceTaskHandle, 1);
+  xTaskCreatePinnedToCore(this->displayTask, "displayTask", 8192, (void*)this, 20, &faceTaskHandle, 1);
+  vTaskDelay(1000 / portTICK_PERIOD_MS);
 };
 
 void roboFace::displayTask(void* roboFaceInstance) {
@@ -99,10 +92,6 @@ void roboFace::displayTask(void* roboFaceInstance) {
 
     case faceAction::LOOKRIGHT:
       roboFaceRef->lookRightAni(roboFaceRef->_intValue);
-      break;
-
-    case faceAction::STARTUP:
-      roboFaceRef->startUp();
       break;
 
     case faceAction::BLINK:
@@ -175,39 +164,26 @@ void roboFace::displayTask(void* roboFaceInstance) {
   };
 
   vTaskDelay(5);
+  roboFaceRef->actionRunning = false;
   vTaskDelete(NULL);
 };
 
-void roboFace::startUp() {
-  actionRunning = true;
-
-  wink(50);
-  vTaskDelay(1000);
-  lookLeftAni(50);
-  vTaskDelay(100);
-  lookRightAni(50);
-  vTaskDelay(500);
-  neutral();
-  vTaskDelay(1000);
-  smile(1000);
-
-  actionRunning = false;
-};
-
-
 void roboFace::imgloop() {
+  uint32_t notifyStopValue;
   // Test routine
-  actionRunning = true;
-
   for (int i = 0; i <= 60; i++) {
     drawbitmap(i);
-    delay(800);
+
+    if (xTaskNotifyWait(0x00, 0x00, &notifyStopValue, 0) == pdTRUE) {
+      vTaskDelay(5);
+      vTaskDelete(NULL);
+    }
+
+    vTaskDelay(500 / portTICK_PERIOD_MS);
   }
-  actionRunning = false;
 }
 
 void roboFace::displayText(String text, int size) {
-  actionRunning = true;
 
   ledMatrix.stopscroll();
   ledMatrix.clearDisplay();
@@ -221,13 +197,15 @@ void roboFace::displayText(String text, int size) {
     ledMatrix.setCursor(0, 18);
     ledMatrix.setFont(&FreeSansBold12pt7b);
   }
+
   ledMatrix.print(text);
   ledMatrix.display();
 
-  actionRunning = false;
 };
 
 void roboFace::scrollText(String text, int wait) {
+  uint32_t notifyStopValue;
+  
   actionRunning = true;
 
   ledMatrix.stopscroll();
@@ -240,31 +218,31 @@ void roboFace::scrollText(String text, int wait) {
   int len = (text.length() * 9);
 
   for (int x = 128; x > -len; x = x - 2) {
+  
     ledMatrix.clearDisplay();
     ledMatrix.setCursor(x, 32);
     ledMatrix.print(text);
     ledMatrix.display();
+
+    if (xTaskNotifyWait(0x00, 0x00, &notifyStopValue, 0) == pdTRUE) {
+      vTaskDelay(5);
+      vTaskDelete(NULL);
+    }
+
     vTaskDelay(wait);
+  
   }
 
-  actionRunning = false;
 };
 
 void roboFace::drawbitmap(int index) {
-  actionRunning = true;
-
   ledMatrix.stopscroll();
   ledMatrix.clearDisplay();
-
   ledMatrix.drawBitmap(0, 0, bmp_allArray[index], 128, 63, 1, 0);
   ledMatrix.display();
-
-  actionRunning = false;
 };
 
 void roboFace::neutral() {
-  actionRunning = true;
-
   ledMatrix.stopscroll();
   ledMatrix.clearDisplay();
 
@@ -273,27 +251,16 @@ void roboFace::neutral() {
   ledMatrix.fillCircle(rightEyeX, rightEyeY, eyeRadius, 0);
 
   ledMatrix.display();
-  actionRunning = false;
 };
 
 void roboFace::smile(int wait) {
-  actionRunning = true;
-
   neutral();
   ledMatrix.fillTriangle(leftEyeX + 17, leftEyeY + 18, rightEyeX - 17, rightEyeY + 18, leftEyeX + ((rightEyeX - leftEyeX) / 2), leftEyeY + 25, 0);
-
   ledMatrix.display();
-
-  if (wait > 0) {
-    vTaskDelay(wait);
-    neutral();
-  }
-  actionRunning = false;
 };
 
 void roboFace::lookLeftAni(int wait) {
-  actionRunning = true;
-
+  uint32_t notifyStopValue;
   neutral();
 
   for (int i = 0; i < 15; i++) {
@@ -305,13 +272,17 @@ void roboFace::lookLeftAni(int wait) {
     ledMatrix.fillCircle(rightEyeX - i, rightEyeY, eyeRadius, 0);
     ledMatrix.display();
 
+    if (xTaskNotifyWait(0x00, 0x00, &notifyStopValue, 0) == pdTRUE) {
+      vTaskDelay(5);
+      vTaskDelete(NULL);
+    }
+
     vTaskDelay(wait);
   }
-  actionRunning = false;
 };
 
 void roboFace::lookRightAni(int wait) {
-  actionRunning = true;
+  uint32_t notifyStopValue;
 
   neutral();
 
@@ -324,14 +295,16 @@ void roboFace::lookRightAni(int wait) {
     ledMatrix.fillCircle(rightEyeX + i, rightEyeY, eyeRadius, 0);
     ledMatrix.display();
 
+    if (xTaskNotifyWait(0x00, 0x00, &notifyStopValue, 0) == pdTRUE) {
+      vTaskDelay(5);
+      vTaskDelete(NULL);
+    }
+
     vTaskDelay(wait);
   }
-  actionRunning = false;
 };
 
 void roboFace::blink(int wait) {
-  actionRunning = true;
-
   ledMatrix.stopscroll();
   ledMatrix.clearDisplay();
 
@@ -341,12 +314,10 @@ void roboFace::blink(int wait) {
   vTaskDelay(wait);
 
   neutral();
-  actionRunning = false;
 };
 
 
 void roboFace::wink(int wait) {
-  actionRunning = true;
   int _wait = wait == 0 ? 50 : wait;
   ledMatrix.stopscroll();
   ledMatrix.clearDisplay();
@@ -358,11 +329,10 @@ void roboFace::wink(int wait) {
   vTaskDelay(_wait);
 
   neutral();
-  actionRunning = false;
 };
 
 void roboFace::shake(int wait) {
-  actionRunning = true;
+  uint32_t notifyStopValue;
 
   neutral();
   bool left = true;
@@ -385,26 +355,36 @@ void roboFace::shake(int wait) {
     }
 
     vTaskDelay(wait);
+
+    if (xTaskNotifyWait(0x00, 0x00, &notifyStopValue, 0) == pdTRUE) {
+      vTaskDelay(5);
+      vTaskDelete(NULL);
+    }
+
     neutral();
     vTaskDelay(wait);
   }
-
-  actionRunning = false;
 };
 
 void roboFace::cylon(int wait) {
-  actionRunning = true;
-  
+  uint32_t notifyStopValue;
+
   ledMatrix.stopscroll();
   ledMatrix.clearDisplay();
   int _wait = wait == 0 ? 10 : wait;
 
   // Three times
-  for (int i = 0; i <= 3; i++) {
+  while(true) {
     for (int x = 0; x <= 110; x = x + 10) {
       ledMatrix.clearDisplay();
       ledMatrix.fillRect(x, 20, 18, 24, 1);
       ledMatrix.display();
+      
+      if (xTaskNotifyWait(0x00, 0x00, &notifyStopValue, 0) == pdTRUE) {
+        vTaskDelay(5);
+        vTaskDelete(NULL);
+      }
+
       vTaskDelay(wait);
     }
 
@@ -412,30 +392,35 @@ void roboFace::cylon(int wait) {
       ledMatrix.clearDisplay();
       ledMatrix.fillRect(x, 20, 18, 24, 1);
       ledMatrix.display();
+
+      if (xTaskNotifyWait(0x00, 0x00, &notifyStopValue, 0) == pdTRUE) {
+        vTaskDelay(5);
+        vTaskDelete(NULL);
+      }
+
       vTaskDelay(wait);
     }
   }
 
   ledMatrix.clearDisplay();
   ledMatrix.display();
-
-  actionRunning = false;
 }
 
 void roboFace::testfillrect(int wait) {
-  actionRunning = true;
+  uint32_t notifyStopValue;
 
   ledMatrix.clearDisplay();
-
   for (int16_t i = 0; i < ledMatrix.height() / 2; i += 3) {
     // The INVERSE color is used so rectangles alternate white/black
     ledMatrix.fillRect(i, i, ledMatrix.width() - i * 2, ledMatrix.height() - i * 2, SSD1306_INVERSE);
     ledMatrix.display();  // Update screen with each newly-drawn rectangle
-    vTaskDelay(1);
-  }
+    if (xTaskNotifyWait(0x00, 0x00, &notifyStopValue, 0) == pdTRUE) {
+      vTaskDelay(5);
+      vTaskDelete(NULL);
+    }
 
-  vTaskDelay(wait);
-  actionRunning = false;
+    vTaskDelay(10);
+  }
 }
 
 void roboFace::scrollScreenLeft() {
@@ -445,23 +430,30 @@ void roboFace::scrollScreenLeft() {
 
 void roboFace::scrollScreenRight() {
   ledMatrix.startscrollright(0, 63);
-  actionRunning = false;
 }
 
 void roboFace::stopScrolling() {
   ledMatrix.stopscroll();
-  actionRunning = false;
 }
 
 void roboFace::animation(const byte frames[][512], int loop) {
-  int frame_count = 27;
-  for(int n = 0; n<=loop; n++) {
-    for(int frame = 0; frame <= frame_count; frame++ ) {
-    ledMatrix.clearDisplay();
-    ledMatrix.drawBitmap(32, 0, frames[frame], 64, 64, 1);
-    ledMatrix.display();
-    vTaskDelay(42);
+  uint32_t notifyStopValue;
+
+  while(true) {
+    int frame_count = 27;
+    for(int n = 0; n<=loop; n++) {
+      for(int frame = 0; frame <= frame_count; frame++ ) {
+        ledMatrix.clearDisplay();
+        ledMatrix.drawBitmap(32, 0, frames[frame], 64, 64, 1);
+        ledMatrix.display();
+        
+        if (xTaskNotifyWait(0x00, 0x00, &notifyStopValue, 0) == pdTRUE) {
+          vTaskDelay(5);
+          vTaskDelete(NULL);
+        }
+
+        vTaskDelay(42);
+      }
     }
   }
-  actionRunning = false;
 }

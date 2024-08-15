@@ -1,6 +1,8 @@
 /*
 * WiFi & Config
 */
+#include <WiFi.h>
+#include <WiFiUdp.h>
 #include <FS.h>
 #include <SPIFFS.h>
 #define FORMAT_SPIFFS_IF_FAILED true
@@ -10,6 +12,11 @@
 #include <WiFiManager.h>
 WiFiManager wm;
 bool shouldSaveConfig = false;
+
+/*
+* Master server or 'brain'
+*/
+IPAddress master_server_ip;
 
 /*
 * Webserver
@@ -28,6 +35,8 @@ httpd_handle_t stream_httpd = NULL;
 #define PART_BOUNDARY "!!!FRAME!!!"
 #define CAM_FRAMERATE "15"
 
+camera_config_t camera_config;
+
 static const char *_STREAM_CONTENT_TYPE = "multipart/x-mixed-replace;boundary=" PART_BOUNDARY;
 static const char *_STREAM_BOUNDARY = "\r\n--" PART_BOUNDARY "\r\n";
 static const char *_STREAM_PART = "Content-Type: image/jpeg\r\nContent-Length: %u\r\nX-Timestamp: %d.%06d\r\n\r\n";
@@ -41,47 +50,22 @@ const uint8_t framerate_delay = 1000 / (int)atol(cam_framerate);
 /*
 * UDP Mic streaming
 */
-#include <WiFi.h>
-#include <WiFiUdp.h>
-#include <driver/i2s.h>
+#include <ESP_I2S.h>
 #include <math.h>
+#define SAMPLE_RATE 16000
+#define I2S_BUFFER_LEN 512
+
+I2SClass I2S;
 
 WiFiUDP Udp;
+int outPort = 3000;
 
 TaskHandle_t wrapper_micstreamUpdate;
 bool micIsStreaming = false;
-int outPort = 3000;
-IPAddress master_server_ip;
 
 uint16_t mic_gain_factor = 5;
-
-// Use I2S Processor 0
-#define I2S_PORT I2S_NUM_0
-
-// Define input buffer length
-#define I2S_BUFFER_LEN 512
-uint8_t i2sBuffer[I2S_BUFFER_LEN * 2];
-
-// Set up I2S Processor configuration
-const i2s_config_t i2s_config = {
-  .mode = i2s_mode_t(I2S_MODE_MASTER | I2S_MODE_RX | I2S_MODE_PDM),
-  .sample_rate = 16000,
-  .bits_per_sample = i2s_bits_per_sample_t(16),
-  .channel_format = I2S_CHANNEL_FMT_ONLY_LEFT,
-  .communication_format = I2S_COMM_FORMAT_STAND_I2S,
-  .intr_alloc_flags = ESP_INTR_FLAG_LEVEL1,
-  .dma_buf_count = 8,
-  .dma_buf_len = I2S_BUFFER_LEN,
-  .use_apll = false
-};
-
-// Set I2S pin configuration
-i2s_pin_config_t i2s_mic_pins = {
-  .bck_io_num = I2S_PIN_NO_CHANGE,
-  .ws_io_num = 42,
-  .data_out_num = I2S_PIN_NO_CHANGE,
-  .data_in_num = 41
-};
+int available_bytes, read_bytes;
+char i2sBuffer[I2S_BUFFER_LEN * 2];
 
 /*
 * MicStreamTask task handling mic streaming over udp
@@ -95,13 +79,20 @@ void MicStreamTask(void *pvParameters) {
 
   for (;;) {
     // Get I2S data and place in data buffer
-    size_t bytesIn = 0;
-    esp_err_t result = i2s_read(I2S_PORT, &i2sBuffer, I2S_BUFFER_LEN, &bytesIn, portMAX_DELAY);
-    if (result == ESP_OK && bytesIn > 0) {
+
+    I2S.read();
+    available_bytes = I2S.available();
+    if(available_bytes < I2S_BUFFER_LEN) {
+      read_bytes = I2S.readBytes(i2sBuffer, available_bytes);
+    } else {
+      read_bytes = I2S.readBytes(i2sBuffer, I2S_BUFFER_LEN);
+    }
+
+    if (read_bytes > 0) {
 
       int16_t *sample_buffer = (int16_t *)i2sBuffer;
 
-      int16_t samples_read = bytesIn / 2;
+      int16_t samples_read = read_bytes / 2;
       float audio_block_float[samples_read];
 
       for (size_t i = 0; i < samples_read; i++) {
@@ -112,10 +103,15 @@ void MicStreamTask(void *pvParameters) {
 
       // Send raw audio 32bit float samples over UDP
       Udp.beginPacket(master_server_ip, outPort);
-      Udp.write((const uint8_t *)audio_block_float, bytesIn * 2);
+      Udp.write((const uint8_t *)audio_block_float, read_bytes * 2);
       Udp.endPacket();
+    } else {
+        Serial.println("BAD ESP result... ");
     }
   }
+  
+  Serial.println("Missed for loop!");
+
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -128,6 +124,9 @@ void MicStreamTask(void *pvParameters) {
 * Camera stream over http as multipart/x-mixed-replace with Content-Type: image/jpeg
 */
 static esp_err_t stream_handler(httpd_req_t *req) {
+
+  Serial.println("Stream request received.");
+
   camera_fb_t *fb = NULL;
   struct timeval _timestamp;
   struct timeval _old_timestamp;
@@ -152,7 +151,7 @@ static esp_err_t stream_handler(httpd_req_t *req) {
   while (camIsStreaming) {
     fb = esp_camera_fb_get();
     if (!fb) {
-      log_e("Camera capture failed");
+      Serial.println("Camera capture failed");
       res = ESP_FAIL;
     } else {
       _timestamp.tv_sec = fb->timestamp.tv_sec;
@@ -169,17 +168,30 @@ static esp_err_t stream_handler(httpd_req_t *req) {
 
       _jpg_buf_len = fb->len;
       _jpg_buf = fb->buf;
+
     }
+
+    // Send stream boundary header
     if (res == ESP_OK) {
       res = httpd_resp_send_chunk(req, _STREAM_BOUNDARY, strlen(_STREAM_BOUNDARY));
+    } else {
+      Serial.println("Capture failed during stream.");
     }
+
+    // Send stream part header
     if (res == ESP_OK) {
       size_t hlen = snprintf((char *)part_buf, 128, _STREAM_PART, _jpg_buf_len, _timestamp.tv_sec, _timestamp.tv_usec);
       res = httpd_resp_send_chunk(req, (const char *)part_buf, hlen);
+    } else {
+      Serial.println("Sending failed during stream.");
     }
+
     if (res == ESP_OK) {
       res = httpd_resp_send_chunk(req, (const char *)_jpg_buf, _jpg_buf_len);
+    } else {
+      Serial.println("Capture failed during stream.");
     }
+
     if (fb) {
       esp_camera_fb_return(fb);
       fb = NULL;
@@ -208,6 +220,7 @@ static esp_err_t capture_handler(httpd_req_t *req) {
   bool camWasStreaming = camIsStreaming;
   camIsStreaming = false;
   delay(50);
+
   fb = esp_camera_fb_get();
 
   if (!fb) {
@@ -222,12 +235,11 @@ static esp_err_t capture_handler(httpd_req_t *req) {
 
   char ts[32];
   snprintf(ts, 32, "%ld.%06ld", fb->timestamp.tv_sec, fb->timestamp.tv_usec);
+
   httpd_resp_set_hdr(req, "X-Timestamp", (const char *)ts);
-
   res = httpd_resp_send(req, (const char *)fb->buf, fb->len);
-  camIsStreaming = camWasStreaming;
-
   esp_camera_fb_return(fb);
+  camIsStreaming = camWasStreaming;
 
   return res;
 }
@@ -286,7 +298,8 @@ static esp_err_t cmd_handler(httpd_req_t *req) {
   uint8_t res = 0;
 
   if (!strcmp(req_setting, "framesize")) {
-    res = (req_value != -1) ? s->set_framesize(s, (framesize_t)req_value) : s->status.framesize;
+    res = (req_value != -1) ? camera_config.frame_size = (framesize_t)req_value : camera_config.frame_size;
+    camera_init();
   } else if (!strcmp(req_setting, "quality"))
     res = (req_value != -1) ? s->set_quality(s, req_value) : s->status.quality;
   else if (!strcmp(req_setting, "contrast"))
@@ -339,7 +352,9 @@ static esp_err_t cmd_handler(httpd_req_t *req) {
     }
     res = camIsStreaming ? 1 : 0;
   } else if (!strcmp(req_setting, "micstreaming")) {
+
     if (req_value != -1) {
+
       if (req_value == 1 && !micIsStreaming) {
         micIsStreaming = true;
         xTaskCreatePinnedToCore(MicStreamTask, "Micstream", 5000, NULL, 10, &wrapper_micstreamUpdate, 0);
@@ -349,6 +364,7 @@ static esp_err_t cmd_handler(httpd_req_t *req) {
       }
     }
     res = micIsStreaming ? 1 : 0;
+
   } else if (!strcmp(req_setting, "micgain")) {
     if (req_value >= 0 and req_value <= 50) {
       mic_gain_factor = req_value;
@@ -409,6 +425,27 @@ static esp_err_t config_erase_handler(httpd_req_t *req) {
   delay(2000);
   wm.erase();
   esp_restart();
+}
+
+/*
+* camera_init 
+*
+* de-initialize and initalize camera with camera config
+* return bool (true if succesful)
+*/
+static bool camera_init() {
+ 
+  delay(150);
+  esp_camera_deinit();
+  delay(150);
+
+  esp_err_t err = esp_camera_init(&camera_config);
+  if (err != ESP_OK) {
+    Serial.printf("Camera init failed with error 0x%x", err);
+    return false;
+  }
+
+  return true;
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -474,7 +511,7 @@ void setup() {
   wm.setSaveConfigCallback(saveConfigCallback);
 
   bool wificonnect = wm.autoConnect("ESP-SENSE-CAM", "password123");
-
+  
   if (!wificonnect) {
     Serial.println("Failed to connect");
     delay(3000);
@@ -502,51 +539,49 @@ void setup() {
   Serial.print(WiFi.localIP());
   Serial.println("' to connect to server ");
 
-  camera_config_t canera_config;
-
-  canera_config.ledc_channel = LEDC_CHANNEL_0;
-  canera_config.ledc_timer = LEDC_TIMER_0;
-  canera_config.pin_d0 = Y2_GPIO_NUM;
-  canera_config.pin_d1 = Y3_GPIO_NUM;
-  canera_config.pin_d2 = Y4_GPIO_NUM;
-  canera_config.pin_d3 = Y5_GPIO_NUM;
-  canera_config.pin_d4 = Y6_GPIO_NUM;
-  canera_config.pin_d5 = Y7_GPIO_NUM;
-  canera_config.pin_d6 = Y8_GPIO_NUM;
-  canera_config.pin_d7 = Y9_GPIO_NUM;
-  canera_config.pin_xclk = XCLK_GPIO_NUM;
-  canera_config.pin_pclk = PCLK_GPIO_NUM;
-  canera_config.pin_vsync = VSYNC_GPIO_NUM;
-  canera_config.pin_href = HREF_GPIO_NUM;
-  canera_config.pin_sccb_sda = SIOD_GPIO_NUM;
-  canera_config.pin_sccb_scl = SIOC_GPIO_NUM;
-  canera_config.pin_pwdn = PWDN_GPIO_NUM;
-  canera_config.pin_reset = RESET_GPIO_NUM;
-  canera_config.xclk_freq_hz = 20000000;
-  canera_config.frame_size = FRAMESIZE_QVGA;
-  canera_config.pixel_format = PIXFORMAT_JPEG;
-  canera_config.grab_mode = CAMERA_GRAB_LATEST;
-  canera_config.jpeg_quality = 10;
-  canera_config.fb_count = 2;
+  camera_config.ledc_channel = LEDC_CHANNEL_0;
+  camera_config.ledc_timer = LEDC_TIMER_0;
+  camera_config.pin_d0 = Y2_GPIO_NUM;
+  camera_config.pin_d1 = Y3_GPIO_NUM;
+  camera_config.pin_d2 = Y4_GPIO_NUM;
+  camera_config.pin_d3 = Y5_GPIO_NUM;
+  camera_config.pin_d4 = Y6_GPIO_NUM;
+  camera_config.pin_d5 = Y7_GPIO_NUM;
+  camera_config.pin_d6 = Y8_GPIO_NUM;
+  camera_config.pin_d7 = Y9_GPIO_NUM;
+  camera_config.pin_xclk = XCLK_GPIO_NUM;
+  camera_config.pin_pclk = PCLK_GPIO_NUM;
+  camera_config.pin_vsync = VSYNC_GPIO_NUM;
+  camera_config.pin_href = HREF_GPIO_NUM;
+  camera_config.pin_sccb_sda = SIOD_GPIO_NUM;
+  camera_config.pin_sccb_scl = SIOC_GPIO_NUM;
+  camera_config.pin_pwdn = PWDN_GPIO_NUM;
+  camera_config.pin_reset = RESET_GPIO_NUM;
+  camera_config.xclk_freq_hz = 20000000;
+  camera_config.frame_size = FRAMESIZE_QVGA;
+  camera_config.pixel_format = PIXFORMAT_JPEG;
+  camera_config.grab_mode = CAMERA_GRAB_LATEST;
+  camera_config.jpeg_quality = 10;
+  camera_config.fb_count = 2;
 
   if (psramFound()) {
     Serial.printf("PSRAM Found for camera\n");
-    canera_config.fb_location = CAMERA_FB_IN_PSRAM;
+    camera_config.fb_location = CAMERA_FB_IN_PSRAM;
   } else {
-    canera_config.fb_location = CAMERA_FB_IN_DRAM;
+    camera_config.fb_location = CAMERA_FB_IN_DRAM;
   }
 
   // camera init
-  esp_err_t err = esp_camera_init(&canera_config);
-  if (err != ESP_OK) {
-    Serial.printf("Camera init failed with error 0x%x", err);
-    return;
-  }
+  esp_err_t err = esp_camera_init(&camera_config);
+  if (err != ESP_OK) { Serial.printf("Camera init failed with error 0x%x", err); }
 
   // I2S Init for mic streaming
-  i2s_driver_install(I2S_PORT, &i2s_config, 0, NULL);
-  i2s_set_pin(I2S_PORT, &i2s_mic_pins);
+  I2S.setPinsPdmRx(42, 41);
 
+  I2S.setPins(-1, 42, 41, -1, -1);
+  if (! I2S.begin(I2S_MODE_PDM_RX, SAMPLE_RATE, I2S_DATA_BIT_WIDTH_16BIT, I2S_SLOT_MODE_MONO)) {
+    Serial.println("Failed to initialize I2S!");
+  }
   // Webserver init.
   Serial.println("Webserver starting");
 

@@ -2,10 +2,10 @@
 <html lang="en">
 <head>
 	<title>Welcome to Sappie - Your Robotic Assistant</title>
+	<meta charset="UTF-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1">
+	<link rel="stylesheet" href="pico.indigo.min.css">
 </head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<link rel="stylesheet" href="milligram.min.css">
 
 <script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
 <script>
@@ -63,75 +63,60 @@ setInterval("update_BNO08X()",500);
 <body>
 <br>
 <div class="container">
-	<div class="row">
-		<div class="column  column-50 ">
-			<div class="container">
-			  <h2> Distance sensor (VL53L1X)</h2>
-			  <div class="row">
-				<div class="column" id='ph_distance'></div>
-			  </div>
-			  <div class="row">
-				<div class="column" id='ph_ambient'></div>
-			  </div>
-			  <div class="row">
-				<div class="column" id='ph_peak'></div>
-			  </div>
-			  <div class="row">
-				<div class="column" id='ph_status'></div>
-			  </div>
-			</div>
-		</div>		
-		<div class="column column-50">
-			<div class="container">
-			  <h2> Gyro sensor (BNO08X)</h2>
-			  <div class="row">
-				<div class="column" id='shake'></div>
-			  </div>
-			  <div class="row">
-				<div class="column" id='stability'></div>
-			  </div>
-			  <div class="row">
-				  <br>
-			  </div>
-			  <div class="row">
-				<div class="column" id='geoMagRotationVector_real'></div>
-			  </div>
-			  <div class="row">
-				<div class="column" id='geoMagRotationVector_i'></div>
-			  </div>
-			  <div class="row">
-				<div class="column" id='geoMagRotationVector_j'></div>
-			  </div>
-			  <div class="row">
-				<div class="column" id='geoMagRotationVector_k'></div>
-			  </div>
-			  <div class="row">
-				  <br>
-			  </div>
-			  <div class="row">
-				<div class="column" id='accelerometer_x'></div>
-			  </div>
-			  <div class="row">
-				<div class="column" id='accelerometer_y'></div>
-			  </div>
-			  <div class="row">
-				<div class="column" id='accelerometer_z'></div>
-			  </div>
-			  <div class="row">
-				  <br>
-			  </div>
-			  <div class="row">
-				<div class="column" id='gyroscope_x'></div>
-			  </div>
-			  <div class="row">
-				<div class="column" id='gyroscope_y'></div>
-			  </div>
-			  <div class="row">
-				<div class="column" id='gyroscope_z'></div>
-			  </div>
-			</div>
+		<h2> Distance sensor (VL53L1X)</h2>
+		<div class="grid">
+			<div id='ph_distance'></div>
 		</div>
-	</div>
+		<div class="grid">
+			<div id='ph_ambient'></div>
+		</div>
+		<div class="grid">
+			<div id='ph_peak'></div>
+		</div>
+		<div class="grid">
+			<div id='ph_status'></div>
+		</div>
+		<br>
+		<h2> Gyro sensor (BNO08X)</h2>
+		<div class="grid">
+			<div id='shake'></div>
+		</div>
+		<div class="grid">
+			<div id='stability'></div>
+		</div>
+		<br>
+		<div class="grid">
+			<div id='geoMagRotationVector_real'></div>
+		</div>
+		<div class="grid">
+			<div id='geoMagRotationVector_i'></div>
+		</div>
+		<div class="grid">
+			<div id='geoMagRotationVector_j'></div>
+		</div>
+		<div class="grid">
+			<div id='geoMagRotationVector_k'></div>
+		</div>
+		<br>
+		<div class="grid">
+			<div id='accelerometer_x'></div>
+		</div>
+		<div class="grid">
+			<div id='accelerometer_y'></div>
+		</div>
+		<div class="grid">
+			<div id='accelerometer_z'></div>
+		</div>
+		<br>
+		<div class="grid">
+			<div id='gyroscope_x'></div>
+		</div>
+		<div class="grid">
+			<div id='gyroscope_y'></div>
+		</div>
+		<div class="grid">
+			<div id='gyroscope_z'></div>
+		</div>
 </div>
 </body>
 </html>

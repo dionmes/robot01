@@ -21,7 +21,6 @@ enum faceAction {
   SMILE = 4,
   LOOKLEFT = 5,
   LOOKRIGHT = 6,
-  STARTUP = 7,
   BLINK = 8,
   WINK = 9,
   SHAKE = 10,
@@ -49,7 +48,7 @@ class roboFace {
   public:
     roboFace();
     void begin();
-    // Action - enum faceAction, String (optional text if Action requires it), Int optional delay dependent on action.
+    // Action - enum faceAction, String - (optional text if Action requires it), Int - index of image or optional delay dependent on action.
     void exec( int action, String text = "", int intValue = 0);
     // Boolean to see if task is running.
     bool actionRunning;
@@ -82,8 +81,6 @@ class roboFace {
     // Look Right animation. (to be called from displayTask inside a vtask)
     void lookRightAni(int wait);
     // Startup sequence of multiple animations. (to be called from displayTask inside a vtask)
-    void startUp();
-    // Blink eyes. (to be called from displayTask inside a vtask)
     void blink(int wait);
     // Wink left eye. (to be called from displayTask inside a vtask)
     void wink(int wait);
