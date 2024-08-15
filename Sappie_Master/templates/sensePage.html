@@ -5,15 +5,31 @@
 </head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<link rel="stylesheet" href="css/milligram.min.css">
+<link rel="stylesheet" href="css/pico.indigo.min.css">
+<script src="js/jquery-3.7.1.min.js"></script>
 
 <script>
 
-const sense_ip = "192.168.133.248"
 
-function mic_stream(on) {
+function cam_capture() {
+	$("#progress-capture").show();
+    d = new Date();
+    $("#capture-img").attr('src', "http://{{context.sappiesense_ip}}:80/capture?"+d.getTime());
+	$("#progress-capture").hide();
+}
+
+function cam_receive() {
+	$("#progress-capture").show();
+    cam_stream(1); 
+    $("#capture-img").attr('src', "http://{{context.sappiesense_ip}}:81/stream");
+	$("#progress-capture").hide();
+}
+
+function cam_resolution(res) {
+	$("#progress-resolution").show();
+
 	$.ajax({
-		url: "http://" + sense_ip + "/micstream?on=" + on,
+		url: "http://{{context.sappiesense_ip}}/control?setting=framesize&param=" + res,
 		type: 'GET',
     	dataType: 'text',
     	async: false})
@@ -23,11 +39,51 @@ function mic_stream(on) {
 			console.log(status);
 		})
 		.always(function() {
+        	$("#progress-resolution").hide();
 		});
+}
+  
+function cam_stream(on) {
+	$("#progress-controls").show();
 
+	$.ajax({
+		url: "http://{{context.sappiesense_ip}}/control?setting=camstreaming&param=" + on,
+		type: 'GET',
+    	dataType: 'text',
+    	async: false})
+    	.done(function (result) {
+    	    console.log(result);
+		})
+		.fail(function (xhr, status) {
+			console.log(status);
+		})
+		.always(function() {
+        	$("#progress-controls").hide();
+		});
+}
+
+function mic_stream(on) {
+	$("#progress-controls").show();
+
+	$.ajax({
+		url: "http://{{context.sappiesense_ip}}/control?setting=micstreaming&param=" + on,
+		type: 'GET',
+    	dataType: 'text',
+    	async: false})
+    	.done(function (result) {
+    	    console.log(result);
+		})
+		.fail(function (xhr, status) {
+			console.log(status);
+		})
+		.always(function() {
+        	$("#progress-controls").hide();
+		});
 }
 
 function wakeUpSense() {
+	$("#progress-controls").show();
+
 	$.ajax({
 		url: "/wakeupsense",
 		type: 'GET',
@@ -39,51 +95,71 @@ function wakeUpSense() {
 			console.log(status);
 		})
 		.always(function() {
+        	$("#progress-controls").hide();
 		});
 }
-  
+
 </script>
 
 <body>
 
 <div class="container">
-	<div class="row">
-		<div class="column">
-			<h1 class="centered">Sappie Sense Control</h1>
-		</div>
-		<div class="column">
-			<a class="button button-primary" href='index.html'>Back</a>
-		</div>
+    <hgroup>
+        <br>
+        <h1 class="centered">Sappie Sense Control</h1>
+        <a href='index.html'>Back</a>
+	</hgroup>
+<hr>
+<br>
+	<div class="container-fluid">
+	    <progress id="progress-capture" style="display:none"></progress>
+    </div>
+	<div class="grid">
+        <button id="capture" class="secondary" onClick="cam_capture();">Show Capture</button>
+        <button id="stream" class="secondary" onClick="cam_receive();">Show Stream</button>
 	</div>
+	
+    <br>
+    <div class="container-fluid">
+        <figure id="capture-container">
+            <img id="capture-img" crossorigin="">
+        </figure>
+    </div>
+	<h3>Resolution</h3>
+	<div class="container-fluid">
+	    <progress id="progress-resolution" style="display:none"></progress>
+    </div>
+    <div role="group">
+        <button id="camres5" onClick="cam_resolution('5');">320x240</button>
+        <button id="camres8" onClick="cam_resolution('8');">640x480</button>
+        <button id="camres9" onClick="cam_resolution('9');">800x600</button>
+	</div>
+    <div role="group">
+        <button id="camres10" onClick="cam_resolution('10');">1024x768</button>
+        <button id="camres11" onClick="cam_resolution('11');">1280x720</button>
+	</div>
+	
+	<h3>Controls</h3>
+        <div class="container-fluid">
+            <progress id="progress-controls" style="display:none"></progress>
+        </div>
+   <div class="container-fluid">
+        <button class="outline" onClick="wakeUpSense();">Wake up Sense/Camera</button>
+        <br><br>
+        <div role="group">
+            <button id="startcam" onClick="cam_stream('1');">Start cam stream</button>
+            <button id="stopcam" class="secondary" onClick="cam_stream('0');">Stop cam stream</button>
+        </div>
+        <br>
+        <div role="group">
+            <button id="startmic" onClick="mic_stream('1');">Start mic stream</button>
+            <button id="stopmic" class="secondary" onClick="mic_stream('0');">Stop mic stream</button>
+        </div>
+        <br>
+        
+    </div>
+    <br>
 </div>
 
-<div class="container">
-	<div class="row">
-		<div class="column column-25">
-			<div class="button button-outline" onClick="wakeUpSense();">Wake up Sense/Camera</div>
-		</div>
-		<div class="column column-25">
-		</div>
-	</div>
-</div>
-<br>
-<br>
-<div class="container">
-	<div class="row">
-		<div class="column column-25">
-			<div id="starmic" class="button button-outline" onClick="mic_stream('1');">Start Microphone stream</div>
-		</div>
-		<div class="column column-25">
-			<div id="startmic" class="button button-outline" onClick="mic_stream('0');">Stop Microphone stream</div>
-		</div>
-	</div>
-</div>
-<br>
-<br>
-<br>
-<div id="stream-container" class="image-container">
-<a id="save-still" href="#" class="button save" download="capture.jpg">Save</a>
-<img id="stream" src="http://192.168.133.248:81/stream" crossorigin="">
-</div>
 </body>
 </html>

@@ -5,25 +5,34 @@
 </head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<link rel="stylesheet" href="css/milligram.min.css">
+<link rel="stylesheet" href="css/pico.indigo.min.css">
 <style>
     iframe {display: block; height: 100vh; width: 100vw; border: none; }
 </style>
+<script src="js/jquery-3.7.1.min.js"></script>
+
+<script>
+    $( document ).ready(function() {
+        if ("{{context.sappie_ip}}".length === 0) {
+            $("#content").html('<br><h3 style="color: red; text-align: center;">No connection</h3>');
+        } else {
+            $("#content").html('<iframe src="http://{{context.sappie_ip}}/display.html">');
+        }
+    });
+</script>
 
 <body>
 
 <div class="container">
-	<div class="row">
-		<div class="column">
-			<h1 class="centered">Sappie Face/Display</h1>
-		</div>
-		<div class="column">
-			<a class="button button-primary" href='index.html'>Back</a>
-		</div>
-	</div>
+	<br>
+    <hgroup>
+		<h1 class="centered">Sappie Display/Face</h1>
+        <a href='index.html'>Back</a>
+	</hgroup>
 </div>
-
-<iframe src="http://{{context.sappie_ip}}/display.html">
+<hr>
+<div id="content">
+</div>
 
 <br>
 
