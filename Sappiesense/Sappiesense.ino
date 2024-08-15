@@ -1,8 +1,11 @@
-// wifi & Config
+/*
+* WiFi & Config
+*/
 #include <FS.h>
 #include <SPIFFS.h>
-#include <ArduinoJson.h>
 #define FORMAT_SPIFFS_IF_FAILED true
+#include <ArduinoJson.h>
+#include <ArduinoHttpClient.h>
 
 #include <WiFiManager.h>
 WiFiManager wm;
@@ -29,8 +32,8 @@ static const char *_STREAM_CONTENT_TYPE = "multipart/x-mixed-replace;boundary=" 
 static const char *_STREAM_BOUNDARY = "\r\n--" PART_BOUNDARY "\r\n";
 static const char *_STREAM_PART = "Content-Type: image/jpeg\r\nContent-Length: %u\r\nX-Timestamp: %d.%06d\r\n\r\n";
 
-// Start/stop streaming
-bool camIsStreaming = true;
+// Start/Stop streaming
+bool camIsStreaming = false;
 
 const char *cam_framerate = CAM_FRAMERATE;
 const uint8_t framerate_delay = 1000 / (int)atol(cam_framerate);
@@ -80,24 +83,24 @@ i2s_pin_config_t i2s_mic_pins = {
   .data_in_num = 41
 };
 
-//// Mic streaming task
+/*
+* MicStreamTask task handling mic streaming over udp
+*
+* Streaming raw audio (f32le) from I2S over udp (port 3000)
+*/
 void MicStreamTask(void *pvParameters) {
 
   String ip = master_server_ip.toString();
-  log_i("Micstream running to : %s , port %u ", ip.c_str(), outPort);
+  Serial.printf("Micstream running to : %s , port %u \n", ip.c_str(), outPort);
 
   for (;;) {
     // Get I2S data and place in data buffer
     size_t bytesIn = 0;
     esp_err_t result = i2s_read(I2S_PORT, &i2sBuffer, I2S_BUFFER_LEN, &bytesIn, portMAX_DELAY);
-
     if (result == ESP_OK && bytesIn > 0) {
 
       int16_t *sample_buffer = (int16_t *)i2sBuffer;
 
-      // Read I2S data buffer
-      // I2S reads stereo data and one channel is zero the other contains
-      // data, both have 2 bytes per sample
       int16_t samples_read = bytesIn / 2;
       float audio_block_float[samples_read];
 
@@ -336,12 +339,14 @@ static esp_err_t cmd_handler(httpd_req_t *req) {
     }
     res = camIsStreaming ? 1 : 0;
   } else if (!strcmp(req_setting, "micstreaming")) {
-    if (req_value == 1 && !micIsStreaming) {
-      micIsStreaming = true;
-      xTaskCreatePinnedToCore(MicStreamTask, "Micstream", 5000, NULL, 10, &wrapper_micstreamUpdate, 0);
-    } else {
-      micIsStreaming = false;
-      vTaskDelete(wrapper_micstreamUpdate);
+    if (req_value != -1) {
+      if (req_value == 1 && !micIsStreaming) {
+        micIsStreaming = true;
+        xTaskCreatePinnedToCore(MicStreamTask, "Micstream", 5000, NULL, 10, &wrapper_micstreamUpdate, 0);
+      } else if (micIsStreaming) {
+        micIsStreaming = false;
+        vTaskDelete(wrapper_micstreamUpdate);
+      }
     }
     res = micIsStreaming ? 1 : 0;
   } else if (!strcmp(req_setting, "micgain")) {
@@ -459,6 +464,7 @@ void setup() {
     Serial.println("failed to mount FS");
   }
 
+  // Wifi Manager
   wm.setConnectTimeout(20);
   wm.setMinimumSignalQuality();
 
@@ -537,6 +543,10 @@ void setup() {
     return;
   }
 
+  // I2S Init for mic streaming
+  i2s_driver_install(I2S_PORT, &i2s_config, 0, NULL);
+  i2s_set_pin(I2S_PORT, &i2s_mic_pins);
+
   // Webserver init.
   Serial.println("Webserver starting");
 
@@ -572,6 +582,21 @@ void setup() {
   } else {
     Serial.printf("Stream server failed \n");
   }
+
+  // Register with remote master
+  Serial.println("Registering with remote master");
+  WiFiClient httpWifiInstance;
+  HttpClient http(httpWifiInstance, config_master_ip, 5000);
+
+  String httpPath = "/api/register_sense?ip=" + WiFi.localIP().toString();
+
+  int http_err = http.get(httpPath);
+  if ( http_err == 0 ) {
+    Serial.println(http.responseBody());
+  } else {
+    Serial.printf("Got status code: %u \n", http_err);
+  }
+
 }
 
 void loop() {
