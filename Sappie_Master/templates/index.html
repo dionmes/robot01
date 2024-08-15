@@ -9,27 +9,107 @@ Flask/Jinja2 template variables used
 </head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<link rel="stylesheet" href=" css/milligram.min.css">
+<link rel="stylesheet" href="css/pico.indigo.min.css">
+<script src="js/jquery-3.7.1.min.js"></script>
 
+<script>
+
+function ask_sappie() {
+
+	var text = $("#ask_textField").val();
+	var vision = $("#vision").is(":checked");
+    console.log(vision);
+	var url = "/api/ask_sappie"; 	
+	$( "#llm_result" ).text( "" );
+	$("#progress").show();
+	$.ajax({
+		url: url,
+		data : JSON.stringify({"text" : text, "vision": vision }),
+		type: 'POST',
+		contentType : 'application/json' })
+		.done(function (result) {
+			$("#ask_textField").val('');
+			$( "#llm_result" ).text( JSON.stringify(result) );
+			$("#progress").hide();
+		})
+		.fail(function (xhr, status) {
+			$( "#llm_result" ).text( "not ok" );
+			$("#progress").hide();
+		});
+
+}
+
+function clearIP() {
+	$.ajax({
+		url: "/api/clearips",
+		type: 'GET',
+    	dataType: 'text',
+    	async: false})
+    	.done(function (result) {
+        	location.reload();
+		})
+		.fail(function (xhr, status) {
+			console.log(status);
+		})
+		.always(function() {
+		});
+}
+  
+</script>
 <body> 
 
 <div class="container">
-	<h1 class="">Welcome to Sappie</h1>
-	<h3 class="">Your Robotic Assistant</h3>
-	<div class="row">
-		<div class="column column-25">
-			<div class=".button-clear"><a href='masterPage.html'>Master functions</a></div>
-			<div class=".button-clear"><a href='sensorsPage.html'>Sensor Information</a></div>
-			<div class=".button-clear"><a href='controlsPage.html'>Controls</a></div>
-			<div class=".button-clear"><a href='displayPage.html'>Face/Display</a></div>
-			<div class=".button-clear"><a href='sensePage.html'>Sense/Camera</a></div>
-		</div>
-		<div class="column column-25">
-			<img class="img_centered" src="images/robosapienv1.jpg" />
-		</div>
-	</div>
-	<p> Sappie IP : {{context.sappie_ip}} <br>
-	Sense IP  : {{context.sappiesense_ip}} </p>
+<br>
+    <hgroup>
+        <h1 style="color: var(--pico-primary);" >Welcome to Sappie</h1>
+        <h3 >Your Robotic Assistant</h3>
+    </hgroup>
+
+    <div class="container">
+        <progress id="chat-progress" style="display:none"></progress>
+    </div>
+    <br>
+    <div class="container">
+        <div class="container">
+            <progress id="progress" style="display:none"></progress>
+        </div>
+
+        <form onsubmit="ask_sappie();return false;">
+            <input type="text" placeholder="Ask Sappie" id="ask_textField" >
+            <label for="vision_checkbox">
+            <input type="checkbox" name="vision_checkbox" id="vision"/>
+            Vision
+            </label>
+        </form>	
+        <div class="grid">
+            <button class="secondary" onClick="ask_sappie(false);"> Ask </button>
+        </div>
+        <div class="grid">
+            Result :
+            <div id="llm_result"></div>
+    	</div>
+    	
+        <br>
+    </div>
+
+    <br>
+    <h3>Sappie System</h3>
+	<nav>
+      <ul>
+        <li><a href='masterPage.html'>Master functions</a></li>
+        <li><a href='controlsPage.html'>Controls</a></li>
+        <li><a href='displayPage.html'>Face/Display</a></li>
+        <li><a href='sensorsPage.html'>Sensor Information</a></li>
+        <li><a href='sensePage.html'>Sense/Camera</a></li>
+      </ul>
+    </nav>
+    
+	<div class="grid"">
+        <figure style="width:10em;">
+            <img class="img_centered" src="images/sappiev1.png" />
+        </figure>
+    </div>	
+    <br>
 </div>
 </body>
 </html>

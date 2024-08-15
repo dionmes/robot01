@@ -10,13 +10,21 @@ import time
 import soundfile as sf
 import torch
 device="cuda"
+voice=4830
 
 class TTS:
+	loaded=False
+	
 	def __init__(self):
+	    self.loaded = False
+	    
+	def loadModel(self):
 		self.synthesiser = pipeline("text-to-speech", "microsoft/speecht5_tts",device=0)
 		
 		embeddings_dataset = load_dataset("Matthijs/cmu-arctic-xvectors", split="validation")
-		self.speaker_embeddings = torch.tensor(embeddings_dataset[6500]["xvector"]).to(device).unsqueeze(0)
+		self.speaker_embeddings = torch.tensor(embeddings_dataset[voice]["xvector"]).to(device).unsqueeze(0)	
+
+		self.loaded = True
 	
 	def speak(self, text, destIP):
 		UDP_PORT = 9000

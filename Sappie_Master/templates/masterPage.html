@@ -9,26 +9,29 @@ Flask/Jinja2 template variables used
 </head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<link rel="stylesheet" href=" css/milligram.min.css">
+<link rel="stylesheet" href="css/pico.indigo.min.css">
 
 <script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
 <script>
-
 function tts() {
 
-	var text = $("#textField").val(); 	
+	var text = $("#tts_textField").val(); 	
 	var url = "/api/tts"; 	
+	$("#tts_result").text( "" );
+	$("#progress").show();
 	$.ajax({
 		url: url,
 		data : JSON.stringify({"text" : text}),
 		type: 'POST',
-		dataType: 'application/json',
 		contentType : 'application/json' })
 		.done(function (result) {
 			$( "#tts_result" ).text( "ok" );
+			$("#progress").hide();
+			$("#tts_textField").val('');
 		})
 		.fail(function (xhr, status) {
-			$( "#tts_result" ).text( status );
+			$( "#tts_result" ).text( "not ok" );
+			$("#progress").hide();
 		});
 
 }
@@ -37,30 +40,38 @@ function tts() {
 <body> 
 
 <div class="container">
-	<div class="row">
-		<div class="column">
-			<h1 class="centered">Sappie Master functions</h1>
+	<br>
+    <hgroup>
+		<h1 class="centered">Sappie Master functions</h1>
+        <a href='index.html'>Back</a>
+	</hgroup>
+</div>
+<hr>
+<div class="container">
+	<progress id="progress" style="display:none"></progress>
+</div>
+<div class="container">
+	<form onsubmit="tts();">
+		<input type="text" placeholder="Text to speak" id="tts_textField" >
+	</form>	
+</div>
+<div class="container">
+	<button class="outline" onClick="tts();">Say text</button>
+</div>
+<br>
+<div class="container"">
+	<div class="grid">
+		<div class="container">
+			<strong>Sappie IP : </strong>{{context.sappie_ip}} 	<button onClick="reset_sappie();">Reset Sappie</button>
 		</div>
-		<div class="column">
-			<a class="button button-primary" href='index.html'>Back</a>
+		<div class="container">
+			<strong>Sense IP  : </strong>{{context.sappiesense_ip}}	<button onClick="reset_sense();">Reset Sense</button>
 		</div>
 	</div>
 </div>
 
 <div class="container">
-	<form>
-	  <fieldset>
-		<label for="textField">Text to speak</label>
-		<input type="text" placeholder="Hello" id="textField">
-		<div class="button button-outline" onClick="tts();">Say text</div>
-	  	<div id="tts_result"></div>
-	  </fieldset>
-	</form>
-</div>
-<div class="container">
-	<p> Sappie IP : {{context.sappie_ip}} <br>
-	Sense IP  : {{context.sappiesense_ip}} </p>
-</div>
-
+	<button class="secondary" onClick="clearIP();">Clear IP's</button>
+ </div>
 </body>
 </html>
