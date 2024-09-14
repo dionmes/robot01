@@ -29,11 +29,11 @@ function ask_sappie() {
 		contentType : 'application/json' })
 		.done(function (result) {
 			$("#ask_textField").val('');
-			$( "#llm_result" ).text( JSON.stringify(result) );
+			$( "#llm_result" ).text( " Response : " + JSON.stringify(result) );
 			$("#progress").hide();
 		})
 		.fail(function (xhr, status) {
-			$( "#llm_result" ).text( "not ok" );
+			$( "#llm_result" ).text( "Response : Error : " +status );
 			$("#progress").hide();
 		});
 
@@ -83,16 +83,11 @@ function clearIP() {
         </form>	
         <div class="grid">
             <button class="secondary" onClick="ask_sappie(false);"> Ask </button>
-        </div>
-        <div class="grid">
-            Result :
             <div id="llm_result"></div>
     	</div>
-    	
         <br>
     </div>
-
-    <br>
+    <hr>
     <h3>Sappie System</h3>
 	<nav>
       <ul>
@@ -109,6 +104,9 @@ function clearIP() {
             <img class="img_centered" src="images/sappiev1.png" />
         </figure>
     </div>	
+    <hr>
+    <br>
+    <br>
     <br>
 </div>
 </body>
