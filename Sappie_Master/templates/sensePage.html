@@ -81,6 +81,26 @@ function mic_stream(on) {
 		});
 }
 
+function mic_gain() {
+	$("#progress-controls").show();
+	var gain = $("#micgain").val();
+
+	$.ajax({
+		url: "http://{{context.sappiesense_ip}}/control?setting=micgain&param=" + gain ,
+		type: 'GET',
+    	dataType: 'text',
+    	async: false})
+    .done(function (result) {
+		$("#progress-controls").hide();
+		})
+    .fail(function (xhr, status) {
+ 		$("#progress-controls").hide();
+   })
+    .always(function() {
+		console.log(status);
+    });
+}
+
 function wakeUpSense() {
 	$("#progress-controls").show();
 
@@ -138,23 +158,30 @@ function wakeUpSense() {
         <button id="camres10" onClick="cam_resolution('10');">1024x768</button>
         <button id="camres11" onClick="cam_resolution('11');">1280x720</button>
 	</div>
-	
+	<hr>
 	<h3>Controls</h3>
         <div class="container-fluid">
             <progress id="progress-controls" style="display:none"></progress>
         </div>
    <div class="container-fluid">
-        <button class="outline" onClick="wakeUpSense();">Wake up Sense/Camera</button>
+        <button class="secondary" onClick="wakeUpSense();">Wake up Sense/Camera</button>
         <br><br>
+        <label>
+        <h6>Microphone Gain</h6>
+        <input id="micgain" type="range" onchange="mic_gain();" min="0" max="30" value="5" step="1"/>
+        </label>
+
+        <div role="group">
+            <button id="startmic" onClick="mic_stream('1');">Start mic stream</button>
+            <button id="stopmic" class="secondary" onClick="mic_stream('0');">Stop mic stream</button>
+        </div>
+        <hr>
         <div role="group">
             <button id="startcam" onClick="cam_stream('1');">Start cam stream</button>
             <button id="stopcam" class="secondary" onClick="cam_stream('0');">Stop cam stream</button>
         </div>
         <br>
-        <div role="group">
-            <button id="startmic" onClick="mic_stream('1');">Start mic stream</button>
-            <button id="stopmic" class="secondary" onClick="mic_stream('0');">Stop mic stream</button>
-        </div>
+        <hr>
         <br>
         
     </div>

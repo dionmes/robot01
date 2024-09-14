@@ -35,6 +35,42 @@ function tts() {
 		});
 
 }
+
+function reset_sappie() {
+
+	$.ajax({
+		url: "http://{{context.sappie_ip}}/reset",
+		type: 'GET',
+		timeout: 1000})
+		.done(function (result) {
+			$( "#tts_result" ).text( "ok" );
+			$("#progress").hide();
+		})
+		.fail(function (xhr, status) {
+			$( "#tts_result" ).text( "not ok" );
+			$("#progress").hide();
+		});
+
+}
+
+function reset_sense() {
+
+	$.ajax({
+		url: "http://{{context.sappiesense_ip}}/reset",
+		type: 'GET',
+		timeout: 1000})
+		.done(function (result) {
+			$( "#tts_result" ).text( "ok" );
+			$("#progress").hide();
+		})
+		.fail(function (xhr, status) {
+			$( "#tts_result" ).text( "not ok" );
+			$("#progress").hide();
+		});
+
+}
+
+
 </script>
 
 <body> 
