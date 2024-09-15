@@ -11,6 +11,7 @@ from datetime import datetime
 from tts_speecht5_udp import TTS
 from stt_distil_whisper import STT
 
+from robot01 import ROBOT
 from display import DISPLAY
 from sense import SENSE
 
@@ -23,6 +24,9 @@ sappie_state = {}
 # Sappie current context. IPs will be overwritten by remote devices with current ip
 sappie_context = {"sappie_ip":"192.168.133.75", "sappiesense_ip" : "192.168.133.226", "sappie" : sappie_state}
 
+# Robot01
+robot = ROBOT(sappie_context['sappie_ip'])
+
 # Display engine
 display = DISPLAY(sappie_context['sappie_ip'])
 
@@ -30,12 +34,13 @@ display = DISPLAY(sappie_context['sappie_ip'])
 sense = SENSE(sappie_context['sappiesense_ip'])
 
 # tts engine
-tts_engine = TTS()
+tts_engine = TTS(sappie_context['sappie_ip'])
 tts_max_sentence_lenght = 12
-tts_q = queue.Queue() 
+tts_q = queue.Queue(3) 
+tts_speechspeed = 0.15
 
 # stt engine
-stt_engine = STT(sappie_context['sappie_ip'])
+stt_engine = STT(display)
 
 # Model
 llm_model = "mskimomadto/chat-gph-vision"
@@ -124,6 +129,28 @@ def register_sense():
     return jsonify(api_response)
 
 #
+# GET: /api/register_ip?device={DEVICE}&ip={IP ADRESS SENSE}
+#
+@app.route('/api/register_ip', methods=['GET'])
+def register_ip():
+
+    print(request.args.get('param') )
+    
+    sense_ip = request.args.get('ip')
+    device = request.args.get('device')
+    
+    if validate_ip_address(sense_ip):
+        sappie_context[device] = sense_ip
+        api_response = { 'status': 'Registration successful', 'error' : 0 }    
+    else:
+        sappie_context[device] = ""
+        api_response = { 'status': 'Registration failed', 'error' : 101 }    
+
+    print(sappie_context)
+    return jsonify(api_response)
+
+
+#
 # GET: /api/register_sense?ip={IP ADRESS SENSE}
 #
 @app.route('/api/clearips', methods=['GET'])
@@ -161,8 +188,12 @@ def tts_api():
     data = request.get_json()
     text = data["text"]
 
-    if sappie_context['sappie_ip'] != "":        
-        tts_q.put_nowait(text)
+    if sappie_context['sappie_ip'] != "":
+        try:    
+            tts_q.put_nowait(text)
+        except:
+            print("tts queue full")
+
         api_response = { 'status': 'ok', 'error' : 0 }
     else:
         api_response = { 'status': 'Error', 'error' : 1 }
@@ -291,7 +322,7 @@ def tts_worker():
         # Show neutral face
         display.action(3)
         # Call to enable Audio receive
-        requests.get("http://" + sappie_context['sappie_ip'] + "/audiostream?on=1")
+        robot.startaudio()
 
     while True:
         text = tts_q.get()
@@ -304,9 +335,9 @@ def tts_worker():
         except:
             print("No mic timeout")
         
-        tts_engine.speak(text,sappie_context['sappie_ip']) 
+        tts_engine.speak(text) 
         tts_q.task_done()
-        tts_mic_timeout = Timer(len(text) * 0.1, end_tts)
+        tts_mic_timeout = Timer(len(text) * tts_speechspeed, end_tts)
         tts_mic_timeout.start()       
 #
 #

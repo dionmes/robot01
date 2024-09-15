@@ -1,2 +1,7 @@
 .DS_Store
 **/build
+**/__pycache__
+<<<<<<< Updated upstream
+=======
+
+>>>>>>> Stashed changes
