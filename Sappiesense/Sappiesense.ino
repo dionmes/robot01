@@ -60,7 +60,7 @@ I2SClass I2S;
 WiFiUDP Udp;
 int outPort = 3000;
 
-TaskHandle_t wrapper_micstreamUpdate;
+TaskHandle_t micStreamTaskHandle;
 bool micIsStreaming = false;
 
 uint16_t mic_gain_factor = 5;
@@ -73,11 +73,13 @@ char i2sBuffer[I2S_BUFFER_LEN * 2];
 * Streaming raw audio (f32le) from I2S over udp (port 3000)
 */
 void MicStreamTask(void *pvParameters) {
+  // vtask stop notify
+  uint32_t notifyStopValue;
 
   String ip = master_server_ip.toString();
   Serial.printf("Micstream running to : %s , port %u \n", ip.c_str(), outPort);
 
-  for (;;) {
+  while (xTaskNotifyWait(0x00, 0x00, &notifyStopValue, 0) != pdTRUE) {
     // Get I2S data and place in data buffer
 
     I2S.read();
@@ -109,8 +111,9 @@ void MicStreamTask(void *pvParameters) {
         Serial.println("BAD ESP result... ");
     }
   }
-  
-  Serial.println("Missed for loop!");
+
+  vTaskDelay(500 / portTICK_PERIOD_MS);
+  vTaskDelete(NULL);
 
 }
 
@@ -244,6 +247,19 @@ static esp_err_t capture_handler(httpd_req_t *req) {
   return res;
 }
 
+
+/* 
+* health_handler for httpd
+*
+* Response with ok
+*/
+static esp_err_t health_handler(httpd_req_t *req) {
+  delay(1000);
+  Serial.print("Health ok");
+  httpd_resp_set_hdr(req, "Access-Control-Allow-Origin", "*");
+  return httpd_resp_send(req, "ok", 2);
+}
+
 /*
 * helper for cmd_handler 
 *
@@ -357,10 +373,10 @@ static esp_err_t cmd_handler(httpd_req_t *req) {
 
       if (req_value == 1 && !micIsStreaming) {
         micIsStreaming = true;
-        xTaskCreatePinnedToCore(MicStreamTask, "Micstream", 5000, NULL, 10, &wrapper_micstreamUpdate, 0);
+        xTaskCreatePinnedToCore(MicStreamTask, "Micstream", 5000, NULL, 10, &micStreamTaskHandle, 0);
       } else if (micIsStreaming) {
+        xTaskNotify( micStreamTaskHandle, 1, eSetValueWithOverwrite );
         micIsStreaming = false;
-        vTaskDelete(wrapper_micstreamUpdate);
       }
     }
     res = micIsStreaming ? 1 : 0;
@@ -375,7 +391,7 @@ static esp_err_t cmd_handler(httpd_req_t *req) {
     return httpd_resp_send_500(req);
   }
 
-  String json_response_string = "{\"" + String(req_setting) + "\" : " + String(res) + " }\"";
+  String json_response_string = "{\"" + String(req_setting) + "\" : response : " + String(res) + " }\"";
   
   uint8_t response_len = json_response_string.length();
   char json_response[response_len];
@@ -441,7 +457,7 @@ static bool camera_init() {
 
   esp_err_t err = esp_camera_init(&camera_config);
   if (err != ESP_OK) {
-    Serial.printf("Camera init failed with error 0x%x", err);
+    Serial.printf("Camera init failed with error 0x%x \n", err);
     return false;
   }
 
@@ -573,7 +589,6 @@ void setup() {
 
   // camera init
   esp_err_t err = esp_camera_init(&camera_config);
-  if (err != ESP_OK) { Serial.printf("Camera init failed with error 0x%x", err); }
 
   // I2S Init for mic streaming
   I2S.setPinsPdmRx(42, 41);
@@ -588,6 +603,7 @@ void setup() {
   httpd_config_t httpd_config = HTTPD_DEFAULT_CONFIG();
   httpd_config.max_uri_handlers = 16;
 
+  httpd_uri_t health_uri = { .uri = "/health", .method = HTTP_GET, .handler = health_handler, .user_ctx = NULL };
   httpd_uri_t cmd_uri = { .uri = "/control", .method = HTTP_GET, .handler = cmd_handler, .user_ctx = NULL };
   httpd_uri_t capture_uri = { .uri = "/capture", .method = HTTP_GET, .handler = capture_handler, .user_ctx = NULL };
   httpd_uri_t go2sleep_url = { .uri = "/go2sleep", .method = HTTP_GET, .handler = go2sleep_handler, .user_ctx = NULL };
@@ -595,6 +611,7 @@ void setup() {
   httpd_uri_t erase_url = { .uri = "/eraseconfig", .method = HTTP_GET, .handler = config_erase_handler, .user_ctx = NULL };
 
   if (httpd_start(&server_httpd, &httpd_config) == ESP_OK) {
+    httpd_register_uri_handler(server_httpd, &health_uri);
     httpd_register_uri_handler(server_httpd, &cmd_uri);
     httpd_register_uri_handler(server_httpd, &capture_uri);
     httpd_register_uri_handler(server_httpd, &go2sleep_url);
@@ -619,7 +636,7 @@ void setup() {
   }
 
   // Register with remote master
-  Serial.println("Registering with remote master");
+  Serial.println("Registering with master server");
   WiFiClient httpWifiInstance;
   HttpClient http(httpWifiInstance, config_master_ip, 5000);
 
