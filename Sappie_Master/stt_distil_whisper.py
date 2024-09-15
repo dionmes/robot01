@@ -73,6 +73,9 @@ class STT:
 		print("Ready to transcribe...")
 		
 		while self.running:
+		
+			speech_prob = 0
+			
 			try:
 				# Receive data from the socket (with a buffer size of 1024 bytes)
 				# Need a 2048 Sample for VAD so will add two together, as audio packets are 1024 size
@@ -85,38 +88,39 @@ class STT:
 				# VAD
 				speech_prob = self.vad_model(torch.tensor(np_data).cpu(), 16000).cpu().item()
 				
-				if speech_prob > self.sensitivity:
-					nonsilence_counter = self.silence_period
-					if not self.speech_detected:
-						self.speech_detected = True
-						print("Detection started")
-						#Send display action via fire and forget so no significant stream interruption will happen.
-						self.display.action(19)
 				
 			except:
 				print(f"Audio receive/detection fail")
 
-				# Create Audio transcription sample until silence is detected via nonsilence_counter. 
-				# Currently no max sample size. 
-				if nonsilence_counter > 0:	
-					nonsilence_counter = nonsilence_counter - 1
-					np_audio_chunk = np.concatenate([np_audio_chunk,np_data])
-					
-					# Silende detected
-					if nonsilence_counter <= 0:
-						if np_audio_chunk.size > self.speech_length:
-							try:
-								self.audiochunks_q.put(np_audio_chunk)
-							except:
-								print("Audiochunk queue full")
-	
-						print("Detection ended")
-						self.speech_detected = False
-						nonsilence_counter = 0
-	
-						#Send display action via fire and forget so no significant stream interruption will happen.					
-						self.display.action(3)
-						np_audio_chunk = np.empty(0)
+			if speech_prob > self.sensitivity:
+				nonsilence_counter = self.silence_period
+				if not self.speech_detected:
+					self.speech_detected = True
+					print("Detection started")
+					#Send display action via fire and forget so no significant stream interruption will happen.
+					self.display.action(19)
+
+			# Create Audio transcription sample until silence is detected via nonsilence_counter. 
+			# Currently no max sample size. 
+			if nonsilence_counter > 0:	
+				nonsilence_counter = nonsilence_counter - 1
+				np_audio_chunk = np.concatenate([np_audio_chunk,np_data])
+				
+				# Silende detected
+				if nonsilence_counter <= 0:
+					if np_audio_chunk.size > self.speech_length:
+						try:
+							self.audiochunks_q.put(np_audio_chunk)
+						except:
+							print("Audiochunk queue full")
+
+					print("Detection ended")
+					self.speech_detected = False
+					nonsilence_counter = 0
+
+					#Send display action via fire and forget so no significant stream interruption will happen.					
+					self.display.action(3)
+					np_audio_chunk = np.empty(0)
 					
 	# async function to do audio transcription
 	def transcribe(self):

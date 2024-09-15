@@ -34,9 +34,10 @@ display = DISPLAY(sappie_context['sappie_ip'])
 sense = SENSE(sappie_context['sappiesense_ip'])
 
 # tts engine
-tts_engine = TTS()
+tts_engine = TTS(sappie_context['sappie_ip'])
 tts_max_sentence_lenght = 12
 tts_q = queue.Queue(3) 
+tts_speechspeed = 0.15
 
 # stt engine
 stt_engine = STT(display)
@@ -126,6 +127,28 @@ def register_sense():
         api_response = { 'status': 'Registration failed', 'error' : 101 }    
             
     return jsonify(api_response)
+
+#
+# GET: /api/register_ip?device={DEVICE}&ip={IP ADRESS SENSE}
+#
+@app.route('/api/register_ip', methods=['GET'])
+def register_ip():
+
+    print(request.args.get('param') )
+    
+    sense_ip = request.args.get('ip')
+    device = request.args.get('device')
+    
+    if validate_ip_address(sense_ip):
+        sappie_context[device] = sense_ip
+        api_response = { 'status': 'Registration successful', 'error' : 0 }    
+    else:
+        sappie_context[device] = ""
+        api_response = { 'status': 'Registration failed', 'error' : 101 }    
+
+    print(sappie_context)
+    return jsonify(api_response)
+
 
 #
 # GET: /api/register_sense?ip={IP ADRESS SENSE}
@@ -312,9 +335,9 @@ def tts_worker():
         except:
             print("No mic timeout")
         
-        tts_engine.speak(text,sappie_context['sappie_ip']) 
+        tts_engine.speak(text) 
         tts_q.task_done()
-        tts_mic_timeout = Timer(len(text) * 0.1, end_tts)
+        tts_mic_timeout = Timer(len(text) * tts_speechspeed, end_tts)
         tts_mic_timeout.start()       
 #
 #
