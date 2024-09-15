@@ -8,7 +8,7 @@ A ripped Robosapien LLM powered robot.
 	- Main
 	- Sense
 
-- **Web interface & AI models**
+- **Web interface & AI models**  
 	Implemented on a Nvidia AGX Xaver development board. All models run locally (tts, stt, llm)
 
 
