@@ -11,6 +11,7 @@ from datetime import datetime
 from tts_speecht5_udp import TTS
 from stt_distil_whisper import STT
 
+from robot01 import ROBOT
 from display import DISPLAY
 from sense import SENSE
 
@@ -23,6 +24,9 @@ sappie_state = {}
 # Sappie current context. IPs will be overwritten by remote devices with current ip
 sappie_context = {"sappie_ip":"192.168.133.75", "sappiesense_ip" : "192.168.133.226", "sappie" : sappie_state}
 
+# Robot01
+robot = ROBOT(sappie_context['sappie_ip'])
+
 # Display engine
 display = DISPLAY(sappie_context['sappie_ip'])
 
@@ -32,10 +36,10 @@ sense = SENSE(sappie_context['sappiesense_ip'])
 # tts engine
 tts_engine = TTS()
 tts_max_sentence_lenght = 12
-tts_q = queue.Queue() 
+tts_q = queue.Queue(3) 
 
 # stt engine
-stt_engine = STT(sappie_context['sappie_ip'])
+stt_engine = STT(display)
 
 # Model
 llm_model = "mskimomadto/chat-gph-vision"
@@ -161,8 +165,12 @@ def tts_api():
     data = request.get_json()
     text = data["text"]
 
-    if sappie_context['sappie_ip'] != "":        
-        tts_q.put_nowait(text)
+    if sappie_context['sappie_ip'] != "":
+        try:    
+            tts_q.put_nowait(text)
+        except:
+            print("tts queue full")
+
         api_response = { 'status': 'ok', 'error' : 0 }
     else:
         api_response = { 'status': 'Error', 'error' : 1 }
@@ -291,7 +299,7 @@ def tts_worker():
         # Show neutral face
         display.action(3)
         # Call to enable Audio receive
-        requests.get("http://" + sappie_context['sappie_ip'] + "/audiostream?on=1")
+        robot.startaudio()
 
     while True:
         text = tts_q.get()

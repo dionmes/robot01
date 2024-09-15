@@ -25,20 +25,20 @@ sock.bind((UDP_IP, UDP_PORT))
 
 # STT Class with VAD
 class STT:
-	def __init__(self,sappie_ip="", silence_periond = 50, sensitivity = 0.010, speech_length = 35000):
+	def __init__(self,display, silence_periond = 50, sensitivity = 0.010, speech_length = 35000):
 		self.sensitivity = sensitivity
 		self.loaded = False
 		self.speech_detected = False
 		self.silence_period = silence_periond
 		self.speech_length = speech_length
 		
-		self.stt_q = queue.Queue()
-		self.audiochunks_q =  queue.Queue()
+		self.stt_q = queue.Queue(3)
+		self.audiochunks_q =  queue.Queue(2)
 		
 		self.running = False
 		
 		#display engine
-		self.display = DISPLAY(sappie_ip)
+		self.display = display
 
 	# Model loading is deferred so class can be loaded without loading model, speeding up startup of the server
 	def load_models(self):
@@ -84,6 +84,7 @@ class STT:
 				
 				# VAD
 				speech_prob = self.vad_model(torch.tensor(np_data).cpu(), 16000).cpu().item()
+				
 				if speech_prob > self.sensitivity:
 					nonsilence_counter = self.silence_period
 					if not self.speech_detected:
@@ -92,16 +93,22 @@ class STT:
 						#Send display action via fire and forget so no significant stream interruption will happen.
 						self.display.action(19)
 				
+			except:
+				print(f"Audio receive/detection fail")
+
 				# Create Audio transcription sample until silence is detected via nonsilence_counter. 
 				# Currently no max sample size. 
-				if nonsilence_counter > 0:			
+				if nonsilence_counter > 0:	
 					nonsilence_counter = nonsilence_counter - 1
 					np_audio_chunk = np.concatenate([np_audio_chunk,np_data])
 					
 					# Silende detected
 					if nonsilence_counter <= 0:
 						if np_audio_chunk.size > self.speech_length:
-							self.audiochunks_q.put(np_audio_chunk)
+							try:
+								self.audiochunks_q.put(np_audio_chunk)
+							except:
+								print("Audiochunk queue full")
 	
 						print("Detection ended")
 						self.speech_detected = False
@@ -110,8 +117,6 @@ class STT:
 						#Send display action via fire and forget so no significant stream interruption will happen.					
 						self.display.action(3)
 						np_audio_chunk = np.empty(0)
-			except:
-				 print(f"Audio receive/detection fail")
 					
 	# async function to do audio transcription
 	def transcribe(self):
@@ -131,7 +136,11 @@ class STT:
 			pred_ids = self.stt_model.generate(input_features, **gen_kwargs)
 			transcription = self.processor.batch_decode(pred_ids, skip_special_tokens=True, decode_with_timestamps=gen_kwargs["return_timestamps"])
 
-			self.stt_q.put(transcription)
+			try:
+				self.stt_q.put(transcription)
+			except:
+				print("STT transcribe queue full")
+
 			self.audiochunks_q.task_done()
 
 	def start(self):
