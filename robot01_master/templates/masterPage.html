@@ -70,6 +70,24 @@ function reset_sense() {
 
 }
 
+function clearips() {
+
+	$.ajax({
+		url: "/api/clearips",
+		type: 'GET',
+		timeout: 1000})
+		.done(function (result) {
+			$( "#tts_result" ).text( "ok" );
+			$("#progress").hide();
+			location.reload();
+		})
+		.fail(function (xhr, status) {
+			$( "#tts_result" ).text( "not ok" );
+			$("#progress").hide();
+		});
+
+}
+
 
 </script>
 
@@ -107,7 +125,7 @@ function reset_sense() {
 </div>
 
 <div class="container">
-	<button class="secondary" onClick="clearIP();">Clear IP's</button>
+	<button class="secondary" onClick="clearips();">Clear IP's</button>
  </div>
 </body>
 </html>

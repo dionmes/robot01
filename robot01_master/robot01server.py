@@ -136,19 +136,17 @@ def register_ip():
 
     print(request.args.get('param') )
     
-    sense_ip = request.args.get('ip')
-    device = request.args.get('device')
+    ip = request.args.get('ip')
+    device = request.args.get('device') + "_ip"
     
-    if validate_ip_address(sense_ip):
-        robot01_context[device] = sense_ip
+    if validate_ip_address(ip):
+        robot01_context[device] = ip
         api_response = { 'status': 'Registration successful', 'error' : 0 }    
     else:
         robot01_context[device] = ""
         api_response = { 'status': 'Registration failed', 'error' : 101 }    
 
-    print(robot01_context)
     return jsonify(api_response)
-
 
 #
 # GET: /api/register_sense?ip={IP ADRESS SENSE}
