@@ -640,7 +640,7 @@ void setup() {
   WiFiClient httpWifiInstance;
   HttpClient http(httpWifiInstance, config_master_ip, 5000);
 
-  String httpPath = "/api/register_sense?ip=" + WiFi.localIP().toString();
+  String httpPath = "/api/register_ip?ip=" + WiFi.localIP().toString() + "&device=robot01sense";
 
   int http_err = http.get(httpPath);
   if ( http_err == 0 ) {
