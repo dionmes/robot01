@@ -1,0 +1,40 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+	<title>Welcome to robot01 - Your Robotic Assistant</title>
+</head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="stylesheet" href="css/pico.indigo.min.css">
+<style>
+    iframe {display: block; height: 100vh; width: 100vw; border: none; }
+</style>
+<script src="js/jquery-3.7.1.min.js"></script>
+
+<script>
+    $( document ).ready(function() {
+        if ("{{context.robot01_ip}}".length === 0) {
+            $("#content").html('<br><h3 style="color: red; text-align: center;">No connection</h3>');
+        } else {
+            $("#content").html('<iframe src="http://{{context.robot01_ip}}/display.html">');
+        }
+    });
+</script>
+
+<body>
+
+<div class="container">
+	<br>
+    <hgroup>
+		<h1 class="centered">robot01 Display/Face</h1>
+        <a href='index.html'>Back</a>
+	</hgroup>
+</div>
+<hr>
+<div id="content">
+</div>
+
+<br>
+
+</body>
+</html>

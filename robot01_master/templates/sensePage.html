@@ -1,0 +1,192 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+	<title>Welcome to robot01 - Your Robotic Assistant</title>
+</head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="stylesheet" href="css/pico.indigo.min.css">
+<script src="js/jquery-3.7.1.min.js"></script>
+
+<script>
+
+
+function cam_capture() {
+	$("#progress-capture").show();
+    d = new Date();
+    $("#capture-img").attr('src', "http://{{context.robot01sense_ip}}:80/capture?"+d.getTime());
+	$("#progress-capture").hide();
+}
+
+function cam_receive() {
+	$("#progress-capture").show();
+    cam_stream(1); 
+    $("#capture-img").attr('src', "http://{{context.robot01sense_ip}}:81/stream");
+	$("#progress-capture").hide();
+}
+
+function cam_resolution(res) {
+	$("#progress-resolution").show();
+
+	$.ajax({
+		url: "http://{{context.robot01sense_ip}}/control?setting=framesize&param=" + res,
+		type: 'GET',
+    	dataType: 'text',
+    	async: false})
+    	.done(function (result) {
+		})
+		.fail(function (xhr, status) {
+			console.log(status);
+		})
+		.always(function() {
+        	$("#progress-resolution").hide();
+		});
+}
+  
+function cam_stream(on) {
+	$("#progress-controls").show();
+
+	$.ajax({
+		url: "http://{{context.robot01sense_ip}}/control?setting=camstreaming&param=" + on,
+		type: 'GET',
+    	dataType: 'text',
+    	async: false})
+    	.done(function (result) {
+    	    console.log(result);
+		})
+		.fail(function (xhr, status) {
+			console.log(status);
+		})
+		.always(function() {
+        	$("#progress-controls").hide();
+		});
+}
+
+function mic_stream(on) {
+	$("#progress-controls").show();
+
+	$.ajax({
+		url: "http://{{context.robot01sense_ip}}/control?setting=micstreaming&param=" + on,
+		type: 'GET',
+    	dataType: 'text',
+    	async: false})
+    	.done(function (result) {
+    	    console.log(result);
+		})
+		.fail(function (xhr, status) {
+			console.log(status);
+		})
+		.always(function() {
+        	$("#progress-controls").hide();
+		});
+}
+
+function mic_gain() {
+	$("#progress-controls").show();
+	var gain = $("#micgain").val();
+
+	$.ajax({
+		url: "http://{{context.robot01sense_ip}}/control?setting=micgain&param=" + gain ,
+		type: 'GET',
+    	dataType: 'text',
+    	async: false})
+    .done(function (result) {
+		$("#progress-controls").hide();
+		})
+    .fail(function (xhr, status) {
+ 		$("#progress-controls").hide();
+   })
+    .always(function() {
+		console.log(status);
+    });
+}
+
+function wakeUpSense() {
+	$("#progress-controls").show();
+
+	$.ajax({
+		url: "/wakeupsense",
+		type: 'GET',
+    	dataType: 'text',
+    	async: false})
+    	.done(function (result) {
+		})
+		.fail(function (xhr, status) {
+			console.log(status);
+		})
+		.always(function() {
+        	$("#progress-controls").hide();
+		});
+}
+
+</script>
+
+<body>
+
+<div class="container">
+    <hgroup>
+        <br>
+        <h1 class="centered">robot01 Sense Control</h1>
+        <a href='index.html'>Back</a>
+	</hgroup>
+<hr>
+<br>
+	<div class="container-fluid">
+	    <progress id="progress-capture" style="display:none"></progress>
+    </div>
+	<div class="grid">
+        <button id="capture" class="secondary" onClick="cam_capture();">Show Capture</button>
+        <button id="stream" class="secondary" onClick="cam_receive();">Show Stream</button>
+	</div>
+	
+    <br>
+    <div class="container-fluid">
+        <figure id="capture-container">
+            <img id="capture-img" crossorigin="">
+        </figure>
+    </div>
+	<h3>Resolution</h3>
+	<div class="container-fluid">
+	    <progress id="progress-resolution" style="display:none"></progress>
+    </div>
+    <div role="group">
+        <button id="camres5" onClick="cam_resolution('5');">320x240</button>
+        <button id="camres8" onClick="cam_resolution('8');">640x480</button>
+        <button id="camres9" onClick="cam_resolution('9');">800x600</button>
+	</div>
+    <div role="group">
+        <button id="camres10" onClick="cam_resolution('10');">1024x768</button>
+        <button id="camres11" onClick="cam_resolution('11');">1280x720</button>
+	</div>
+	<hr>
+	<h3>Controls</h3>
+        <div class="container-fluid">
+            <progress id="progress-controls" style="display:none"></progress>
+        </div>
+   <div class="container-fluid">
+        <button class="secondary" onClick="wakeUpSense();">Wake up Sense/Camera</button>
+        <br><br>
+        <label>
+        <h6>Microphone Gain</h6>
+        <input id="micgain" type="range" onchange="mic_gain();" min="0" max="30" value="5" step="1"/>
+        </label>
+
+        <div role="group">
+            <button id="startmic" onClick="mic_stream('1');">Start mic stream</button>
+            <button id="stopmic" class="secondary" onClick="mic_stream('0');">Stop mic stream</button>
+        </div>
+        <hr>
+        <div role="group">
+            <button id="startcam" onClick="cam_stream('1');">Start cam stream</button>
+            <button id="stopcam" class="secondary" onClick="cam_stream('0');">Stop cam stream</button>
+        </div>
+        <br>
+        <hr>
+        <br>
+        
+    </div>
+    <br>
+</div>
+
+</body>
+</html>

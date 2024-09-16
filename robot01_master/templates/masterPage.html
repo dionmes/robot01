@@ -1,0 +1,113 @@
+<!DOCTYPE html>
+<!-- 
+Flask/Jinja2 template variables used  
+-->
+
+<html lang="en">
+<head>
+	<title>Welcome to robot01 - Your Robotic Assistant</title>
+</head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="stylesheet" href="css/pico.indigo.min.css">
+
+<script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
+<script>
+function tts() {
+
+	var text = $("#tts_textField").val(); 	
+	var url = "/api/tts"; 	
+	$("#tts_result").text( "" );
+	$("#progress").show();
+	$.ajax({
+		url: url,
+		data : JSON.stringify({"text" : text}),
+		type: 'POST',
+		contentType : 'application/json' })
+		.done(function (result) {
+			$( "#tts_result" ).text( "ok" );
+			$("#progress").hide();
+			$("#tts_textField").val('');
+		})
+		.fail(function (xhr, status) {
+			$( "#tts_result" ).text( "not ok" );
+			$("#progress").hide();
+		});
+
+}
+
+function reset_robot01() {
+
+	$.ajax({
+		url: "http://{{context.robot01_ip}}/reset",
+		type: 'GET',
+		timeout: 1000})
+		.done(function (result) {
+			$( "#tts_result" ).text( "ok" );
+			$("#progress").hide();
+		})
+		.fail(function (xhr, status) {
+			$( "#tts_result" ).text( "not ok" );
+			$("#progress").hide();
+		});
+
+}
+
+function reset_sense() {
+
+	$.ajax({
+		url: "http://{{context.robot01sense_ip}}/reset",
+		type: 'GET',
+		timeout: 1000})
+		.done(function (result) {
+			$( "#tts_result" ).text( "ok" );
+			$("#progress").hide();
+		})
+		.fail(function (xhr, status) {
+			$( "#tts_result" ).text( "not ok" );
+			$("#progress").hide();
+		});
+
+}
+
+
+</script>
+
+<body> 
+
+<div class="container">
+	<br>
+    <hgroup>
+		<h1 class="centered">robot01 Master functions</h1>
+        <a href='index.html'>Back</a>
+	</hgroup>
+</div>
+<hr>
+<div class="container">
+	<progress id="progress" style="display:none"></progress>
+</div>
+<div class="container">
+	<form onsubmit="tts();">
+		<input type="text" placeholder="Text to speak" id="tts_textField" >
+	</form>	
+</div>
+<div class="container">
+	<button class="outline" onClick="tts();">Say text</button>
+</div>
+<br>
+<div class="container"">
+	<div class="grid">
+		<div class="container">
+			<strong>robot01 IP : </strong>{{context.robot01_ip}} 	<button onClick="reset_robot01();">Reset robot01</button>
+		</div>
+		<div class="container">
+			<strong>Sense IP  : </strong>{{context.robot01sense_ip}}	<button onClick="reset_sense();">Reset Sense</button>
+		</div>
+	</div>
+</div>
+
+<div class="container">
+	<button class="secondary" onClick="clearIP();">Clear IP's</button>
+ </div>
+</body>
+</html>

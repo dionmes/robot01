@@ -1,0 +1,10 @@
+[Unit]
+Description=My test service
+After=multi-user.target
+[Service]
+Type=simple
+User=dion
+Restart=always
+ExecStart=/usr/bin/python3 /home/dion/robot01_Master/robot01server.py
+[Install]
+WantedBy=multi-user.target

@@ -1,0 +1,193 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+	<title>Welcome to robot01 - Your Robotic Assistant</title>
+</head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="stylesheet" href="pico.indigo.min.css">
+
+<script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
+<script>
+
+function displayAction(action) {
+	/**
+	  DISPLAYTEXTSMALL = 1, 
+	  DISPLAYTEXTLARGE = 2,
+	  NEUTRAL = 3, 
+	  SMILE = 4,
+	  LOOKLEFT = 5,
+	  LOOKRIGHT = 6,
+	  BLINK = 8,
+	  WINK = 9,
+	  SHAKE = 10,
+	  TESTFILLRECT = 11,
+	  DISPLAYIMG = 12,
+	  CYLON = 13,
+	  SCROLLTEXT=14,
+	  SCROLLLEFT=15,
+	  SCROLLRIGHT=16,
+	  STOPSCROLL=17,
+	  GEAR_ANIMATION=18,
+	  RECORD_ANIMATION=19,
+	  HOURGLASS_ANIMATION=20,
+	  LOADER_ANIMATION=21,
+	  BELL_ANIMATION=22,
+	  CHAT_ANIMATION=23,
+	**/
+	var url = "/displayaction?action=" + action;
+	if (action == 1 || action == 2 || action == 14) {
+		url = "/displayaction?action=" + action + "&text=" + $("#textField").val(); 	
+	}
+	if (action==12) {
+		url = "/displayaction?action=" + action + "&index=" + $("#img_index").val();	
+	}
+	$.ajax({
+		url: url,
+		type: 'GET',
+    	dataType: 'text',
+    	async: false})
+    	.done(function (result) {
+		})
+		.fail(function (xhr, status) {
+			console.log(status);
+		})
+		.always(function() {
+		});
+}
+
+function imgloop() {
+	$.ajax({
+		url: "/displayaction?action=24",
+		type: 'GET',
+		dataType: 'text',
+		async: false})
+		.done(function (result) {
+		})
+		.fail(function (xhr, status) {
+			console.log(status);
+		})
+		.always(function() {
+		});
+}
+  
+</script>
+
+<body>
+<div class="container">
+	<form onsubmit="displayAction(14);">
+		<label for="textField">Text to display</label>
+		<input type="text" placeholder="Hello" id="textField">
+	</form>
+	<div role="group">
+		<button onClick="displayAction(14);">Scroll text</button>
+		<button class="secondary" onClick="displayAction(1);">Text small</button>
+		<button class="secondary" onClick="displayAction(2);">Text large</button>
+	</div>
+	<br>
+	<div role="group">
+		<button class="secondary" onClick="displayAction(18);">Gear animation</button>
+		<button class="secondary" onClick="displayAction(19);">Record animation</button>
+		<button class="secondary" onClick="displayAction(20);">HourGlass animation</button>
+	</div>
+	<div role="group">
+		<button class="secondary" onClick="displayAction(21);">Loader animation</button>
+		<button class="secondary" onClick="displayAction(22);">Bell animation</button>
+		<button class="secondary" onClick="displayAction(23);">Chat animation</button>
+	</div>
+
+	<div class="grid">
+		<div>
+			<select id="img_index" aria-label="Image to display">
+				<option value="0">bmp_angry</option>
+				<option value="1">bmp_apple</option>
+				<option value="2">bmp_bat</option>
+				<option value="3">bmp_brokenheart</option>
+				<option value="4">bmp_camera</option>
+				<option value="5">bmp_cheers</option>
+				<option value="6">bmp_chicken</option>
+				<option value="7">bmp_clapping</option>
+				<option value="8">bmp_clock</option>
+				<option value="9">bmp_cloud</option>
+				<option value="10">bmp_computer</option>
+				<option value="11">bmp_documents</option>
+				<option value="12">bmp_ear</option>
+				<option value="13">bmp_enjoy</option>
+				<option value="14">bmp_exloding</option>
+				<option value="15">bmp_flower</option>
+				<option value="16">bmp_game</option>
+				<option value="17">bmp_grapes</option>
+				<option value="18">bmp_hammer</option>
+				<option value="19">bmp_heart</option>
+				<option value="20">bmp_hearteyes</option>
+				<option value="21">bmp_home</option>
+				<option value="22">bmp_horns</option>
+				<option value="23">bmp_island</option>
+				<option value="24">bmp_mail</option>
+				<option value="25">bmp_moon</option>
+				<option value="26">bmp_muscle</option>
+				<option value="27">bmp_music</option>
+				<option value="28">bmp_mute</option>
+				<option value="29">bmp_nerd</option>
+				<option value="30">bmp_neutral</option>
+				<option value="31">bmp_panda</option>
+				<option value="32">bmp_penguin</option>
+				<option value="33">bmp_pie</option>
+				<option value="34">bmp_rabbit</option>
+				<option value="35">bmp_racecar</option>
+				<option value="36">bmp_rain</option>
+				<option value="37">bmp_rollingeyes</option>
+				<option value="38">bmp_sad</option>
+				<option value="39">bmp_robot01</option>
+				<option value="40">bmp_saturn</option>
+				<option value="41">bmp_shark</option>
+				<option value="42">bmp_sick</option>
+				<option value="43">bmp_sleepy</option>
+				<option value="44">bmp_smile</option>
+				<option value="45">bmp_speaker</option>
+				<option value="46">bmp_speakerloud</option>
+				<option value="47">bmp_speaking</option>
+				<option value="48">bmp_stars</option>
+				<option value="49">bmp_stop</option>
+				<option value="50">bmp_sun</option>
+				<option value="51">bmp_sunbehindcloud</option>
+				<option value="52">bmp_thinking</option>
+				<option value="53">bmp_thunder</option>
+				<option value="54">bmp_tongue</option>
+				<option value="55">bmp_unhappy</option>
+				<option value="56">bmp_warning</option>
+				<option value="57">bmp_waving</option>
+				<option value="58">bmp_wink</option>
+				<option value="59">bmp_yawn</option>
+				<option value="60">bmp_zzz</option>
+			</select>	
+		</div>
+		<div role="group">
+			<button onClick="displayAction(12);">Show image</button>
+			<button class="outline" onClick="imgloop();">Image loop</button>
+		</div>
+	</div>
+	
+	<br>
+	<div role="group">
+		<button onClick="displayAction(3);">Neutral face</button>
+		<button class="secondary" onClick="displayAction(5);">Look left</button>
+		<button class="secondary" onClick="displayAction(6);">Look right</button>
+		<button onClick="displayAction(4);">Face smile</button>
+	</div>
+
+	<div role="group">
+		<button onClick="displayAction(8);">Blink</button>
+		<button onClick="displayAction(9);">Wink</button>
+		<button onClick="displayAction(10);">Shake</button>
+		<button onClick="displayAction(13);">Cylon</button>
+	</div>
+	<div role="group">
+		<button onClick="displayAction(11);">Test fill</button>
+		<button onClick="displayAction(15);">Scroll left</button>
+		<button onClick="displayAction(16);">Scroll right</button>
+		<button onClick="displayAction(17);">Stop scroll</button>
+	</div>
+</div>
+</body>
+</html>
