@@ -25,6 +25,11 @@ AsyncFsWebServer WebServer(80, FILESYSTEM, "robot01 server");
 bool apMode = false;
 
 /*
+* Robot name
+*/
+String ROBOT_NAME = "Sappie";
+
+/*
 * I2S - UDP
 */
 #include "AsyncUDP.h"
@@ -111,7 +116,7 @@ void setup() {
 
   // HTML server
   WebServer.on("/", HTTP_ANY, [](AsyncWebServerRequest *request) {
-    request->send(FILESYSTEM, "/Index.html");
+    request->send(FILESYSTEM, "/index.html");
   });
 
   // Add request handlers to webserver
@@ -185,7 +190,7 @@ void setup() {
   WiFiClient httpWifiInstance;
   HttpClient http(httpWifiInstance, config_master_ip, 5000);
 
-  String httpPath = "/api/register_robot01?ip=" + WiFi.localIP().toString();
+  String httpPath = "/api/register_ip?ip=" + WiFi.localIP().toString() + "&device=robot01";
 
   int http_err = http.get(httpPath);
   if (http_err == 0) {
@@ -197,8 +202,11 @@ void setup() {
   // Boot complete
   Serial.println("Boot complete...");
   delay(100);
-  roboFace.exec(faceAction::SCROLLTEXT, "Hello, I am robot01 @ " + WiFi.localIP().toString(), 100);
+
+  String register_string =  "Hello, I am " + ROBOT_NAME + " @ " + WiFi.localIP().toString();
+  roboFace.exec(faceAction::SCROLLTEXT,register_string, 100);
   delay(500);
+  
   while (roboFace.actionRunning) { delay(100); }
   roboFace.exec(faceAction::DISPLAYIMG, "", 39);
   delay(1000);
