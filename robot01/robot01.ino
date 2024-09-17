@@ -128,13 +128,14 @@ void setup() {
   WebServer.on("/displayaction", HTTP_GET, display_action_handler);
   WebServer.on("/wakeupsense", HTTP_GET, wakeupsense_handler);
 
-  WebServer.enableFsCodeEditor();
   String config_master_ip;
   WebServer.addOptionBox("robot01 Options");
   WebServer.addOption("Remote-Master-IP-Address", config_master_ip);
 
   // Start webserver
   Serial.println("Starting Webserver");
+  WebServer.init();
+
   WebServer.getOptionValue("Remote-Master-IP-Address", config_master_ip);
 
   Serial.print(F("ESP Web Server started on IP Address: "));
