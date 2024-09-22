@@ -14,8 +14,7 @@ class ROBOT:
 		threading.Thread(target=self.safe_http_call, args=[('http://' + self.ip + '/audiostream?on=0')])
 
 	def safe_http_call(self,url):
-		
 		try:
 			requests.get(url, timeout=self.timeout)
-		except:
-			print("request failed - " + url)
+		except Exception as e:
+			print("Request - " + url + " , error : ",e)

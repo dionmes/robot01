@@ -10,10 +10,12 @@ class SENSE:
 		self.timeout = timeout
 
 	def startmic(self):
-		threading.Thread(target=self.safe_http_call, args=['http://' + self.ip + "/control?setting=micstreaming=1"]).start()
-	
+		threading.Thread(target=self.safe_http_call, args=['http://' + self.ip + "/control?setting=micstreaming&param=1"]).start()
+		print("Mic enabled")
+		
 	def stopmic(self):
-		threading.Thread(target=self.safe_http_call, args=['http://' + self.ip + "/control?setting=micstreaming=0"]).start()
+		threading.Thread(target=self.safe_http_call, args=['http://' + self.ip + "/control?setting=micstreaming&param=0"]).start()
+		print("Mic disabled")
 	
 	def capture(self, resolution=5):
 		image_base64 = ""
@@ -36,7 +38,7 @@ class SENSE:
 		
 		try:
 			requests.get(url, timeout=self.timeout)
-		except:
-			print("request failed - " + url)
+		except Exception as e:
+			print("Request - " + url + " , error : ",e)
 
 

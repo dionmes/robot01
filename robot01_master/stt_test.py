@@ -1,10 +1,13 @@
 import threading
 import time
 import queue
+from display import DISPLAY
 
 from stt_distil_whisper import STT
 
-stt = STT("192.168.133.75")
+display = DISPLAY("192.168.133.75")
+
+stt = STT(display)
 
 #STT worker
 def stt_worker():
