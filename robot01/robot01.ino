@@ -288,21 +288,19 @@ void webhandler_wrapper_bno08xInfo(AsyncWebServerRequest *request) {
 */
 void audiostream_handler(AsyncWebServerRequest *request) {
 
-  String json = "{ \"command\" : \"failed\" }";
-
   if (request->hasArg("on")) {
     int value = request->arg("on").toInt();
     if (value == 1 && !audioStreamRunning) {
       Serial.println("Audio streaming starting\n");
       startAudio(true);
-      json = "{\"audiostream\": 1}";
     }
     if (value == 0 && audioStreamRunning) {
       Serial.println("Audio streaming stopping\n");
       startAudio(false);
-      json = "{\"audiostream\": 0 }";
     }
   }
+  
+  String json = "{\"audiostream\": " + String(audioStreamRunning) + " }";
 
   AsyncWebServerResponse *response = request->beginResponse(200, "application/json", json);
   response->addHeader("Access-Control-Allow-Origin", "*");
@@ -315,16 +313,15 @@ void audiostream_handler(AsyncWebServerRequest *request) {
 */
 void volume_handler(AsyncWebServerRequest *request) {
 
-  String json = "{ \"command\" : \"failed\" }";
-
   if (request->hasArg("power")) {
     int value = request->arg("power").toInt();
     if (value >= 0 && value <= MAX_VOLUME) {
       i2sGainMultiplier = value;
     } 
-    json = "{ \"command\" : \"succes\" }";
   }
 
+  String json = "{\"volume\": " +  String(i2sGainMultiplier) + " }";
+  
   AsyncWebServerResponse *response = request->beginResponse(200, "application/json", json);
   response->addHeader("Access-Control-Allow-Origin", "*");
 
