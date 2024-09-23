@@ -11,7 +11,7 @@ from transformers import AutoModelForSpeechSeq2Seq, AutoProcessor, pipeline
 device = "cuda" if torch.cuda.is_available() else "cpu"
 torch.set_default_device(device)
 torch_dtype = torch.float16
-model_id = "distil-whisper/distil-large-v2"
+model_id = "distil-whisper/distil-large-v3"
 
 UDP_IP = "0.0.0.0" 
 UDP_PORT = 3000 # Audio stream receive udp port
@@ -55,7 +55,7 @@ class STT:
 				tokenizer=self.processor.tokenizer,
 				feature_extractor=self.processor.feature_extractor,
 				max_new_tokens=128,
-				torch_dtype=torch_dtype,
+				torch_dtype=torch_dtype
 			)
 
 		print("STT Models loaded")
@@ -86,9 +86,10 @@ class STT:
 				
 				# VAD
 				speech_prob = self.vad_model(torch.tensor(np_data).cpu(), 16000).cpu().item()
+				#print(speech_prob)
 				
-			except:
-				print(f"Audio receive/detection fail")
+			except Exception as e:
+				print("UDP audio receive & analysis error : ",type(e).__name__ )
 
 			if speech_prob > self.sensitivity:
 			
@@ -117,7 +118,7 @@ class STT:
 					print("STT Detection ended")
 					self.speech_detected = False
 					nonsilence_counter = 0
-					self.vad_model.reset_states() 
+					#self.vad_model.reset_states() 
 
 					#Send display action 
 					self.display.action(3)

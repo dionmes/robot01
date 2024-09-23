@@ -45,7 +45,7 @@ class BRAIN:
 		#
 		# LLM Model
 		#
-		self.llm_model = "mskimomadto/chat-gph-vision"
+		self.llm_model = "mistral"
 		#llm context
 		self.llm_context_id = "1"
 		
