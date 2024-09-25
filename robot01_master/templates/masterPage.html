@@ -1,8 +1,4 @@
 <!DOCTYPE html>
-<!-- 
-Flask/Jinja2 template variables used  
--->
-
 <html lang="en">
 <head>
 	<title>Welcome to robot01 - Your Robotic Assistant</title>
@@ -10,12 +6,12 @@ Flask/Jinja2 template variables used
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <link rel="stylesheet" href="css/pico.indigo.min.css">
+<script src="js/jquery-3.7.1.min.js"></script>
 
-<script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
 <script>
-function tts() {
 
-	var text = $("#tts_textField").val(); 	
+function tts() {
+	var text = $("#tts_textField").val();
 	var url = "/api/tts"; 	
 	$("#tts_result").text( "" );
 	$("#progress").show();
@@ -32,8 +28,7 @@ function tts() {
 		.fail(function (xhr, status) {
 			$( "#tts_result" ).text( "not ok" );
 			$("#progress").hide();
-		});
-
+		})
 }
 
 function reset_robot01() {
@@ -88,44 +83,56 @@ function clearips() {
 
 }
 
-
 </script>
 
 <body> 
-
-<div class="container">
-	<br>
-    <hgroup>
-		<h1 class="centered">robot01 Master functions</h1>
-        <a href='index.html'>Back</a>
-	</hgroup>
-</div>
-<hr>
-<div class="container">
-	<progress id="progress" style="display:none"></progress>
-</div>
-<div class="container">
-	<form onsubmit="tts();">
-		<input type="text" placeholder="Text to speak" id="tts_textField" >
-	</form>	
-</div>
-<div class="container">
-	<button class="outline" onClick="tts();">Say text</button>
-</div>
-<br>
-<div class="container"">
-	<div class="grid">
+<div class="container-fluid">
+	<div class="container">
+	
+		<br>
+		<hgroup>
+			<h1 class="centered" style="color: var(--pico-primary);">robot01 Master functions</h1>
+			<a href='index.html'>Back</a>
+		</hgroup>
+		<hr>
 		<div class="container">
-			<strong>robot01 IP : </strong>{{context.robot01_ip}} 	<button onClick="reset_robot01();">Reset robot01</button>
+			<progress id="progress" style="display:none"></progress>
 		</div>
+		
 		<div class="container">
-			<strong>Sense IP  : </strong>{{context.robot01sense_ip}}	<button onClick="reset_sense();">Reset Sense</button>
+			<form onsubmit="tts();">
+				<input type="text" placeholder="Text to speak" id="tts_textField" >
+			</form>	
 		</div>
+		
+		<div class="container">
+			<button class="outline" onClick="tts();">Say text</button>
+		</div>
+		
+		<hr>
+		<br>
+		
+		<div class="grid">
+			<div>
+				<strong>robot01 IP : </strong>{{context.robot01_ip}}
+			</div>
+			<div>
+				<button onClick="reset_robot01();">Reset robot01</button>
+			</div>
+			<div>
+				<strong>Sense IP  : </strong>{{context.robot01sense_ip}}
+			</div>
+			<div>
+				<button onClick="reset_sense();">Reset Sense</button>
+			</div>
+		</div>
+		<br>
+		<hr>		
+		<button class="secondary" onClick="clearips();">Clear IP's</button>
+		
 	</div>
 </div>
-
-<div class="container">
-	<button class="secondary" onClick="clearips();">Clear IP's</button>
- </div>
+<br>
+<br>
 </body>
 </html>

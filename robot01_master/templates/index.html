@@ -1,8 +1,4 @@
 <!DOCTYPE html>
-<!-- 
-Flask/Jinja2 template variables used  
--->
-
 <html lang="en">
 <head>
 	<title>Welcome to robot01 - Your Robotic Assistant</title>
@@ -58,56 +54,54 @@ function clearIP() {
 </script>
 <body> 
 
-<div class="container">
-<br>
-    <hgroup>
-        <h1 style="color: var(--pico-primary);" >Welcome to robot01</h1>
-        <h3 >Your Robotic Assistant</h3>
-    </hgroup>
-
-    <div class="container">
-        <progress id="chat-progress" style="display:none"></progress>
-    </div>
-    <br>
-    <div class="container">
-        <div class="container">
-            <progress id="progress" style="display:none"></progress>
-        </div>
-
-        <form onsubmit="ask_robot01();return false;">
-            <input type="text" placeholder="Ask robot01" id="ask_textField" >
-            <label for="vision_checkbox">
-            <input type="checkbox" name="vision_checkbox" id="vision"/>
-            Vision
-            </label>
-        </form>	
-        <div class="grid">
-            <button class="secondary" onClick="ask_robot01(false);"> Ask </button>
-            <div id="llm_result"></div>
-    	</div>
-        <br>
-    </div>
-    <hr>
-    <h3>robot01 System</h3>
-	<nav>
-      <ul>
-        <li><a href='masterPage.html'>Master functions</a></li>
-        <li><a href='controlsPage.html'>Controls</a></li>
-        <li><a href='displayPage.html'>Face/Display</a></li>
-        <li><a href='sensorsPage.html'>Sensor Information</a></li>
-        <li><a href='sensePage.html'>Sense/Camera</a></li>
-      </ul>
-    </nav>
-    
-	<div class="grid"">
-        <figure style="width:10em;">
-            <img class="img_centered" src="images/robot01v1.png" />
-        </figure>
-    </div>	
-    <hr>
-    <br>
-    <br>
-    <br>
+<div class="container-fluid">
+	<div class="container">
+		<br>
+		<hgroup>
+			<h1>Sappie - Your Robotic Assistant</h1>
+		</hgroup>
+		<nav>
+			<ul>
+				<li><a href='masterPage.html'>Master</a></li>
+				<li><a href='controlsPage.html'>Controls</a></li>
+				<li><a href='displayPage.html'>Display</a></li>
+				<li><a href='sensorsPage.html'>Sensors</a></li>
+				<li><a href='sensePage.html'>Sense</a></li>
+			</ul>
+		</nav>
+		<hr>
+		<div class="container">
+			<progress id="chat-progress" style="display:none"></progress>
+		</div>
+		<br>
+		<div class="container">
+			<div class="container">
+				<progress id="progress" style="display:none"></progress>
+			</div>
+	
+			<form onsubmit="ask_robot01();return false;">
+				<input type="text" placeholder="Ask robot01" id="ask_textField" >
+				<label for="vision_checkbox">
+				<input type="checkbox" name="vision_checkbox" id="vision"/>
+				Vision
+				</label>
+			</form>	
+			<div class="grid">
+				<button class="secondary" onClick="ask_robot01(false);"> Ask </button>
+				<div id="llm_result"></div>
+			</div>
+			<br>
+		</div>
+		<hr>
+		<div class="grid"">
+			<figure style="width:10em;">
+				<img class="img_centered" src="images/robot01v1.png" />
+			</figure>
+		</div>	
+   		<hr>
+   	</div>
 </div>
+<br>
+<br>
 </body>
 </html>
