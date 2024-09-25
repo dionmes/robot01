@@ -115,10 +115,10 @@ void setup() {
   IPAddress myIP = WebServer.startWiFi(15000, "ESP32_robot01", "123456789");
 
   // HTML server
-  WebServer.on("/", HTTP_ANY, [](AsyncWebServerRequest *request) {
-    request->send(FILESYSTEM, "/index.html");
-  });
-
+  WebServer.on("/", HTTP_GET, [](AsyncWebServerRequest *request) { request->send(FILESYSTEM, "/index.html"); });
+  WebServer.on("/controls.html", HTTP_GET, webhandler_file );
+  WebServer.on("/display.html", HTTP_GET, webhandler_file );
+  WebServer.on("/sensors.html", HTTP_GET, webhandler_file );
   // Add request handlers to webserver
   WebServer.on("/VL53L1X_Info", HTTP_GET, webhandler_VL53L1X_Info);
   WebServer.on("/BNO08X_Info", HTTP_GET, webhandler_wrapper_bno08xInfo);
@@ -135,7 +135,6 @@ void setup() {
   // Start webserver
   Serial.println("Starting Webserver");
   WebServer.init();
-
   WebServer.getOptionValue("Remote-Master-IP-Address", config_master_ip);
 
   Serial.print(F("ESP Web Server started on IP Address: "));
@@ -237,6 +236,16 @@ void bno08xUpdateTask(void *pvParameters) {
 ////////////////////////////////  Web handlers  /////////////////////////////////////////
 
 /*
+* Handler to get webfiles with header
+*/
+void webhandler_file(AsyncWebServerRequest *request) {
+  Serial.println(request->url());
+  AsyncWebServerResponse *response = request->beginResponse(FILESYSTEM, request->url() );
+  response->addHeader("Access-Control-Allow-Origin", "*");
+  request->send(response);
+}
+
+/*
 * Handler to get vl53l1x values
 */
 void webhandler_VL53L1X_Info(AsyncWebServerRequest *request) {
@@ -254,7 +263,6 @@ void webhandler_VL53L1X_Info(AsyncWebServerRequest *request) {
 
   AsyncWebServerResponse *response = request->beginResponse(200, "application/json", json);
   response->addHeader("Access-Control-Allow-Origin", "*");
-
   request->send(response);
 }
 

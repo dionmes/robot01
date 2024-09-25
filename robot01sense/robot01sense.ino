@@ -391,7 +391,7 @@ static esp_err_t cmd_handler(httpd_req_t *req) {
     return httpd_resp_send_500(req);
   }
 
-  String json_response_string = "{\"" + String(req_setting) + "\" : response : " + String(res) + " }\"";
+  String json_response_string = "{ \"" + String(req_setting) + "\", \"response\" : " + String(res) + " }";
   
   uint8_t response_len = json_response_string.length();
   char json_response[response_len];
