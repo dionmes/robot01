@@ -8,6 +8,7 @@
 #include "roboFace.h"
 #include "bodyControl.h"
 #include <ESP_I2S.h>
+#include <ArduinoJson.h>
 
 /*
 * Webserver
@@ -127,6 +128,7 @@ void setup() {
   WebServer.on("/bodyaction", HTTP_GET, body_action_handler);
   WebServer.on("/displayaction", HTTP_GET, display_action_handler);
   WebServer.on("/wakeupsense", HTTP_GET, wakeupsense_handler);
+  WebServer.on("/health", HTTP_GET, webhealth_handler);
 
   String config_master_ip;
   WebServer.addOptionBox("robot01 Options");
@@ -140,9 +142,6 @@ void setup() {
   Serial.print(F("ESP Web Server started on IP Address: "));
   Serial.println(myIP);
   Serial.println(F("Open /setup page to configure optional parameters"));
-
-  // Enable content editor
-  WebServer.enableFsCodeEditor();
 
   delay(100);
 
@@ -245,6 +244,19 @@ void webhandler_file(AsyncWebServerRequest *request) {
   request->send(response);
 }
 
+/* 
+* health_handler for httpd
+*
+* Response with ok
+*/
+void webhealth_handler(AsyncWebServerRequest *request) {
+  
+  String json = "{\"status\": \"ok\" }";
+
+  AsyncWebServerResponse *response = request->beginResponse(200, "application/json", json );
+  response->addHeader("Access-Control-Allow-Origin", "*");
+  request->send(response);
+}
 /*
 * Handler to get vl53l1x values
 */

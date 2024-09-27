@@ -247,17 +247,24 @@ static esp_err_t capture_handler(httpd_req_t *req) {
   return res;
 }
 
-
 /* 
 * health_handler for httpd
 *
 * Response with ok
 */
 static esp_err_t health_handler(httpd_req_t *req) {
-  delay(1000);
-  Serial.print("Health ok");
+  
   httpd_resp_set_hdr(req, "Access-Control-Allow-Origin", "*");
-  return httpd_resp_send(req, "ok", 2);
+  httpd_resp_set_type(req, HTTPD_TYPE_JSON);
+
+  JsonDocument json_obj;
+  json_obj["status"] = "ok";
+  size_t jsonSize = measureJson(json_obj);
+  char json_response[jsonSize];
+  serializeJson(json_obj, json_response, jsonSize );
+  httpd_resp_send(req, json_response , jsonSize );
+  
+  return ESP_OK;
 }
 
 /*
@@ -292,6 +299,7 @@ static esp_err_t parse_get(httpd_req_t *req, char **obuf) {
 * cmd handler for camera / mic settings & streaming
 */
 static esp_err_t cmd_handler(httpd_req_t *req) {
+  
   char *buf = NULL;
   char req_setting[32];
   char param_value[32];
@@ -363,14 +371,16 @@ static esp_err_t cmd_handler(httpd_req_t *req) {
   else if (!strcmp(req_setting, "ae_level"))
     res = (req_value != -1) ? s->set_ae_level(s, req_value) : s->status.ae_level;
   else if (!strcmp(req_setting, "camstreaming")) {
+    
     if (req_value != -1) {
       camIsStreaming = (req_value == 1) ? true : false;
     }
+    
     res = camIsStreaming ? 1 : 0;
+
   } else if (!strcmp(req_setting, "micstreaming")) {
 
     if (req_value != -1) {
-
       if (req_value == 1 && !micIsStreaming) {
         micIsStreaming = true;
         xTaskCreatePinnedToCore(MicStreamTask, "Micstream", 5000, NULL, 10, &micStreamTaskHandle, 0);
@@ -379,26 +389,33 @@ static esp_err_t cmd_handler(httpd_req_t *req) {
         micIsStreaming = false;
       }
     }
+
     res = micIsStreaming ? 1 : 0;
 
   } else if (!strcmp(req_setting, "micgain")) {
+
     if (req_value >= 0 and req_value <= 50) {
       mic_gain_factor = req_value;
     }
     res = mic_gain_factor;
   } else {
     Serial.printf("Unknown command: %s \n", req_setting);
-    return httpd_resp_send_500(req);
+    httpd_resp_send_500(req);
+    return ESP_FAIL;
   }
 
-  String json_response_string = "{ \"" + String(req_setting) + "\", \"response\" : " + String(res) + " }";
-  
-  uint8_t response_len = json_response_string.length();
-  char json_response[response_len];
-  json_response_string.toCharArray(json_response, response_len);
+  JsonDocument json_obj;
+  json_obj[req_setting] = res;
 
+  size_t jsonSize = measureJson(json_obj);
+  char json_response[jsonSize];
+  serializeJson(json_obj, json_response, jsonSize );
+  
+  httpd_resp_set_type(req, HTTPD_TYPE_JSON);
   httpd_resp_set_hdr(req, "Access-Control-Allow-Origin", "*");
-  return httpd_resp_send(req, json_response, response_len);
+  httpd_resp_send(req, json_response, jsonSize);
+  
+  return ESP_OK;
 }
 
 /* 
@@ -412,12 +429,22 @@ static esp_err_t go2sleep_handler(httpd_req_t *req) {
 
   gpio_wakeup_enable(GPIO_NUM_9, GPIO_INTR_HIGH_LEVEL);
 
+  delay(1000);
+  httpd_resp_set_hdr(req, "Access-Control-Allow-Origin", "*");
+
+  JsonDocument json_obj;
+  json_obj["status"] = "ok";
+
+  size_t jsonSize = measureJson(json_obj);
+  char json_response[jsonSize];
+  serializeJson(json_obj, json_response, jsonSize );
+  
+  httpd_resp_set_type(req, HTTPD_TYPE_JSON);
+
   esp_sleep_enable_gpio_wakeup();
   esp_light_sleep_start();
 
-  delay(3000);
-  httpd_resp_set_hdr(req, "Access-Control-Allow-Origin", "*");
-  return httpd_resp_send(req, "ok", HTTPD_RESP_USE_STRLEN);
+  return ESP_OK;
 }
 
 /*
@@ -429,6 +456,7 @@ static esp_err_t reset_handler(httpd_req_t *req) {
   delay(1000);
   Serial.print("Resetting on request.");
   esp_restart();
+  // No return response neccesary
 }
 
 /*
@@ -441,6 +469,7 @@ static esp_err_t config_erase_handler(httpd_req_t *req) {
   delay(2000);
   wm.erase();
   esp_restart();
+  // No return response neccesary
 }
 
 /*
@@ -519,15 +548,18 @@ void setup() {
 
   // Wifi Manager
   wm.setConnectTimeout(20);
-  wm.setMinimumSignalQuality();
+  wm.setMinimumSignalQuality(10);
+  // Custom title HTML for the WiFiManager portal
+  String customTitle = "<h1>Robot01 Sense config</h1>";
+  wm.setCustomHeadElement(customTitle.c_str());
 
   WiFiManagerParameter custom_masterserver("server", "Master server IP", config_master_ip, 40);
   wm.addParameter(&custom_masterserver);
 
   wm.setSaveConfigCallback(saveConfigCallback);
-
-  bool wificonnect = wm.autoConnect("ESP-SENSE-CAM", "password123");
   
+  bool wificonnect = wm.autoConnect("ROBOT01-SENSE", "password123");
+
   if (!wificonnect) {
     Serial.println("Failed to connect");
     delay(3000);
@@ -603,17 +635,17 @@ void setup() {
   httpd_config_t httpd_config = HTTPD_DEFAULT_CONFIG();
   httpd_config.max_uri_handlers = 16;
 
-  httpd_uri_t health_uri = { .uri = "/health", .method = HTTP_GET, .handler = health_handler, .user_ctx = NULL };
-  httpd_uri_t cmd_uri = { .uri = "/control", .method = HTTP_GET, .handler = cmd_handler, .user_ctx = NULL };
-  httpd_uri_t capture_uri = { .uri = "/capture", .method = HTTP_GET, .handler = capture_handler, .user_ctx = NULL };
+  httpd_uri_t health_url = { .uri = "/health", .method = HTTP_GET, .handler = health_handler, .user_ctx = NULL };
+  httpd_uri_t cmd_url = { .uri = "/control", .method = HTTP_GET, .handler = cmd_handler, .user_ctx = NULL };
+  httpd_uri_t capture_url = { .uri = "/capture", .method = HTTP_GET, .handler = capture_handler, .user_ctx = NULL };
   httpd_uri_t go2sleep_url = { .uri = "/go2sleep", .method = HTTP_GET, .handler = go2sleep_handler, .user_ctx = NULL };
   httpd_uri_t reset_url = { .uri = "/reset", .method = HTTP_GET, .handler = reset_handler, .user_ctx = NULL };
   httpd_uri_t erase_url = { .uri = "/eraseconfig", .method = HTTP_GET, .handler = config_erase_handler, .user_ctx = NULL };
 
   if (httpd_start(&server_httpd, &httpd_config) == ESP_OK) {
-    httpd_register_uri_handler(server_httpd, &health_uri);
-    httpd_register_uri_handler(server_httpd, &cmd_uri);
-    httpd_register_uri_handler(server_httpd, &capture_uri);
+    httpd_register_uri_handler(server_httpd, &health_url);
+    httpd_register_uri_handler(server_httpd, &cmd_url);
+    httpd_register_uri_handler(server_httpd, &capture_url);
     httpd_register_uri_handler(server_httpd, &go2sleep_url);
     httpd_register_uri_handler(server_httpd, &reset_url);
     httpd_register_uri_handler(server_httpd, &erase_url);
