@@ -23,14 +23,15 @@ function displayAction(action) {
 		url: url,
 		type: 'GET',
     	dataType: 'text',
-    	async: false})
-    	.done(function (result) {
-		})
-		.fail(function (xhr, status) {
-			console.log(status);
-		})
-		.always(function() {
-		});
+    	async: true
+	})
+	.done(function (result) {
+	})
+	.fail(function (xhr, status) {
+		console.log(status);
+	})
+	.always(function() {
+	});
 }
 
 function imgloop() {
@@ -38,14 +39,15 @@ function imgloop() {
 		url: "http://{{context.robot01_ip}}/displayaction?action=24",
 		type: 'GET',
 		dataType: 'text',
-		async: false})
-		.done(function (result) {
-		})
-		.fail(function (xhr, status) {
-			console.log(status);
-		})
-		.always(function() {
-		});
+		async: true
+	})
+	.done(function (result) {
+	})
+	.fail(function (xhr, status) {
+		console.log(status);
+	})
+	.always(function() {
+	});
 }
   
 </script>

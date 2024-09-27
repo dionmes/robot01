@@ -19,16 +19,17 @@ function tts() {
 		url: url,
 		data : JSON.stringify({"text" : text}),
 		type: 'POST',
-		contentType : 'application/json' })
-		.done(function (result) {
-			$( "#tts_result" ).text( "ok" );
-			$("#progress").hide();
-			$("#tts_textField").val('');
-		})
-		.fail(function (xhr, status) {
-			$( "#tts_result" ).text( "not ok" );
-			$("#progress").hide();
-		})
+		contentType : 'application/json',
+    	async: true		
+	})
+	.done(function (result) {
+		$("#progress").hide();
+		$("#tts_textField").val('');
+	})
+	.fail(function (xhr, status) {
+		alert("Error sending tts request.")
+		$("#progress").hide();
+	})
 }
 
 function reset_robot01() {
@@ -36,15 +37,17 @@ function reset_robot01() {
 	$.ajax({
 		url: "http://{{context.robot01_ip}}/reset",
 		type: 'GET',
-		timeout: 1000})
-		.done(function (result) {
-			$( "#tts_result" ).text( "ok" );
-			$("#progress").hide();
-		})
-		.fail(function (xhr, status) {
-			$( "#tts_result" ).text( "not ok" );
-			$("#progress").hide();
-		});
+		timeout: 1000,
+    	async: true
+	})
+	.done(function (result) {
+		alert("Reset request robot01 send.")
+		$("#progress").hide();
+	})
+	.fail(function (xhr, status) {
+		alert("Error sending reset.")
+		$("#progress").hide();
+	});
 
 }
 
@@ -53,15 +56,17 @@ function reset_sense() {
 	$.ajax({
 		url: "http://{{context.robot01sense_ip}}/reset",
 		type: 'GET',
-		timeout: 1000})
-		.done(function (result) {
-			$( "#tts_result" ).text( "ok" );
-			$("#progress").hide();
-		})
-		.fail(function (xhr, status) {
-			$( "#tts_result" ).text( "not ok" );
-			$("#progress").hide();
-		});
+		timeout: 1000,
+    	async: true		
+	})
+	.done(function (result) {
+		alert("Reset request sense send.")
+		$("#progress").hide();
+	})
+	.fail(function (xhr, status) {
+		alert("Error sending reset.")
+		$("#progress").hide();
+	});
 
 }
 
@@ -70,16 +75,18 @@ function clearips() {
 	$.ajax({
 		url: "/api/clearips",
 		type: 'GET',
-		timeout: 1000})
-		.done(function (result) {
-			$( "#tts_result" ).text( "ok" );
-			$("#progress").hide();
-			location.reload();
-		})
-		.fail(function (xhr, status) {
-			$( "#tts_result" ).text( "not ok" );
-			$("#progress").hide();
-		});
+		timeout: 1000,
+    	async: true		
+	})
+	.done(function (result) {
+		$("#progress").hide();
+		location.reload();
+	})
+	.fail(function (xhr, status) {
+		alert("Error sending clear ips.")
+		$("#progress").hide();
+	});
+}
 
 }
 

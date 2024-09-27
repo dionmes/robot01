@@ -11,45 +11,22 @@
 <script>
 
 function mic_gain() {
-	$("#progress-controls").show();
 	var gain = $("#micgain").val();
 
 	$.ajax({
 		url: "http://{{context.robot01sense_ip}}/control?setting=micgain&param=" + gain ,
 		type: 'GET',
-    	dataType: 'text',
-    	async: false
+    	dataType: 'json',
+    	async: true
     })
     .done(function (result) {
-		$("#progress-controls").hide();
 	})
     .fail(function (xhr, status, errorThrown) {
- 		$("#progress-controls").hide();
 		alert(errorThrown);
 	})
-}
-
-function mic_stream() {
-	$("#progress-controls").show();
-	var checked = $('input[name="micstream"]').is(':checked');
-	var on = checked ? 1 : 0;
-	console.log(on);
-	$.ajax({
-		url: "http://{{context.robot01sense_ip}}/control?setting=micstreaming&param=" + on,
-		type: 'GET',
-    	dataType: 'text',
-    	async: false
-    })
-	.fail(function (xhr, status, errorThrown) {
-		alert(errorThrown);
-	})
-	.always(function() {
-		$("#progress-controls").hide();
-	});
 }
 
 function cam_stream() {
-	$("#progress-controls").show();
 	var checked = $('input[name="camstream"]').is(':checked');
 	var on = checked ? 1 : 0;
 	console.log(on);
@@ -57,17 +34,14 @@ function cam_stream() {
 	$.ajax({
 		url: "http://{{context.robot01sense_ip}}/control?setting=camstreaming&param=" + on,
 		type: 'GET',
-    	dataType: 'text',
-    	async: false
+    	dataType: 'json',
+    	async: true
 	})
 	.done(function (result) {
 		console.log(result);
 	})
 	.fail(function (xhr, status, errorThrown) {
 		alert(errorThrown);
-	})
-	.always(function() {
-		$("#progress-controls").hide();
 	});
 }
 
@@ -78,13 +52,10 @@ function wakeUpSense() {
 		url: "/wakeupsense",
 		type: 'GET',
     	dataType: 'text',
-    	async: false 
+    	async: true 
     })
 	.fail(function (xhr, status,errorThrown ) {
 		alert(errorThrown);
-	})
-	.always(function() {
-        $("#progress-controls").hide();
 	});
 }
 
@@ -107,19 +78,31 @@ function cam_resolution(res) {
 	$.ajax({
 		url: "http://{{context.robot01sense_ip}}/control?setting=framesize&param=" + res,
 		type: 'GET',
-    	dataType: 'text',
-    	async: false 
+    	dataType: 'json',
+    	async: true 
 	})
 	.done(function (result) {
 	})
-	.fail(function (xhr, status) {
+	.fail(function (xhr, status, errorThrown) {
+		alert(errorThrown);
 		console.log(status);
-	})
-	.always(function() {
-		$("#progress-resolution").hide();
 	});
 }
   
+function erase_config() {
+	$.ajax({
+		url: "http://{{context.robot01sense_ip}}/eraseconfig",
+		type: 'GET',
+    	dataType: 'text',
+    	async: true 
+    })
+	.done(function (result) {
+		alert("Erase config initiated.")
+	})
+	.fail(function (xhr, status,errorThrown ) {
+		alert(errorThrown);
+	})
+}
 
 window.onload = function() {
 
@@ -127,47 +110,26 @@ window.onload = function() {
 	$.ajax({
 		url: "http://{{context.robot01sense_ip}}/control?setting=micgain",
 		type: 'GET',
-    	dataType: 'text',
-    	async: false 
+    	dataType: 'json',
+    	async: true
     })
     .done(function (result) {
 		console.log(result);
-		$("#micstream").removeAttr("disabled");
-		if (result.response === 1 ) {
-			$("#micstream").attr("checked", true);
-		} else {
-			$("#micstream").attr("checked", false);
-		}
+		$("#micgain").removeAttr("disabled");
+    	$("#micgain").val(result.micgain);
 	})
 
-	// Get udp micstream status
-	$.ajax({
-		url: "http://{{context.robot01sense_ip}}/control?setting=micstreaming",
-		type: 'GET',
-    	dataType: 'text',
-    	async: false 
-    })
-    .done(function (result) {
-		console.log(result);
-		$("#micstream").removeAttr("disabled");
-		if (result.response === 1 ) {
-			$("#micstream").attr("checked", true);
-		} else {
-			$("#micstream").attr("checked", false);
-		}
-	})
-	
 	// Get camstream status
 	$.ajax({
 		url: "http://{{context.robot01sense_ip}}/control?setting=camstreaming",
 		type: 'GET',
-    	dataType: 'text',
-    	async: false 
+    	dataType: 'json',
+    	async: true
     })
     .done(function (result) {
 		console.log(result);
 		$("#camstream").removeAttr("disabled");
-		if (result.response === 1 ) {
+		if (result.camstreaming === 1 ) {
 			$("#camstream").attr("checked", true);
 		} else {
 			$("#camstream").attr("checked", false);
@@ -203,12 +165,6 @@ window.onload = function() {
 
 		<div class="grid">
 			<label>
-			<input id="micstream" onchange="mic_stream();" name="micstream" type="checkbox" role="switch" disabled/>
-			Microphone stream
-			</label>
-			<br>
-	
-			<label>
 			<input id="camstream" onchange="cam_stream();" name="camstream" type="checkbox" role="switch" disabled/>
 			Camera stream
 			</label>
@@ -241,6 +197,8 @@ window.onload = function() {
 		<div role="group">
 			<button id="camres11" onClick="cam_resolution('11');">1280x720</button>
 		</div>
+		<hr>
+		<button id="eraseconfig" style="background-color: red;"onClick="erase_config();">Erase</button>
 	</div>
 </div>
 <br>

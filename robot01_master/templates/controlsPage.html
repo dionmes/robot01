@@ -18,27 +18,8 @@ function volume() {
 		url: "http://{{context.robot01_ip}}/volume?power=" + volume,
 		type: 'GET',
     	dataType: 'json',
-    	async: false})
-    .done(function (result) {
-		$("#progress-audio").hide();
-	})
-    .fail(function (xhr, status, errorThrown) {
- 		$("#progress-audio").hide();
-		alert(errorThrown);
-	})
-}
-
-
-function audio_control() {
-	var checked = $('input[name="audiostream"]').is(':checked');
-	var on = checked ? 1 : 0;
-	console.log(on);
-	$("#progress-audio").show();
-	$.ajax({
-		url: "http://{{context.robot01_ip}}/audiostream?on=" + on,
-		type: 'GET',
-    	dataType: 'json',
-    	async: false})
+    	async: true
+    })
     .done(function (result) {
 		$("#progress-audio").hide();
 	})
@@ -54,7 +35,8 @@ function bodyaction(action, direction) {
 		url: url,
 		type: 'GET',
     	dataType: 'text',
-    	async: false})
+    	async: true
+    })
 }
 
 function bodytest() {
@@ -62,7 +44,8 @@ function bodytest() {
 		url: "http://{{context.robot01_ip}}/bodyaction",
 		type: 'GET',
     	dataType: 'text',
-    	async: false})
+    	async: true
+    })
 }
 
 window.onload = function() {
@@ -72,27 +55,12 @@ window.onload = function() {
 		url: "http://{{context.robot01_ip}}/volume",
 		type: 'GET',
     	dataType: 'json',
-    	async: false})
+    	async: true
+    })
     .done(function (result) {
     	 $("#volume").removeAttr("disabled");
     	 $("#volume").val(result.volume);
     	 console.log(result.volume);
-	})
-
-	// Get udp audiostream receive
-	$.ajax({
-		url: "http://{{context.robot01_ip}}/audiostream",
-		type: 'GET',
-    	dataType: 'json',
-    	async: false})
-    .done(function (result) {
-    	 $("#audiostream").removeAttr("disabled");
-    	 if (result.audiostream === 1 ) {
-    	  $("#audiostream").attr("checked", true);
-    	 } else {
-    	  $("#audiostream").attr("checked", false);
-    	 }
-    	 console.log( result);
 	})
 	
 };
@@ -110,16 +78,12 @@ window.onload = function() {
 		<progress id="progress-audio" style="display:none"></progress>
 	
 		<label>
-		Volume
+		Audio output Volume
 		<input id="volume" type="range" onchange="volume();" min="0" max="6" value="0" step="1" disabled/>
 		</label>
 
 		<div class="grid">
 			<div>
-				<label>
-				<input id="audiostream" onchange="audio_control();" name="audiostream" type="checkbox" role="switch" disabled/>
-				Receive UDP Audio
-				</label>
 				<br>
 				<button class="outline" onClick="bodytest();" style="height:50%;">Body test</button>
 			</div>

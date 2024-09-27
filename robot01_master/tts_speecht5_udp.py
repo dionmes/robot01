@@ -88,6 +88,9 @@ class TTS:
 					self.sense.startmic() # Start mic
 					self.micstopped = False
 
+	def queue_size(self):
+		return self.text_q.size()
+		
 	def start(self):
 		self.running = True
 		threading.Thread(target=self.generate_speech, daemon=True).start()

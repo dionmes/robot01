@@ -133,6 +133,8 @@ class BRAIN:
 		n = 0
 		
 		for line in llm_response.iter_lines():
+			# Slow down if tts queue gets larger
+			time.sleep(self.tts_engine.queue_size * 0.500)
 			
 			body = json.loads(line)
 			token = body['message']['content']

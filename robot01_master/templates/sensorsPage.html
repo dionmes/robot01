@@ -15,16 +15,16 @@ function update_VL53L1X() {
 		url: "http://{{context.robot01_ip}}/VL53L1X_Info",
 		type: 'GET',
     	dataType: 'json',
-    	async: false,
-		error: function (xhr, status) {
-			console.log(status);
-		},
-		success: function (result) {
-			$( "#ph_distance" ).html( "Distance : " + result.range_mm + " mm.");
-			$( "#ph_ambient" ).html( "Ambient : " + result.ambient_count );
-			$( "#ph_peak" ).html("Peak : " + result.peak_signal );
-			$( "#ph_status" ).html("Status : " + result.range_status );
-		}
+    	async: true
+    })
+    .done(function (result) {
+		$( "#ph_distance" ).html( "Distance : " + result.range_mm + " mm.");
+		$( "#ph_ambient" ).html( "Ambient : " + result.ambient_count );
+		$( "#ph_peak" ).html("Peak : " + result.peak_signal );
+		$( "#ph_status" ).html("Status : " + result.range_status );
+	})
+    .fail(function (xhr, status, errorThrown) {
+		console.log(status);
 	});	
 }
 
@@ -33,11 +33,9 @@ function update_BNO08X() {
 		url: "http://{{context.robot01_ip}}/BNO08X_Info",
 		type: 'GET',
     	dataType: 'json',
-    	async: false,
-		error: function (xhr, status) {
-			console.log(status);
-		},
-		success: function (result) {
+    	async: true
+	    })	
+		.done(function (result) {
 			$( "#geoMagRotationVector_real" ).html("GEO Mag. Rot. real : " + result.geoMagRotationVector_real );
 			$( "#geoMagRotationVector_i" ).html("GEO Mag. Rot. i : " + result.geoMagRotationVector_i );
 			$( "#geoMagRotationVector_j" ).html("GEO Mag. Rot. j : " + result.geoMagRotationVector_j );
@@ -50,9 +48,10 @@ function update_BNO08X() {
 			$( "#gyroscope_z" ).html("Gyroscope z : " +  result.gyroscope_z );
 			$( "#stability" ).html("Stability : " + result.stability );
 			$( "#shake" ).html("Shake : " + result.shake );
-
-		}
-	});	
+		})
+		.fail(function (xhr, status, errorThrown) {
+			console.log(status);
+		});	
 }
 
 window.onload = function() {
