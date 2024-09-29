@@ -1,5 +1,7 @@
 # Robot01
 
+![Robot image](./img/robot01.jpg)
+
 A ripped Robosapien LLM powered robot.  
 
 - **Hardware**   
