@@ -1,6 +1,6 @@
 # Robot01
 
-![Robot image](./img/robot01.jpg)
+![Robot image](./img/robot01.png)
 
 A ripped Robosapien LLM powered robot.  
 
