@@ -1,4 +1,3 @@
-
 /*
 * Hardware
 */
@@ -8,22 +7,29 @@
 #include "roboFace.h"
 #include "bodyControl.h"
 #include <ESP_I2S.h>
-#include <ArduinoJson.h>
+#include <FS.h>
+#include <SPIFFS.h>
+#define FORMAT_SPIFFS_IF_FAILED true
+
+/*
+* Master server or 'brain'
+*/
+IPAddress master_server_ip;
+
+#include <WiFiManager.h>
+WiFiManager wm;
+bool shouldSaveConfig = false;
 
 /*
 * Webserver
 */
-#include <FS.h>
-#include <LittleFS.h>
-#include <AsyncFsWebServer.h>
+#include "esp_http_server.h"
+httpd_handle_t server_httpd = NULL;
 
 // http client
 #include <ArduinoHttpClient.h>
 
-#define FILESYSTEM LittleFS
-// AsyncFsWebServer WebServer instance
-AsyncFsWebServer WebServer(80, FILESYSTEM, "robot01 server");
-bool apMode = false;
+#include <ArduinoJson.h>
 
 /*
 * Robot name
@@ -78,6 +84,15 @@ TaskHandle_t AudioStreamTaskHandle;
 TaskHandle_t robotRoutineTask;
 
 /*
+* saveConfigCallback for wifimanager
+*
+* Indicate with shouldSaveConfig that config needs to be saved during setup
+*/
+void saveConfigCallback() {
+  shouldSaveConfig = true;
+}
+
+/*
 * Initialization/setup
 */
 void setup() {
@@ -110,40 +125,113 @@ void setup() {
   roboFace.exec(faceAction::DISPLAYTEXTLARGE, "Server");
   Serial.println("Webserver starting");
 
-  startFilesystem();
+  char config_master_ip[40];
 
-  // Try to connect to stored SSID, start AP if fails after timeout
-  IPAddress myIP = WebServer.startWiFi(15000, "ESP32_robot01", "123456789");
+  // Load config.json from SPIFFS
+  if (SPIFFS.begin(FORMAT_SPIFFS_IF_FAILED)) {
+    Serial.println("mounted file system");
+    if (SPIFFS.exists("/config.json")) {
+      Serial.println(" SPIFFS.open ");
+      File configFile = SPIFFS.open("/config.json", "r");
+      if (configFile) {
+        JsonDocument json;
+        String input = configFile.readString();
+        if (input != NULL) {
 
-  // HTML server
-  WebServer.on("/", HTTP_GET, [](AsyncWebServerRequest *request) { request->send(FILESYSTEM, "/index.html"); });
-  WebServer.on("/controls.html", HTTP_GET, webhandler_file );
-  WebServer.on("/display.html", HTTP_GET, webhandler_file );
-  WebServer.on("/sensors.html", HTTP_GET, webhandler_file );
+          DeserializationError deserializeError = deserializeJson(json, input);
+
+          if (!deserializeError) {
+            strcpy(config_master_ip, json["master_ip"]);
+            Serial.println("config_master_ip");
+          } else {
+            Serial.println("failed to load json config");
+          }
+          configFile.close();
+        }
+      } else {
+        Serial.println("No config file.");
+      }
+    }
+  } else {
+    Serial.println("failed to mount FS");
+  }
+
+  // Wifi Manager
+  wm.setConnectTimeout(20);
+  wm.setMinimumSignalQuality(10);
+  // Custom title HTML for the WiFiManager portal
+  String customTitle = "<h1>Robot01 config</h1>";
+  wm.setCustomHeadElement(customTitle.c_str());
+
+  WiFiManagerParameter custom_masterserver("server", "Master server IP", config_master_ip, 40);
+  wm.addParameter(&custom_masterserver);
+
+  wm.setSaveConfigCallback(saveConfigCallback);
+  
+  bool wificonnect = wm.autoConnect("ESP32_robot01", "123456789");
+
+  if (!wificonnect) {
+    Serial.println("Failed to connect");
+    delay(3000);
+    ESP.restart();
+  } else {
+    Serial.println("connected... :)");
+  }
+
+  if (shouldSaveConfig) {
+    Serial.println("saving config");
+    JsonDocument json;
+    strcpy(config_master_ip, custom_masterserver.getValue());
+    File configFile = SPIFFS.open("/config.json", "w");
+    if (!configFile) {
+      Serial.println("failed to open config file for writing");
+    }
+    json["master_ip"] = config_master_ip;
+    serializeJson(json, configFile);
+    configFile.close();
+  }
+
+  master_server_ip.fromString(config_master_ip);
+  Serial.printf("Remote master server IP: %s \n", master_server_ip.toString().c_str());
+
+  // HTTP API server
+  Serial.println("Webserver starting");
+
+  httpd_config_t httpd_config = HTTPD_DEFAULT_CONFIG();
+  httpd_config.max_uri_handlers = 16;
+
   // Add request handlers to webserver
-  WebServer.on("/VL53L1X_Info", HTTP_GET, webhandler_VL53L1X_Info);
-  WebServer.on("/BNO08X_Info", HTTP_GET, webhandler_wrapper_bno08xInfo);
-  WebServer.on("/audiostream", HTTP_GET, audiostream_handler);
-  WebServer.on("/volume", HTTP_GET, volume_handler);
-  WebServer.on("/bodyaction", HTTP_GET, body_action_handler);
-  WebServer.on("/displayaction", HTTP_GET, display_action_handler);
-  WebServer.on("/wakeupsense", HTTP_GET, wakeupsense_handler);
-  WebServer.on("/health", HTTP_GET, webhealth_handler);
+  httpd_uri_t VL53L1X_url = { .uri = "//VL53L1X_Info", .method = HTTP_GET, .handler = webhandler_VL53L1X_Info, .user_ctx = NULL };
+  httpd_uri_t BNO08X_url = { .uri = "/BNO08X_Info", .method = HTTP_GET, .handler = webhandler_wrapper_bno08xInfo, .user_ctx = NULL };
+  httpd_uri_t audiostream_url = { .uri = "/audiostream", .method = HTTP_GET, .handler = audiostream_handler, .user_ctx = NULL };
+  httpd_uri_t volume_url = { .uri = "/volume", .method = HTTP_GET, .handler = volume_handler, .user_ctx = NULL };
+  httpd_uri_t bodyaction_url = { .uri = "/bodyaction", .method = HTTP_GET, .handler = body_action_handler, .user_ctx = NULL };
+  httpd_uri_t displayaction_url = { .uri = "/displayaction", .method = HTTP_GET, .handler = display_action_handler, .user_ctx = NULL };
+  httpd_uri_t wakeupsense_url = { .uri = "/wakeupsense", .method = HTTP_GET, .handler = wakeupsense_handler, .user_ctx = NULL };
+  httpd_uri_t health_url = { .uri = "/health", .method = HTTP_GET, .handler = webhealth_handler, .user_ctx = NULL };
+  httpd_uri_t erase_url = { .uri = "/eraseconfig", .method = HTTP_GET, .handler = config_erase_handler, .user_ctx = NULL };
+  httpd_uri_t reset_url = { .uri = "/reset", .method = HTTP_GET, .handler = reset_handler, .user_ctx = NULL };
 
-  String config_master_ip;
-  WebServer.addOptionBox("robot01 Options");
-  WebServer.addOption("Remote-Master-IP-Address", config_master_ip);
+  if (httpd_start(&server_httpd, &httpd_config) == ESP_OK) {
+    httpd_register_uri_handler(server_httpd, &VL53L1X_url);
+    httpd_register_uri_handler(server_httpd, &BNO08X_url);
+    httpd_register_uri_handler(server_httpd, &audiostream_url);
+    httpd_register_uri_handler(server_httpd, &volume_url);
+    httpd_register_uri_handler(server_httpd, &bodyaction_url);
+    httpd_register_uri_handler(server_httpd, &displayaction_url);
+    httpd_register_uri_handler(server_httpd, &wakeupsense_url);
+    httpd_register_uri_handler(server_httpd, &health_url);
+    httpd_register_uri_handler(server_httpd, &reset_url);
+    httpd_register_uri_handler(server_httpd, &erase_url);
 
-  // Start webserver
-  Serial.println("Starting Webserver");
-  WebServer.init();
-  WebServer.getOptionValue("Remote-Master-IP-Address", config_master_ip);
-
-  Serial.print(F("ESP Web Server started on IP Address: "));
-  Serial.println(myIP);
-  Serial.println(F("Open /setup page to configure optional parameters"));
+    Serial.printf("Server on port: %d \n", httpd_config.server_port);
+  } else {
+    Serial.printf("Server failed");
+  }
 
   delay(100);
+  Serial.println("Robot01 API IP : ");
+  Serial.print(WiFi.localIP());
 
   // Audio / I2S init.
   roboFace.exec(faceAction::DISPLAYTEXTLARGE, "AUDIO/I2S");
@@ -183,20 +271,13 @@ void setup() {
   xTaskCreatePinnedToCore(bno08xUpdateTask, "wrapper_bno08x", 4096, NULL, 10, &wrapper_bno08xUpdateTaskHandle, 0);
 
   // Register with remote master
-  Serial.printf("Registering with remote master : %s \n", config_master_ip.c_str());
   roboFace.exec(faceAction::DISPLAYTEXTSMALL, "Master registration " + WiFi.localIP().toString());
-
   WiFiClient httpWifiInstance;
   HttpClient http(httpWifiInstance, config_master_ip, 5000);
 
   String httpPath = "/api/register_ip?ip=" + WiFi.localIP().toString() + "&device=robot01";
-
   int http_err = http.get(httpPath);
-  if (http_err == 0) {
-    Serial.println(http.responseBody());
-  } else {
-    Serial.printf("Got status code: %u \n", http_err);
-  }
+  http_err == 0 ? Serial.println(http.responseBody()) : Serial.printf("Got status code: %u \n", http_err);
 
   // Boot complete
   Serial.println("Boot complete...");
@@ -235,32 +316,14 @@ void bno08xUpdateTask(void *pvParameters) {
 ////////////////////////////////  Web handlers  /////////////////////////////////////////
 
 /*
-* Handler to get webfiles with header
-*/
-void webhandler_file(AsyncWebServerRequest *request) {
-  Serial.println(request->url());
-  AsyncWebServerResponse *response = request->beginResponse(FILESYSTEM, request->url() );
-  response->addHeader("Access-Control-Allow-Origin", "*");
-  request->send(response);
-}
-
-/* 
-* health_handler for httpd
-*
-* Response with ok
-*/
-void webhealth_handler(AsyncWebServerRequest *request) {
-  
-  String json = "{\"status\": \"ok\" }";
-
-  AsyncWebServerResponse *response = request->beginResponse(200, "application/json", json );
-  response->addHeader("Access-Control-Allow-Origin", "*");
-  request->send(response);
-}
-/*
 * Handler to get vl53l1x values
 */
-void webhandler_VL53L1X_Info(AsyncWebServerRequest *request) {
+esp_err_t webhandler_VL53L1X_Info(httpd_req_t *request) {
+  
+  httpd_resp_set_hdr(request, "Access-Control-Allow-Origin", "*");
+  httpd_resp_set_type(request, HTTPD_TYPE_JSON);
+
+  JsonDocument json_obj;
 
   vl53l1x_sensor.read();
 
@@ -269,155 +332,301 @@ void webhandler_VL53L1X_Info(AsyncWebServerRequest *request) {
   float peak_signal = vl53l1x_sensor.ranging_data.peak_signal_count_rate_MCPS;
   float ambient_count = vl53l1x_sensor.ranging_data.ambient_count_rate_MCPS;
 
-  String json = "{\"range_mm\": " + String(range_mm) + ",\"range_status\": " + String(range_status) + ",\"peak_signal\": " + String(peak_signal)
-                + ",\"ambient_count\" : " + String(ambient_count) + " }";
+  json_obj["range_mm"] = String(range_mm);
+  json_obj["range_status"] = String(range_status);
+  json_obj["peak_signal"] = String(peak_signal);
+  json_obj["ambient_count"] = String(ambient_count);
 
+  size_t jsonSize = measureJson(json_obj);
+  char json_response[jsonSize];
+  serializeJson(json_obj, json_response, jsonSize );
 
-  AsyncWebServerResponse *response = request->beginResponse(200, "application/json", json);
-  response->addHeader("Access-Control-Allow-Origin", "*");
-  request->send(response);
+  httpd_resp_send(request, json_response , jsonSize );
+
+  return ESP_OK;
 }
 
 /*
 * Handler to get bno08x values
 */
-void webhandler_wrapper_bno08xInfo(AsyncWebServerRequest *request) {
+esp_err_t webhandler_wrapper_bno08xInfo(httpd_req_t *request) {
 
-  String json = "{\"geoMagRotationVector_real\":" + String(wrapper_bno08x.geoMagRotationVector_real)
-                + ",\"geoMagRotationVector_i\":" + String(wrapper_bno08x.geoMagRotationVector_i)
-                + ",\"geoMagRotationVector_j\":" + String(wrapper_bno08x.geoMagRotationVector_j)
-                + ",\"geoMagRotationVector_k\":" + String(wrapper_bno08x.geoMagRotationVector_k)
-                + ",\"accelerometer_x\":" + String(wrapper_bno08x.accelerometer_x)
-                + ",\"accelerometer_y\":" + String(wrapper_bno08x.accelerometer_y)
-                + ",\"accelerometer_z\":" + String(wrapper_bno08x.accelerometer_z)
-                + ",\"gyroscope_x\":" + String(wrapper_bno08x.gyroscope_x)
-                + ",\"gyroscope_y\":" + String(wrapper_bno08x.gyroscope_y)
-                + ",\"gyroscope_z\":" + String(wrapper_bno08x.gyroscope_z)
-                + ",\"stability\":\"" + String(wrapper_bno08x.stability) + "\""
-                + ",\"shake\":\"" + String(wrapper_bno08x.shake) + "\""
-                + " }";
+  httpd_resp_set_hdr(request, "Access-Control-Allow-Origin", "*");
+  httpd_resp_set_type(request, HTTPD_TYPE_JSON);
 
-  AsyncWebServerResponse *response = request->beginResponse(200, "application/json", json);
-  response->addHeader("Access-Control-Allow-Origin", "*");
+  JsonDocument json_obj;
 
-  request->send(response);
+  json_obj["geoMagRotationVector_real"] = String(wrapper_bno08x.geoMagRotationVector_real);
+  json_obj["geoMagRotationVector_i"] = String(wrapper_bno08x.geoMagRotationVector_i);
+  json_obj["geoMagRotationVector_j"] = String(wrapper_bno08x.geoMagRotationVector_j);
+  json_obj["geoMagRotationVector_k"] = String(wrapper_bno08x.geoMagRotationVector_k);
+  json_obj["accelerometer_x"] = String(wrapper_bno08x.accelerometer_x);
+  json_obj["accelerometer_y"] = String(wrapper_bno08x.accelerometer_y);
+  json_obj["accelerometer_z"] = String(wrapper_bno08x.accelerometer_z);
+  json_obj["gyroscope_x"] = String(wrapper_bno08x.gyroscope_x);
+  json_obj["gyroscope_y"] = String(wrapper_bno08x.gyroscope_y);
+  json_obj["gyroscope_z"] = String(wrapper_bno08x.gyroscope_z);
+  json_obj["stability"] = String(wrapper_bno08x.stability);
+  json_obj["shake"] = String(wrapper_bno08x.shake);
+
+  size_t jsonSize = measureJson(json_obj);
+  char json_response[jsonSize];
+  serializeJson(json_obj, json_response, jsonSize );
+
+  httpd_resp_send(request, json_response , jsonSize );
+
+  return ESP_OK;
 }
 
 /*
 * Handler to enable/disable audiostream
 */
-void audiostream_handler(AsyncWebServerRequest *request) {
+esp_err_t audiostream_handler(httpd_req_t *request) {
 
-  if (request->hasArg("on")) {
-    int value = request->arg("on").toInt();
+  httpd_resp_set_hdr(request, "Access-Control-Allow-Origin", "*");
+  httpd_resp_set_type(request, HTTPD_TYPE_JSON);
+  
+  const char* param_name = "on";
+  String param_value = get_url_param(request, param_name, 2);
+
+  if (param_value != "invalid") {
+
+    int value = param_value.toInt();
+    
     if (value == 1 && !audioStreamRunning) {
       Serial.println("Audio streaming starting\n");
       startAudio(true);
     }
+
     if (value == 0 && audioStreamRunning) {
       Serial.println("Audio streaming stopping\n");
       startAudio(false);
     }
+
   }
   
-  String json = "{\"audiostream\": " + String(audioStreamRunning) + " }";
+  JsonDocument json_obj;
+  json_obj["audiostream"] = String(audioStreamRunning);
+  
+  Serial.print("Audio streaming :");
+  Serial.println(String(audioStreamRunning));
 
-  AsyncWebServerResponse *response = request->beginResponse(200, "application/json", json);
-  response->addHeader("Access-Control-Allow-Origin", "*");
+  size_t jsonSize = measureJson(json_obj);
+  char json_response[jsonSize];
+  serializeJson(json_obj, json_response, jsonSize );
 
-  request->send(response);
+  httpd_resp_send(request, json_response , jsonSize );
+
+  return ESP_OK;
 }
 
 /*
 * Handler to adjust output volume
 */
-void volume_handler(AsyncWebServerRequest *request) {
+esp_err_t volume_handler(httpd_req_t *request) {
 
-  if (request->hasArg("power")) {
-    int value = request->arg("power").toInt();
+  httpd_resp_set_hdr(request, "Access-Control-Allow-Origin", "*");
+  httpd_resp_set_type(request, HTTPD_TYPE_JSON);
+  
+  const char* param_name = "power";
+  String param_value = get_url_param(request,param_name, 4);
+
+  if (param_value != "invalid") {
+    int value = param_value.toInt();
     if (value >= 0 && value <= MAX_VOLUME) {
       i2sGainMultiplier = value;
     } 
   }
-
-  String json = "{\"volume\": " +  String(i2sGainMultiplier) + " }";
   
-  AsyncWebServerResponse *response = request->beginResponse(200, "application/json", json);
-  response->addHeader("Access-Control-Allow-Origin", "*");
+  JsonDocument json_obj;
+  
+  json_obj["volume"] = i2sGainMultiplier;
 
-  request->send(response);
+  size_t jsonSize = measureJson(json_obj);
+  char json_response[jsonSize];
+  serializeJson(json_obj, json_response, jsonSize );
+  
+  httpd_resp_send(request, json_response , jsonSize );
+
+  return ESP_OK;
 }
 
 /*
 * Handler for body test task
 */
-void body_action_handler(AsyncWebServerRequest *request) {
+esp_err_t body_action_handler(httpd_req_t *request) {
 
-  String json = "{ \"command\" : \"failed\" }";
+  httpd_resp_set_hdr(request, "Access-Control-Allow-Origin", "*");
+  httpd_resp_set_type(request, HTTPD_TYPE_JSON);
 
-  if (request->hasArg("action")) {
+  JsonDocument json_obj;
+  json_obj["command"] = "";
 
-    int bodyPart = request->arg("action").toInt();
+  const char* param_name1 = "action";
+  String param_value_action = get_url_param(request, param_name1, 10);
+  const char* param_name2 = "direction";
+  String param_value_direction = get_url_param(request, param_name2, 10);
+  const char* param_name3 = "duration";
+  String param_value_duration = get_url_param(request, param_name3, 10);
 
-    int direction = 0;
-    if (request->hasArg("direction")) { direction = request->arg("direction").toInt(); }
+  if (param_value_action != "invalid") {
 
-    int duration = 0;
-    if (request->hasArg("duration")) { duration = request->arg("duration").toInt(); }
+    int action = param_value_action.toInt();
 
+    int direction = param_value_direction != "invalid" ? param_value_direction.toInt() : 0;
+    int duration = param_value_duration != "invalid" ? param_value_duration.toInt() : 0;
+    
     if (duration < 3000) {
-      json = "{ \"command\" : \"succes\" }";
-      bodyControl.exec(bodyPart, direction, duration);
+      json_obj["command"] = "success";
+      bodyControl.exec(action, direction, duration);
     }
 
   } else {
-    json = "{ \"command\" : \"succes\" }";
+    json_obj["command"] = "success";
     xTaskCreatePinnedToCore(bodyTestRoutine, "BodyTestRoutine", 4096, NULL, 5, &robotRoutineTask, 1);
   }
 
-  AsyncWebServerResponse *response = request->beginResponse(200, "application/json", json);
-  response->addHeader("Access-Control-Allow-Origin", "*");
-  request->send(response);
+  size_t jsonSize = measureJson(json_obj);
+  char json_response[jsonSize];
+  serializeJson(json_obj, json_response, jsonSize );
+
+  httpd_resp_send(request, json_response , jsonSize );
+
+  return ESP_OK;
 }
 
 /*
 * Handler for display action
 */
-void display_action_handler(AsyncWebServerRequest *request) {
+esp_err_t display_action_handler(httpd_req_t *request) {
 
-  String json = "{ \"command\" : \"failed\" }";
+  httpd_resp_set_hdr(request, "Access-Control-Allow-Origin", "*");
+  httpd_resp_set_type(request, HTTPD_TYPE_JSON);
 
-  if (request->hasArg("action")) {
-    int index = request->hasArg("index") ? request->arg("index").toInt() : 0;
-    String text = request->hasArg("text") ? request->arg("text") : "";
+  JsonDocument json_obj;
+  json_obj["command"] = "";
 
-    roboFace.exec(request->arg("action").toInt(), text, index);
+  const char* param_name1 = "action";
+  String param_value_action = get_url_param(request, param_name1, 10);
+  const char* param_name2 = "index";
+  String param_value_direction = get_url_param(request, param_name2, 10);
+  const char* param_name3 = "text";
+  String param_value_duration = get_url_param(request, param_name3, 300);
 
-    json = "{ \"command\" : \"succes\" }";
+  if (param_value_action != "invalid") {
+
+    int index = param_value_direction != "invalid" ? param_value_direction.toInt() : 0;
+    String text = param_value_duration != "invalid" ? param_value_duration : "";
+
+    roboFace.exec(param_value_action.toInt(), text, index);
+
+    json_obj["command"] = "succes";
   }
 
-  AsyncWebServerResponse *response = request->beginResponse(200, "application/json", json);
-  response->addHeader("Access-Control-Allow-Origin", "*");
-  request->send(response);
+  size_t jsonSize = measureJson(json_obj);
+  char json_response[jsonSize];
+  serializeJson(json_obj, json_response, jsonSize );
+
+  httpd_resp_send(request, json_response , jsonSize );
+
+  return ESP_OK;
 }
 
 /*
 * Handler for waking up XAIO sense/camera from sleep
 */
-void wakeupsense_handler(AsyncWebServerRequest *request) {
+esp_err_t wakeupsense_handler(httpd_req_t *request) {
 
-  String json = "{ \"command\" : \"succes\" }";
+  httpd_resp_set_hdr(request, "Access-Control-Allow-Origin", "*");
+  httpd_resp_set_type(request, HTTPD_TYPE_JSON);
 
-  AsyncWebServerResponse *response = request->beginResponse(200, "application/json", json);
-  response->addHeader("Access-Control-Allow-Origin", "*");
-  request->send(response);
+  JsonDocument json_obj;
+  json_obj["command"] = "succes";
+  size_t jsonSize = measureJson(json_obj);
+  char json_response[jsonSize];
+  serializeJson(json_obj, json_response, jsonSize );
 
   digitalWrite(25, HIGH);
   delay(200);
   digitalWrite(25, LOW);
+
+  httpd_resp_send(request, json_response , jsonSize );  
+  return ESP_OK;
 }
 
-////////////////////////////////  Services  /////////////////////////////////////////
+/* 
+* health_handler for httpd
+*
+* Response with ok
+*/
+esp_err_t webhealth_handler(httpd_req_t *req) {
+  
+  httpd_resp_set_hdr(req, "Access-Control-Allow-Origin", "*");
+  httpd_resp_set_type(req, HTTPD_TYPE_JSON);  
+
+  JsonDocument json_obj;
+  json_obj["status"] = "ok";
+  size_t jsonSize = measureJson(json_obj);
+  char json_response[jsonSize];
+  serializeJson(json_obj, json_response, jsonSize );
+  
+  httpd_resp_send(req, json_response , jsonSize );
+  
+  return ESP_OK;
+}
+
+/*
+* reset_handler for httpd
+*
+* Restart ESP32
+*/
+static esp_err_t reset_handler(httpd_req_t *req) {
+  delay(1000);
+  Serial.print("Resetting on request.");
+  esp_restart();
+  // No return response neccesary
+}
+
+/*
+* config_erase_handler for httpd
+*
+* Erase config and wifi settings and Restart ESP32
+*/
+static esp_err_t config_erase_handler(httpd_req_t *req) {
+  Serial.print("Config erase on request.");
+  delay(2000);
+  wm.erase();
+  esp_restart();
+  // No return response neccesary
+}
+
+/////////////////////////////// helper function to get param from webrequest //////////////////////////////////////
+
+/*
+* helper for http url parameters. 
+* - httpd_req_t *req
+* - const char *param : Parameter name
+* - const char *param : Parameter name
+* - int value_size : Expected parameter size for buffer
+*
+* get_url_param
+*/
+static String get_url_param(httpd_req_t *req, const char *param, int value_size) {
+
+    char buf[300];  // Buffer to store query string
+    char value[value_size] = {"invalid\0"}; // return value
+
+    /* Get the query string */
+    if (httpd_req_get_url_query_str(req, buf, sizeof(buf)) == ESP_OK) {
+        /* Extract value of 'name' key */
+        if (httpd_query_key_value(buf, param, value, sizeof(value)) == ESP_OK) {
+        }
+    } 
+
+    return value;
+}
+
+////////////////////////////////  Services  //////////////////////////////////////////////////////////////////////
 
 /*
 * UDP Audio listening callback
@@ -550,33 +759,3 @@ void bodyTestRoutine(void *pVParameters) {
   vTaskDelete(NULL);
 };
 
-////////////////////////////////  Support Functions  /////////////////////////////////////////
-
-/*
-* Filesystem for webserver
-*/
-void startFilesystem() {
-  // FILESYSTEM INIT
-  if (!FILESYSTEM.begin()) {
-    Serial.println("ERROR on mounting filesystem. It will be formmatted!");
-    FILESYSTEM.format();
-    ESP.restart();
-  }
-}
-
-/*
-* Getting FS info (total and free bytes) is strictly related to
-* filesystem library used (LittleFS, FFat, SPIFFS etc etc) and ESP framework
-* ESP8266 FS implementation has methods for total and used bytes (only label is missing)
-*/
-#ifdef ESP32
-void getFsInfo(fsInfo_t *fsInfo) {
-  fsInfo->fsName = "LittleFS";
-  fsInfo->totalBytes = LittleFS.totalBytes();
-  fsInfo->usedBytes = LittleFS.usedBytes();
-}
-#else
-void getFsInfo(fsInfo_t *fsInfo) {
-  fsInfo->fsName = "LittleFS";
-}
-#endif
