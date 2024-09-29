@@ -14,7 +14,7 @@ function tts() {
 	var text = $("#tts_textField").val();
 	var url = "/api/tts"; 	
 	$("#tts_result").text( "" );
-	$("#progress").show();
+	$("#loader").attr("aria-busy", "true");
 	$.ajax({
 		url: url,
 		data : JSON.stringify({"text" : text}),
@@ -23,55 +23,48 @@ function tts() {
     	async: true		
 	})
 	.done(function (result) {
-		$("#progress").hide();
 		$("#tts_textField").val('');
 	})
 	.fail(function (xhr, status) {
-		alert("Error sending tts request.")
-		$("#progress").hide();
+		alert("Error sending tts request.");
 	})
+	.always(function() {
+		$("#loader").attr("aria-busy", "false");
+	});
 }
 
 function reset_robot01() {
-
+	$("#loader").attr("aria-busy", "true");
 	$.ajax({
 		url: "http://{{context.robot01_ip}}/reset",
 		type: 'GET',
 		timeout: 1000,
     	async: true
 	})
-	.done(function (result) {
-		alert("Reset request robot01 send.")
-		$("#progress").hide();
-	})
-	.fail(function (xhr, status) {
-		alert("Error sending reset.")
-		$("#progress").hide();
+	.always(function() {
+		$("#loader").attr("aria-busy", "false");
+		alert("Reset request sense send.");
 	});
 
 }
 
 function reset_sense() {
-
+	$("#loader").attr("aria-busy", "true");
 	$.ajax({
 		url: "http://{{context.robot01sense_ip}}/reset",
 		type: 'GET',
 		timeout: 1000,
     	async: true		
 	})
-	.done(function (result) {
-		alert("Reset request sense send.")
-		$("#progress").hide();
-	})
-	.fail(function (xhr, status) {
-		alert("Error sending reset.")
-		$("#progress").hide();
+	.always(function() {
+		$("#loader").attr("aria-busy", "false");
+		alert("Reset request sense send.");
 	});
 
 }
 
 function clearips() {
-
+	$("#loader").attr("aria-busy", "true");
 	$.ajax({
 		url: "/api/clearips",
 		type: 'GET',
@@ -79,33 +72,39 @@ function clearips() {
     	async: true		
 	})
 	.done(function (result) {
-		$("#progress").hide();
 		location.reload();
 	})
 	.fail(function (xhr, status) {
-		alert("Error sending clear ips.")
-		$("#progress").hide();
+		alert("Error sending clear ips.");
+	})
+	.always(function() {
+		$("#loader").attr("aria-busy", "false");
 	});
-}
-
 }
 
 </script>
 
 <body> 
 <div class="container-fluid">
-	<div class="container">
-	
-		<br>
-		<hgroup>
-			<h1 class="centered" style="color: var(--pico-primary);">robot01 Master functions</h1>
+	<div class="container-fluid" style="position: fixed; background: var(--pico-background-color);">
+		<hgroup">
+			<br>
+			<h1 class="centered" style="color: var(--pico-secondary);">
+			Master functions
+			<div id="loader" aria-busy="false" style="display:inline-block;margin-left:2em;"></div>
+			</h1>
 			<a href='index.html'>Back</a>
 		</hgroup>
 		<hr>
-		<div class="container">
-			<progress id="progress" style="display:none"></progress>
-		</div>
-		
+	</div>
+	<div class="container">
+		<br>
+		<br>
+		<br>
+		<br>
+		<br>
+		<br>	
+		<br>
 		<div class="container">
 			<form onsubmit="tts();">
 				<input type="text" placeholder="Text to speak" id="tts_textField" >
@@ -136,7 +135,6 @@ function clearips() {
 		<br>
 		<hr>		
 		<button class="secondary" onClick="clearips();">Clear IP's</button>
-		
 	</div>
 </div>
 <br>

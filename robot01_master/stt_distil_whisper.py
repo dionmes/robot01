@@ -109,7 +109,7 @@ class STT:
 				
 				# Silende detected
 				if nonsilence_counter <= 0:
-					if np_audio_chunk.size > self.speech_length:
+					if np_audio_chunk.size > self.speech_length:		
 						try:
 							self.audiochunks_q.put_nowait(np_audio_chunk)
 						except Exception as e:
@@ -132,7 +132,6 @@ class STT:
 			self.display.action(20)
 
 			input_features = self.processor(audio_chunk, sampling_rate=16000, return_tensors="pt", device="cuda").input_features
-			
 			input_features = input_features.to(device, dtype=torch_dtype)
 			
 			gen_kwargs = {"max_new_tokens": 128,"num_beams": 1,"return_timestamps": False}

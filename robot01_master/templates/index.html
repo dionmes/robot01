@@ -16,15 +16,13 @@
 <script>
 
 function ask_robot01() {
+	$("#loader").attr("aria-busy", "true");
 
 	var text = $("#ask_textField").val();
 	var vision = $("#vision").is(":checked");
-    console.log(vision);
-	var url = "/api/ask_robot01"; 	
-	$( "#llm_result" ).text( "" );
-	$("#progress").show();
+
 	$.ajax({
-		url: url,
+		url: "/api/ask_robot01",
 		data : JSON.stringify({"text" : text, "vision": vision }),
 		type: 'POST',
 		contentType : 'application/json',
@@ -32,11 +30,12 @@ function ask_robot01() {
 	})
 	.done(function (result) {
 		$("#ask_textField").val('');
-		$("#progress").hide();
 	})
 	.fail(function (xhr, status, errorThrown) {
-		$("#progress").hide();
 		alert(errorThrown);
+	})
+	.always(function() {
+		$("#loader").attr("aria-busy", "false");
 	});
 
 }
@@ -46,68 +45,68 @@ function update_status() {
 	$.ajax({
 		url: "http://{{context.robot01_ip}}/health",
 		type: 'GET',
-    	dataType: 'json',
-    	async: true
-    })
-    .done(function (result) {
-    	$("#robot01status").css({backgroundColor: 'green'});
+		dataType: 'json',
+		async: true
+	})
+	.done(function (result) {
+		$("#robot01status").css({backgroundColor: 'green'});
 	})
 	.fail(function (xhr, status, errorThrown) {
-    	$("#robot01status").css({backgroundColor: 'red'});
-    	console.log( errorThrown);	
+		$("#robot01status").css({backgroundColor: 'red'});
+		console.log( errorThrown);	
 	});
 
 	$.ajax({
 		url: "http://{{context.robot01sense_ip}}/health",
 		type: 'GET',
-    	dataType: 'json',
-    	async: true
-    })
-    .done(function (result) {
-    	$("#sensestatus").css({backgroundColor: 'green'});
-    	console.log(result.status);
+		dataType: 'json',
+		async: true
+	})
+	.done(function (result) {
+		$("#sensestatus").css({backgroundColor: 'green'});
 	})
 	.fail(function (xhr, status, errorThrown) {
-    	$("#sensestatus").css({backgroundColor: 'red'});
-    	console.log( errorThrown);	
+		$("#sensestatus").css({backgroundColor: 'red'});
+		console.log( errorThrown);	
 	});
 		
 }
 
 function audio_control() {
+	$("#loader").attr("aria-busy", "true");
 	var checked = $('input[name="audiostream"]').is(':checked');
 	var on = checked ? 1 : 0;
-	console.log(on);
-	$("#progress-audio").show();
 	$.ajax({
 		url: "http://{{context.robot01_ip}}/audiostream?on=" + on,
 		type: 'GET',
-    	dataType: 'json',
-    	async: true
-    	})
-    .done(function (result) {
-		$("#progress-audio").hide();
-	})
-    .fail(function (xhr, status, errorThrown) {
- 		$("#progress-audio").hide();
-		alert(errorThrown);
-	})
-}
-	
-function mic_stream() {
-	var checked = $('input[name="micstream"]').is(':checked');
-	var on = checked ? 1 : 0;
-	console.log(on);
-	$.ajax({
-		url: "http://{{context.robot01sense_ip}}/control?setting=micstreaming&param=" + on,
-		type: 'GET',
-    	dataType: 'json',
-    	async: true
-    })
+		dataType: 'json',
+		async: true
+		})
 	.fail(function (xhr, status, errorThrown) {
+		$("#audiostream").attr("checked", false);
 		alert(errorThrown);
 	})
 	.always(function() {
+		$("#loader").attr("aria-busy", "false");
+	});
+}
+	
+function mic_stream() {
+	$("#loader").attr("aria-busy", "true");
+	var checked = $('input[name="micstream"]').is(':checked');
+	var on = checked ? 1 : 0;
+	$.ajax({
+		url: "http://{{context.robot01sense_ip}}/control?setting=micstreaming&param=" + on,
+		type: 'GET',
+		dataType: 'json',
+		async: true
+	})
+	.fail(function (xhr, status, errorThrown) {
+		$("#micstream").attr("checked", false);
+		alert(errorThrown);
+	})
+	.always(function() {
+		$("#loader").attr("aria-busy", "false");
 	});
 }
 
@@ -136,27 +135,30 @@ window.onload = function() {
 	$.ajax({
 		url: "http://{{context.robot01_ip}}/audiostream",
 		type: 'GET',
-    	dataType: 'json',
-    	async: true
-    })
-    .done(function (result) {
-    	 $("#audiostream").removeAttr("disabled");
-    	 if (result.audiostream === 1 ) {
-    	  $("#audiostream").attr("checked", true);
-    	 } else {
-    	  $("#audiostream").attr("checked", false);
-    	 }
-    	 console.log( result);
+		dataType: 'json',
+		async: true
+	})
+	.done(function (result) {
+		 $("#audiostream").removeAttr("disabled");
+		 if (result.audiostream === 1 ) {
+		  $("#audiostream").attr("checked", true);
+		 } else {
+		  $("#audiostream").attr("checked", false);
+		 }
+		 console.log( result);
 	})
 }
 </script>
 <body> 
 
 <div class="container-fluid">
-	<div class="container">
-		<br>
-		<hgroup>
-			<h1>Sappie - Your Robotic Assistant</h1>
+	<div class="container-fluid" style="position: fixed; background: var(--pico-background-color);">
+		<hgroup">
+			<br>
+			<h1 class="centered" style="color: var(--pico-secondary);">
+			Sappie - robot01
+			<div id="loader" aria-busy="false" style="display:inline-block;margin-left:2em;"></div>
+			</h1>
 		</hgroup>
 		<nav>
 			<ul>
@@ -168,18 +170,27 @@ window.onload = function() {
 			</ul>
 		</nav>
 		<hr>
+	</div>
+	<br>
+	<br>
+	<br>
+	<br>
+	<br>
+	<br>
+	<br>
+	<br>
+	<div class="container">
 		<div class="container">
 			<form onsubmit="ask_robot01();return false;">
 				<input type="text" placeholder="Ask robot01" id="ask_textField" >
-				<label for="vision_checkbox">
-				<input type="checkbox" name="vision_checkbox" id="vision"/>
-				Vision
-				</label>
-			</form>	
-			<div class="grid">
-				<button class="secondary" onClick="ask_robot01(false);"> Ask </button>
-				<div id="llm_result"></div>
-			</div>
+				<div class="grid">
+					<button class="secondary" onClick="ask_robot01(false);"> Ask </button>
+					<label for="vision_checkbox">
+					<input type="checkbox" name="vision_checkbox" id="vision"/>
+					Vision
+					</label>
+				</div>
+			</form> 
 			<div class="container">
 				<progress id="progress" style="display:none"></progress>
 			</div>	
@@ -205,8 +216,8 @@ window.onload = function() {
 				<img class="img_centered" src="images/robot01v1.png" />
 			</figure>
 		</div>	
-   		<hr>
-   	</div>
+		<hr>
+	</div>
 </div>
 <br>
 <br>

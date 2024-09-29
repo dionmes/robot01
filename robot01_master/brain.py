@@ -7,6 +7,7 @@ from threading import Timer
 import queue
 import base64
 from datetime import datetime
+import time
 
 from tts_speecht5_udp import TTS
 from stt_distil_whisper import STT
@@ -16,6 +17,9 @@ from sense import SENSE
 
 # max words to tts in one go
 tts_max_sentence_lenght = 12
+
+# Ollama LLM Model
+llm_model = "robot01brain"
 
 class BRAIN:
 	def __init__(self, robot01_context ):
@@ -45,19 +49,14 @@ class BRAIN:
 		#
 		# LLM Model
 		#
-		self.llm_model = "mistral"
 		#llm context
 		self.llm_context_id = "1"
 		
 		# llm url
 		self.llm_url = "http://localhost:11434/api/chat"
-		
-		# Read LLM system template
-		with open(self.home_directory + '/robot01_Master/llm_template.txt', 'r') as file:
-			# Read the entire content of the file
-			self.llm_template = file.read()
-			now = datetime.now()
-			self.system_template = self.llm_template + ". Date and time is : " + now.strftime("%A %m/%d/%Y, %H:%M")
+				
+		# Busy indicator
+		self.busy = True
 		
 	def start(self):
 		# Show face gears animation
@@ -88,30 +87,30 @@ class BRAIN:
 		
 		# Show neutral face
 		self.display.action(3) 
+		self.busy = False
 
 	#
 	# prompt handler
 	#
 	def prompt(self,text,vision = False):
-		
-		llm_obj = { \
-		"model": self.llm_model,  \
-		"keep_alive": -1, \
-		"context": [self.llm_context_id], \
-		"messages" : [ {\
-			"role" : "system", \
-			"content" : self.system_template \
-			} , { \
-			"role" : "user", \
-			"content" : text \
-			}]
-		}
-		
+		self.busy = True
+
 		if vision:
 			# Show cylon in display
 			self.display.action(13)
+		
+		# LLM request object
+		llm_obj = { \
+			"model": llm_model,  \
+			"keep_alive": -1, \
+			"context": [self.llm_context_id], \
+			"messages" : [ \
+			{ "role" : "user", "content" : text } \
+			]}
+
+		if vision:
 			llm_obj["messages"][1]['images'] = sense.capture()
-	
+
 		# Show loader in display    
 		self.display.action(21)
 	
@@ -133,17 +132,17 @@ class BRAIN:
 		n = 0
 		
 		for line in llm_response.iter_lines():
-			# Slow down if tts queue gets larger
-			time.sleep(self.tts_engine.queue_size * 0.500)
 			
 			body = json.loads(line)
 			token = body['message']['content']
-	
-			if token in ".,?!...\"" or n > tts_max_sentence_lenght:
+			print(token)
+			if token in ".,?!...;:" or n > tts_max_sentence_lenght:
 				message = message + token
 				#print(message)
 				if not message.strip() == "" and len(message) > 1:
 					self.speak(message)
+					# Slow down if tts queue gets larger
+					time.sleep(self.tts_engine.queue_size() * 0.500)
 	
 				message = ""
 				n = 0
@@ -154,6 +153,8 @@ class BRAIN:
 		if 'context' in body:
 			print(body['context'])
 		
+		self.busy = False
+
 	# direct TTS
 	def speak(self,text):
 		self.tts_engine.speak(text)

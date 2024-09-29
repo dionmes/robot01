@@ -63,13 +63,24 @@ window.onload = function() {
 
 <body>
 <div class="container-fluid">
-	<div class="container">
-		<br>
-		<hgroup>
-			<h1 class="centered" style="color: var(--pico-primary);">robot01 sensors</h1>
+	<div class="container-fluid" style="position: fixed; background: var(--pico-background-color);">
+		<hgroup">
+			<br>
+			<h1 class="centered" style="color: var(--pico-secondary);">
+			Sensors
+			<div id="loader" aria-busy="false" style="display:inline-block;margin-left:2em;"></div>
+			</h1>
 			<a href='index.html'>Back</a>
 		</hgroup>
 		<hr>
+	</div>
+	<div class="container">
+		<br>
+		<br>
+		<br>
+		<br>
+		<br>
+		<br>
 		<h2> Distance sensor (VL53L1X)</h2>
 		<div class="grid">
 			<div id='ph_distance'></div>

@@ -20,7 +20,7 @@ class TTS:
 		self.dest_ip = ip
 		self.display = display
 		self.sense = sense
-		self.audio_q = queue.Queue(maxsize=5)
+		self.audio_q = queue.Queue(maxsize=8)
 		self.text_q = queue.Queue(maxsize=8)
 		self.running = False
 		self.micstopped = False
@@ -51,10 +51,12 @@ class TTS:
 			
 			speech = self.synthesiser(text, forward_params={"speaker_embeddings": self.speaker_embeddings})
 	
-			if not self.micstopped:		
-				self.sense.stopmic() # Stop mic to prevent speech loop
-				self.display.action(23) # Show chat animation in display
+			if not self.micstopped:
+				self.mic_previous_status = self.sense.micstatus()
+				if not self.mic_previous_status:
+					self.sense.stopmic() # Stop mic to prevent speech loop
 				self.micstopped = True
+				self.display.action(23) # Show chat animation in display
 			
 			try:
 				self.audio_q.put_nowait(speech)
@@ -85,11 +87,12 @@ class TTS:
 				time.sleep(1) # Wait for queue fill before enabling again
 				if self.audio_q.empty() and self.text_q.empty():
 					self.display.action(3) # Show neutral face
-					self.sense.startmic() # Start mic
-					self.micstopped = False
+					if self.mic_previous_status:
+						self.sense.startmic() # Start mic
+						self.micstopped = False
 
-	def queue_size(self):
-		return self.text_q.size()
+	def queue_size(self)->int:
+		return self.text_q.qsize()
 		
 	def start(self):
 		self.running = True
