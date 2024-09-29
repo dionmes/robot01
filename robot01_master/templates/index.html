@@ -124,7 +124,7 @@ window.onload = function() {
 	.done(function (result) {
 		console.log(result);
 		$("#micstream").removeAttr("disabled");
-		if (result.micstreaming === 1 ) {
+		if (result.micstreaming == 1 ) {
 			$("#micstream").attr("checked", true);
 		} else {
 			$("#micstream").attr("checked", false);
@@ -140,7 +140,7 @@ window.onload = function() {
 	})
 	.done(function (result) {
 		 $("#audiostream").removeAttr("disabled");
-		 if (result.audiostream === 1 ) {
+		 if (result.audiostream == 1 ) {
 		  $("#audiostream").attr("checked", true);
 		 } else {
 		  $("#audiostream").attr("checked", false);

@@ -64,6 +64,20 @@ function bodytest() {
 	});
 }
 
+function erase_config() {
+	$.ajax({
+		url: "http://{{context.robot01sense_ip}}/eraseconfig",
+		type: 'GET',
+    	dataType: 'text',
+    	async: true 
+    })
+	.done(function (result) {
+		alert("Erase config initiated.");
+	})
+	.fail(function (xhr, status,errorThrown ) {
+		alert(errorThrown);
+	})
+}
 window.onload = function() {
 
 	// Get volume
@@ -157,6 +171,8 @@ window.onload = function() {
 			<button onClick="bodyaction(5,0);">Left leg backward</button>
 			<button onClick="bodyaction(6,0);">Right leg backward</button>
 		</div>
+		<hr>
+		<button id="eraseconfig" style="background-color: red;"onClick="erase_config();">Robot01 Erase</button>
 		
 	</div>
 </div>
