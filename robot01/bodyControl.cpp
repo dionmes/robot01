@@ -7,10 +7,7 @@
 #include <MCP23017.h>
 #include "bodyControl.h"
 
-#define HANDLIGHTS_MCP mcp2
-#define HIP_MCP mcp1
-#define LEFT_MCP mcp1
-#define RIGHT_MCP mcp2
+#define STEPWAIT 50
 
 #define LEFTLOWERARM_DOWN_PIN 9
 #define LEFTLOWERARM_UP_PIN 8
@@ -37,6 +34,9 @@ bodyControl::bodyControl(){
 };
 
 void bodyControl::begin() {
+
+  this->actionRunning = false;
+
   mcp1.init();
   mcp2.init();
 
@@ -51,61 +51,100 @@ void bodyControl::begin() {
   mcp2.writeRegister(MCP23017Register::GPIO_B, 0x00);  //Reset port B
 };
 
-void bodyControl::exec(int action, bool direction, int duration) {
+void bodyControl::exec(int action, bool direction, int steps) {
 
   _action = action;
   _direction = direction;
-  _duration = duration;
+  _steps = steps;
 
+  if ( action == bodyAction::STOP & this->actionRunning & bodyTaskHandle != NULL ) {
+    
+    xTaskNotify( bodyTaskHandle, 1, eSetValueWithOverwrite );
+    this->actionRunning = false;
+
+    mcp1.digitalWrite(LEFTLOWERARM_DOWN_PIN, 0);
+    mcp1.digitalWrite(LEFTLOWERARM_UP_PIN, 0);
+    mcp1.digitalWrite(LEFTUPPERARM_UP_PIN, 0);
+    mcp1.digitalWrite(LEFTUPPERARM_DOWN_PIN, 0);
+
+    mcp2.digitalWrite(RIGHTLOWERARM_DOWN_PIN, 0);
+    mcp2.digitalWrite(RIGHTLOWERARM_UP_PIN, 0);
+    mcp2.digitalWrite(RIGHTUPPERARM_UP_PIN, 0);
+    mcp2.digitalWrite(RIGHTUPPERARM_DOWN_PIN, 0);
+
+    mcp1.digitalWrite(LEFTLEG_BACK_PIN, 0);
+    mcp1.digitalWrite(LEFTLEG_FORWARD_PIN, 0);
+    mcp2.digitalWrite(RIGHTLEG_FORWARD_PIN, 0);
+    mcp2.digitalWrite(RIGHTLEG_BACK_PIN, 0);
+
+    mcp1.digitalWrite(HIP_RIGHT_PIN, 0);
+    mcp1.digitalWrite(HIP_LEFT_PIN, 0);
+    mcp2.digitalWrite(LEFTHAND_LIGHT_PIN, 0);
+    mcp2.digitalWrite(RIGHTHAND_LIGHT_PIN, 0);
+
+    vTaskDelay(500 / portTICK_PERIOD_MS);
+
+    return;
+  }
 
   xTaskCreatePinnedToCore(bodyActionTask, "bodyActionTask", 4096, (void*)this, 10, &bodyTaskHandle, 1);
+
 }
 
 void bodyControl::bodyActionTask(void* bodyControlInstance) {
 
   bodyControl* bodyControlRef = (bodyControl*)bodyControlInstance;
+  bodyControlRef->actionRunning = true;
+
   Serial.printf("Action : %i \n", bodyControlRef->_action);
-  Serial.printf("Direction : %i \n", bodyControlRef->_direction);
 
   switch (bodyControlRef->_action) {
     case bodyAction::LEFTLOWERARM:
-      bodyControlRef->leftLowerArm(bodyControlRef->_direction, bodyControlRef->_duration);
+      bodyControlRef->leftLowerArm(bodyControlRef->_direction, bodyControlRef->_steps);
       break;
 
     case bodyAction::LEFTUPPERARM:
-      bodyControlRef->leftUpperArm(bodyControlRef->_direction, bodyControlRef->_duration);
+      bodyControlRef->leftUpperArm(bodyControlRef->_direction, bodyControlRef->_steps);
       break;
 
     case bodyAction::RIGHTLOWERARM:
-      bodyControlRef->rightLowerArm(bodyControlRef->_direction, bodyControlRef->_duration);
+      bodyControlRef->rightLowerArm(bodyControlRef->_direction, bodyControlRef->_steps);
       break;
 
     case bodyAction::RIGHTUPPERARM:
-      bodyControlRef->rightUpperArm(bodyControlRef->_direction, bodyControlRef->_duration);
+      bodyControlRef->rightUpperArm(bodyControlRef->_direction, bodyControlRef->_steps);
       break;
 
     case bodyAction::LEFTLEG:
-      bodyControlRef->leftLeg(bodyControlRef->_direction, bodyControlRef->_duration);
+      bodyControlRef->leftLeg(bodyControlRef->_direction, bodyControlRef->_steps);
       break;
 
     case bodyAction::RIGHTLEG:
-      bodyControlRef->rightLeg(bodyControlRef->_direction, bodyControlRef->_duration);
+      bodyControlRef->rightLeg(bodyControlRef->_direction, bodyControlRef->_steps);
       break;
 
     case bodyAction::HIP:
-      bodyControlRef->hip(bodyControlRef->_direction, bodyControlRef->_duration);
+      bodyControlRef->hip(bodyControlRef->_direction, bodyControlRef->_steps);
       break;
 
     case bodyAction::LEFTHANDLIGHT:
-      bodyControlRef->leftHandLight(bodyControlRef->_direction, bodyControlRef->_duration);
+      bodyControlRef->leftHandLight(bodyControlRef->_direction, bodyControlRef->_steps);
       break;
 
     case bodyAction::RIGHTHANDLIGHT:
-      bodyControlRef->rightHandLight(bodyControlRef->_direction, bodyControlRef->_duration);
+      bodyControlRef->rightHandLight(bodyControlRef->_direction, bodyControlRef->_steps);
       break;
 
     case bodyAction::TURN:
-      bodyControlRef->turn(bodyControlRef->_direction, bodyControlRef->_duration);
+      bodyControlRef->turn(bodyControlRef->_direction, bodyControlRef->_steps);
+      break;
+
+    case bodyAction::BODYSHAKE:
+      bodyControlRef->shake(bodyControlRef->_direction, bodyControlRef->_steps);
+      break;
+
+    case bodyAction::BACK_AND_FORTH:
+      bodyControlRef->back_and_forth(bodyControlRef->_direction, bodyControlRef->_steps);
       break;
 
     default:
@@ -113,123 +152,259 @@ void bodyControl::bodyActionTask(void* bodyControlInstance) {
   };
 
   vTaskDelay(100);
+  bodyControlRef->actionRunning = true;
   vTaskDelete(NULL);
 };
 
-void bodyControl::leftLowerArm(bool up, int duration) {
-  int _duration = duration == 0 ? 100 : duration;
-  up ? LEFT_MCP.digitalWrite(LEFTLOWERARM_UP_PIN, 1) : LEFT_MCP.digitalWrite(LEFTLOWERARM_DOWN_PIN, 1);
-  vTaskDelay(_duration);
-  up ? LEFT_MCP.digitalWrite(LEFTLOWERARM_UP_PIN, 0) : LEFT_MCP.digitalWrite(LEFTLOWERARM_DOWN_PIN, 0);
+void bodyControl::leftLowerArm(bool up, int steps) {
+  int _steps = steps == 0 ? 100 : steps;
+  up ? mcp1.digitalWrite(LEFTLOWERARM_UP_PIN, 1) : mcp1.digitalWrite(LEFTLOWERARM_DOWN_PIN, 1);
+
+  // steps routine with vtask notify for stopping  
+  uint32_t notifyStopValue;
+  for (int x = 0; x < steps; x = ++x) {
+    if (xTaskNotifyWait(0x00, 0x00, &notifyStopValue, 0) == pdTRUE) {
+      vTaskDelay(5);
+      vTaskDelete(NULL);
+    }
+    vTaskDelay(STEPWAIT);
+  }
+
+  up ? mcp1.digitalWrite(LEFTLOWERARM_UP_PIN, 0) : mcp1.digitalWrite(LEFTLOWERARM_DOWN_PIN, 0);
 };
 
-void bodyControl::leftUpperArm(bool up, int duration) {
-  int _duration = duration == 0 ? 100 : duration;
-  up ? LEFT_MCP.digitalWrite(LEFTUPPERARM_UP_PIN, 1) : LEFT_MCP.digitalWrite(LEFTUPPERARM_DOWN_PIN, 1);
-  vTaskDelay(_duration);
-  up ? LEFT_MCP.digitalWrite(LEFTUPPERARM_UP_PIN, 0) : LEFT_MCP.digitalWrite(LEFTUPPERARM_DOWN_PIN, 0);
+void bodyControl::leftUpperArm(bool up, int steps) {
+  int _steps = steps == 0 ? 100 : steps;
+  up ? mcp1.digitalWrite(LEFTUPPERARM_UP_PIN, 1) : mcp1.digitalWrite(LEFTUPPERARM_DOWN_PIN, 1);
+
+  // steps routine with vtask notify for stopping  
+  uint32_t notifyStopValue;
+  for (int x = 0; x < steps; x = ++x) {
+    if (xTaskNotifyWait(0x00, 0x00, &notifyStopValue, 0) == pdTRUE) {
+      vTaskDelay(5);
+      vTaskDelete(NULL);
+    }
+    vTaskDelay(STEPWAIT);
+  }
+
+  up ? mcp1.digitalWrite(LEFTUPPERARM_UP_PIN, 0) : mcp1.digitalWrite(LEFTUPPERARM_DOWN_PIN, 0);
 };
 
-void bodyControl::rightLowerArm(bool up, int duration) {
-  int _duration = duration == 0 ? 100 : duration;
-  up ? RIGHT_MCP.digitalWrite(RIGHTLOWERARM_UP_PIN, 1) : RIGHT_MCP.digitalWrite(RIGHTLOWERARM_DOWN_PIN, 1);
-  vTaskDelay(_duration);
-  up ? RIGHT_MCP.digitalWrite(RIGHTLOWERARM_UP_PIN, 0) : RIGHT_MCP.digitalWrite(RIGHTLOWERARM_DOWN_PIN, 0);
+void bodyControl::rightLowerArm(bool up, int steps) {
+  int _steps = steps == 0 ? 100 : steps;
+  up ? mcp2.digitalWrite(RIGHTLOWERARM_UP_PIN, 1) : mcp2.digitalWrite(RIGHTLOWERARM_DOWN_PIN, 1);
+
+  // steps routine with vtask notify for stopping  
+  uint32_t notifyStopValue;
+  for (int x = 0; x < steps; x = ++x) {
+    if (xTaskNotifyWait(0x00, 0x00, &notifyStopValue, 0) == pdTRUE) {
+      vTaskDelay(5);
+      vTaskDelete(NULL);
+    }
+    vTaskDelay(STEPWAIT);
+  }
+
+  up ? mcp2.digitalWrite(RIGHTLOWERARM_UP_PIN, 0) : mcp2.digitalWrite(RIGHTLOWERARM_DOWN_PIN, 0);
 };
 
-void bodyControl::rightUpperArm(bool up, int duration) {
-  int _duration = duration == 0 ? 100 : duration;
-  up ? RIGHT_MCP.digitalWrite(RIGHTUPPERARM_UP_PIN, 1) : RIGHT_MCP.digitalWrite(RIGHTUPPERARM_DOWN_PIN, 1);
-  vTaskDelay(_duration);
-  up ? RIGHT_MCP.digitalWrite(RIGHTUPPERARM_UP_PIN, 0) : RIGHT_MCP.digitalWrite(RIGHTUPPERARM_DOWN_PIN, 0);
+void bodyControl::rightUpperArm(bool up, int steps) {
+  int _steps = steps == 0 ? 100 : steps;
+  up ? mcp2.digitalWrite(RIGHTUPPERARM_UP_PIN, 1) : mcp2.digitalWrite(RIGHTUPPERARM_DOWN_PIN, 1);
+
+  // steps routine with vtask notify for stopping  
+  uint32_t notifyStopValue;
+  for (int x = 0; x < steps; x = ++x) {
+    if (xTaskNotifyWait(0x00, 0x00, &notifyStopValue, 0) == pdTRUE) {
+      vTaskDelay(5);
+      vTaskDelete(NULL);
+    }
+    vTaskDelay(STEPWAIT);
+  }
+
+  up ? mcp2.digitalWrite(RIGHTUPPERARM_UP_PIN, 0) : mcp2.digitalWrite(RIGHTUPPERARM_DOWN_PIN, 0);
 };
 
-void bodyControl::leftLeg(bool forward, int duration) {
-  int _duration = duration == 0 ? 100 : duration;
-  forward ? LEFT_MCP.digitalWrite(LEFTLEG_FORWARD_PIN, 1) : LEFT_MCP.digitalWrite(LEFTLEG_BACK_PIN, 1);
-  vTaskDelay(_duration);
-  forward ? LEFT_MCP.digitalWrite(LEFTLEG_FORWARD_PIN, 0) : LEFT_MCP.digitalWrite(LEFTLEG_BACK_PIN, 0);
+void bodyControl::leftLeg(bool forward, int steps) {
+  int _steps = steps == 0 ? 100 : steps;
+  forward ? mcp1.digitalWrite(LEFTLEG_FORWARD_PIN, 1) : mcp1.digitalWrite(LEFTLEG_BACK_PIN, 1);
+
+  // steps routine with vtask notify for stopping  
+  uint32_t notifyStopValue;
+  for (int x = 0; x < steps; x = ++x) {
+    if (xTaskNotifyWait(0x00, 0x00, &notifyStopValue, 0) == pdTRUE) {
+      vTaskDelay(5);
+      vTaskDelete(NULL);
+    }
+    vTaskDelay(STEPWAIT);
+  }
+
+  forward ? mcp1.digitalWrite(LEFTLEG_FORWARD_PIN, 0) : mcp1.digitalWrite(LEFTLEG_BACK_PIN, 0);
 };
 
-void bodyControl::rightLeg(bool forward, int duration) {
-  int _duration = duration == 0 ? 100 : duration;
-  forward ? RIGHT_MCP.digitalWrite(RIGHTLEG_FORWARD_PIN, 1) : RIGHT_MCP.digitalWrite(RIGHTLEG_BACK_PIN, 1);
-  vTaskDelay(_duration);
-  forward ? RIGHT_MCP.digitalWrite(RIGHTLEG_FORWARD_PIN, 0) : RIGHT_MCP.digitalWrite(RIGHTLEG_BACK_PIN, 0);
+void bodyControl::rightLeg(bool forward, int steps) {
+  int _steps = steps == 0 ? 100 : steps;
+  forward ? mcp2.digitalWrite(RIGHTLEG_FORWARD_PIN, 1) : mcp2.digitalWrite(RIGHTLEG_BACK_PIN, 1);
+
+  // steps routine with vtask notify for stopping  
+  uint32_t notifyStopValue;
+  for (int x = 0; x < steps; x = ++x) {
+    if (xTaskNotifyWait(0x00, 0x00, &notifyStopValue, 0) == pdTRUE) {
+      vTaskDelay(5);
+      vTaskDelete(NULL);
+    }
+    vTaskDelay(STEPWAIT);
+  }
+
+  forward ? mcp2.digitalWrite(RIGHTLEG_FORWARD_PIN, 0) : mcp2.digitalWrite(RIGHTLEG_BACK_PIN, 0);
 };
 
-void bodyControl::hip(bool left, int duration) {
-  int _duration = duration == 0 ? 100 : duration;
-  left ? HIP_MCP.digitalWrite(HIP_LEFT_PIN, 1) : HIP_MCP.digitalWrite(HIP_RIGHT_PIN, 1);
-  vTaskDelay(_duration);
-  left ? HIP_MCP.digitalWrite(HIP_LEFT_PIN, 0) : HIP_MCP.digitalWrite(HIP_RIGHT_PIN, 0);
+void bodyControl::hip(bool left, int steps) {
+  int _steps = steps == 0 ? 100 : steps;
+  left ? mcp1.digitalWrite(HIP_LEFT_PIN, 1) : mcp1.digitalWrite(HIP_RIGHT_PIN, 1);
+
+  // steps routine with vtask notify for stopping  
+  uint32_t notifyStopValue;
+  for (int x = 0; x < steps; x = ++x) {
+    if (xTaskNotifyWait(0x00, 0x00, &notifyStopValue, 0) == pdTRUE) {
+      vTaskDelay(5);
+      vTaskDelete(NULL);
+    }
+    vTaskDelay(STEPWAIT);
+  }
+
+  left ? mcp1.digitalWrite(HIP_LEFT_PIN, 0) : mcp1.digitalWrite(HIP_RIGHT_PIN, 0);
 };
 
-void bodyControl::leftHandLight(bool on, int duration) {
-  on ? HANDLIGHTS_MCP.digitalWrite(LEFTHAND_LIGHT_PIN, 1) : HANDLIGHTS_MCP.digitalWrite(LEFTHAND_LIGHT_PIN, 0);
-  if (duration > 0) {
-    vTaskDelay(duration);
-    HANDLIGHTS_MCP.digitalWrite(LEFTHAND_LIGHT_PIN, 0);
-  } 
+void bodyControl::leftHandLight(bool on, int steps) {
+  on ? mcp2.digitalWrite(LEFTHAND_LIGHT_PIN, 1) : mcp2.digitalWrite(LEFTHAND_LIGHT_PIN, 0);
 }
 
-void bodyControl::rightHandLight(bool on, int duration) {
-  on ? HANDLIGHTS_MCP.digitalWrite(RIGHTHAND_LIGHT_PIN, 1) : HANDLIGHTS_MCP.digitalWrite(RIGHTHAND_LIGHT_PIN, 0);
-  if (duration > 0) {
-    vTaskDelay(duration);
-    HANDLIGHTS_MCP.digitalWrite(RIGHTHAND_LIGHT_PIN, 0);
-  } 
+void bodyControl::rightHandLight(bool on, int steps) {
+  on ? mcp2.digitalWrite(RIGHTHAND_LIGHT_PIN, 1) : mcp2.digitalWrite(RIGHTHAND_LIGHT_PIN, 0);
 }
 
-void bodyControl::turn(bool left, int duration) {
+void bodyControl::turn(bool left, int steps) {
 
   if(left) {
 
-    LEFT_MCP.digitalWrite(LEFTLEG_BACK_PIN, 0);
-    LEFT_MCP.digitalWrite(LEFTLEG_FORWARD_PIN, 1);
+    mcp1.digitalWrite(LEFTLEG_BACK_PIN, 0);
+    mcp1.digitalWrite(LEFTLEG_FORWARD_PIN, 1);
 
-    RIGHT_MCP.digitalWrite(RIGHTLEG_FORWARD_PIN, 0);
-    RIGHT_MCP.digitalWrite(RIGHTLEG_BACK_PIN, 1);
+    mcp2.digitalWrite(RIGHTLEG_FORWARD_PIN, 0);
+    mcp2.digitalWrite(RIGHTLEG_BACK_PIN, 1);
 
-    HIP_MCP.digitalWrite(HIP_LEFT_PIN, 1);
-    HIP_MCP.digitalWrite(HIP_RIGHT_PIN, 0);
+    mcp1.digitalWrite(HIP_LEFT_PIN, 1);
+    mcp1.digitalWrite(HIP_RIGHT_PIN, 0);
     vTaskDelay(300);
 
-    LEFT_MCP.digitalWrite(LEFTLEG_BACK_PIN, 0);
-    LEFT_MCP.digitalWrite(LEFTLEG_FORWARD_PIN, 0);
+    mcp1.digitalWrite(LEFTLEG_BACK_PIN, 0);
+    mcp1.digitalWrite(LEFTLEG_FORWARD_PIN, 0);
 
-    RIGHT_MCP.digitalWrite(RIGHTLEG_FORWARD_PIN, 0);
-    RIGHT_MCP.digitalWrite(RIGHTLEG_BACK_PIN, 0);
+    mcp2.digitalWrite(RIGHTLEG_FORWARD_PIN, 0);
+    mcp2.digitalWrite(RIGHTLEG_BACK_PIN, 0);
     
-    HIP_MCP.digitalWrite(HIP_LEFT_PIN, 0);
-    HIP_MCP.digitalWrite(HIP_RIGHT_PIN, 0);
+    mcp1.digitalWrite(HIP_LEFT_PIN, 0);
+    mcp1.digitalWrite(HIP_RIGHT_PIN, 0);
 
     vTaskDelay(100);
 
   } else {
-    LEFT_MCP.digitalWrite(LEFTLEG_BACK_PIN, 1);
-    LEFT_MCP.digitalWrite(LEFTLEG_FORWARD_PIN, 0);
 
-    RIGHT_MCP.digitalWrite(RIGHTLEG_FORWARD_PIN, 1);
-    RIGHT_MCP.digitalWrite(RIGHTLEG_BACK_PIN, 0);
+    mcp1.digitalWrite(LEFTLEG_BACK_PIN, 1);
+    mcp1.digitalWrite(LEFTLEG_FORWARD_PIN, 0);
 
-    HIP_MCP.digitalWrite(HIP_LEFT_PIN, 0);
-    HIP_MCP.digitalWrite(HIP_RIGHT_PIN, 1);
+    mcp2.digitalWrite(RIGHTLEG_FORWARD_PIN, 1);
+    mcp2.digitalWrite(RIGHTLEG_BACK_PIN, 0);
+
+    mcp1.digitalWrite(HIP_LEFT_PIN, 0);
+    mcp1.digitalWrite(HIP_RIGHT_PIN, 1);
     vTaskDelay(300);
 
-    LEFT_MCP.digitalWrite(LEFTLEG_BACK_PIN, 0);
-    LEFT_MCP.digitalWrite(LEFTLEG_FORWARD_PIN, 0);
+    mcp1.digitalWrite(LEFTLEG_BACK_PIN, 0);
+    mcp1.digitalWrite(LEFTLEG_FORWARD_PIN, 0);
 
-    RIGHT_MCP.digitalWrite(RIGHTLEG_FORWARD_PIN, 0);
-    RIGHT_MCP.digitalWrite(RIGHTLEG_BACK_PIN, 0);
+    mcp2.digitalWrite(RIGHTLEG_FORWARD_PIN, 0);
+    mcp2.digitalWrite(RIGHTLEG_BACK_PIN, 0);
 
-    HIP_MCP.digitalWrite(HIP_LEFT_PIN, 0);
-    HIP_MCP.digitalWrite(HIP_RIGHT_PIN, 0);
+    mcp1.digitalWrite(HIP_LEFT_PIN, 0);
+    mcp1.digitalWrite(HIP_RIGHT_PIN, 0);
 
     vTaskDelay(100);
   
   }
-
 }
 
+void bodyControl::shake(bool left, int steps) {
+
+  uint32_t notifyStopValue;
+  for (int x = 0; x < steps; x = ++x) {
   
+    mcp1.digitalWrite(HIP_LEFT_PIN, 1);
+    mcp1.digitalWrite(HIP_RIGHT_PIN, 0);
+
+    // Duration routine with vtask notify for stopping  
+    for (int y = 0; y < 3; y = ++y) {
+      if (xTaskNotifyWait(0x00, 0x00, &notifyStopValue, 0) == pdTRUE) {
+        vTaskDelay(5);
+        vTaskDelete(NULL);
+      }
+      vTaskDelay(STEPWAIT);
+    }
+
+    mcp1.digitalWrite(HIP_LEFT_PIN, 0);
+    mcp1.digitalWrite(HIP_RIGHT_PIN, 1);
+
+    // Duration routine with vtask notify for stopping  
+    for (int y = 0; y < 3; y = ++y) {
+      if (xTaskNotifyWait(0x00, 0x00, &notifyStopValue, 0) == pdTRUE) {
+        vTaskDelay(5);
+        vTaskDelete(NULL);
+      }
+      vTaskDelay(STEPWAIT);
+    }
+    
+  }
+
+    mcp1.digitalWrite(HIP_LEFT_PIN, 0);
+    mcp1.digitalWrite(HIP_RIGHT_PIN, 0);
+};
+
+void bodyControl::back_and_forth(bool left, int steps) {
+
+  uint32_t notifyStopValue;
+  for (int x = 0; x < steps; x = ++x) {
+  
+    mcp1.digitalWrite(LEFTLEG_FORWARD_PIN, 1);
+    mcp2.digitalWrite(RIGHTLEG_FORWARD_PIN, 1);
+    mcp1.digitalWrite(LEFTLEG_BACK_PIN, 0);
+    mcp2.digitalWrite(RIGHTLEG_BACK_PIN, 0);
+
+    // Duration routine with vtask notify for stopping  
+    for (int y = 0; y < 6; y = ++y) {
+      if (xTaskNotifyWait(0x00, 0x00, &notifyStopValue, 0) == pdTRUE) {
+        vTaskDelay(5);
+        vTaskDelete(NULL);
+      }
+      vTaskDelay(STEPWAIT);
+    }
+
+    mcp1.digitalWrite(LEFTLEG_FORWARD_PIN, 0);
+    mcp2.digitalWrite(RIGHTLEG_FORWARD_PIN, 0);
+    mcp1.digitalWrite(LEFTLEG_BACK_PIN, 1);
+    mcp2.digitalWrite(RIGHTLEG_BACK_PIN, 1);
+
+    // Duration routine with vtask notify for stopping  
+    for (int y = 0; y < 6; y = ++y) {
+      if (xTaskNotifyWait(0x00, 0x00, &notifyStopValue, 0) == pdTRUE) {
+        vTaskDelay(5);
+        vTaskDelete(NULL);
+      }
+      vTaskDelay(STEPWAIT);
+    }
+    
+  }
+
+  mcp1.digitalWrite(LEFTLEG_BACK_PIN, 0);
+  mcp2.digitalWrite(RIGHTLEG_BACK_PIN, 0);
+};
+

@@ -466,19 +466,19 @@ esp_err_t body_action_handler(httpd_req_t *request) {
   String param_value_action = get_url_param(request, param_name1, 10);
   const char* param_name2 = "direction";
   String param_value_direction = get_url_param(request, param_name2, 10);
-  const char* param_name3 = "duration";
-  String param_value_duration = get_url_param(request, param_name3, 10);
+  const char* param_name3 = "steps";
+  String param_value_steps = get_url_param(request, param_name3, 10);
 
   if (param_value_action != "invalid") {
 
     int action = param_value_action.toInt();
 
     int direction = param_value_direction != "invalid" ? param_value_direction.toInt() : 0;
-    int duration = param_value_duration != "invalid" ? param_value_duration.toInt() : 0;
+    int steps = param_value_steps != "invalid" ? param_value_steps.toInt() : 0;
     
-    if (duration < 3000) {
+    if (steps < 3000) {
       json_obj["command"] = "success";
-      bodyControl.exec(action, direction, duration);
+      bodyControl.exec(action, direction, steps);
     }
 
   } else {
@@ -511,12 +511,12 @@ esp_err_t display_action_handler(httpd_req_t *request) {
   const char* param_name2 = "index";
   String param_value_direction = get_url_param(request, param_name2, 10);
   const char* param_name3 = "text";
-  String param_value_duration = get_url_param(request, param_name3, 300);
+  String param_value_steps = get_url_param(request, param_name3, 300);
 
   if (param_value_action != "invalid") {
 
     int index = param_value_direction != "invalid" ? param_value_direction.toInt() : 0;
-    String text = param_value_duration != "invalid" ? param_value_duration : "";
+    String text = param_value_steps != "invalid" ? param_value_steps : "";
 
     roboFace.exec(param_value_action.toInt(), text, index);
 
@@ -758,4 +758,3 @@ void bodyTestRoutine(void *pVParameters) {
 
   vTaskDelete(NULL);
 };
-

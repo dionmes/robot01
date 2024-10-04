@@ -24,6 +24,9 @@ enum bodyAction {
   LEFTHANDLIGHT = 8,
   RIGHTHANDLIGHT = 9,
   TURN = 10,
+  BODYSHAKE = 11,
+  STOP = 12,
+  BACK_AND_FORTH =13
 };
 
 /*
@@ -35,8 +38,8 @@ public:
   bodyControl();
   void begin();
 
-  // Action - enum bodyAction, Bool direction, Int duration
-  void exec(int action, bool direction, int duration = 0);
+  // Action - enum bodyAction, Bool direction, Int steps
+  void exec(int action, bool direction, int steps = 0);
 
 private:
   // Task handler for actions
@@ -45,31 +48,37 @@ private:
   // Values for tasks
   int _action;
   bool _direction;
-  int _duration;
+  int _steps;
+
+  bool actionRunning;
 
   // Task function to call. Pass struct bodyActionParams for action parameters.
   static void bodyActionTask(void* actionParams);
 
-  // left Upper Arm movement, pass direction boolean (up = true), and duration of movement.
-  void leftUpperArm(bool up, int duration = 0);
-  // right Upper Arm movement, pass direction boolean (up = true), and duration of movement.
-  void rightUpperArm(bool up, int duration = 0);
-  // left Lower Arm movement, pass direction boolean (up = true), and duration of movement.
-  void leftLowerArm(bool up, int duration = 0);
-  // right Lower Arm movement, pass direction boolean (up = true), and duration of movement.
-  void rightLowerArm(bool up, int duration = 0);
-  // left leg movement, pass direction boolean (forward = true), and duration of movement.
-  void leftLeg(bool forward, int duration = 0);
-  // right leg movement, pass direction boolean (forward = true), and duration of movement.
-  void rightLeg(bool forward, int duration = 0);
-  // hip movement, pass direction boolean (left = true), and duration of movement.
-  void hip(bool left, int duration = 0);
-  // left Hand ligt, on = true, duration of staying on, 0 is indifinite
-  void leftHandLight(bool on, int duration = 0);
-  // right Hand ligt, on = true, duration of staying on, 0 is indifinite
-  void rightHandLight(bool on, int duration = 0);
+  // left Upper Arm movement, pass direction boolean (up = true), and steps of movement.
+  void leftUpperArm(bool up, int steps = 0);
+  // right Upper Arm movement, pass direction boolean (up = true), and steps of movement.
+  void rightUpperArm(bool up, int steps = 0);
+  // left Lower Arm movement, pass direction boolean (up = true), and steps of movement.
+  void leftLowerArm(bool up, int steps = 0);
+  // right Lower Arm movement, pass direction boolean (up = true), and steps of movement.
+  void rightLowerArm(bool up, int steps = 0);
+  // left leg movement, pass direction boolean (forward = true), and steps of movement.
+  void leftLeg(bool forward, int steps = 0);
+  // right leg movement, pass direction boolean (forward = true), and steps of movement.
+  void rightLeg(bool forward, int steps = 0);
+  // hip movement, pass direction boolean (left = true), and steps of movement.
+  void hip(bool left, int steps = 0);
+  // left Hand ligt, on = true, steps of staying on, 0 is indifinite
+  void leftHandLight(bool on, int steps = 0);
+  // right Hand ligt, on = true, steps of staying on, 0 is indifinite
+  void rightHandLight(bool on, int steps = 0);
   // Turn body , left = true
-  void turn(bool left, int duration);
+  void turn(bool left, int steps);
+  // Shake body , left and steps not used
+  void shake(bool left, int steps);
+  // Back and Forth, left and steps not used
+  void back_and_forth(bool left, int steps);
 
 };
 

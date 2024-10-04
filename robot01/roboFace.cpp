@@ -11,6 +11,9 @@
 #include "images.h"
 #include "animations.h"
 
+// vTask core
+#define DISPLAY_ROUTINE_TASK_CORE 0
+
 // Face coordinates
 #define rectX1 0
 #define rectY1 0
@@ -26,6 +29,8 @@
 roboFace::roboFace(){};
 
 void roboFace::begin() {
+  
+  this->actionRunning = false;
 
   // SSD1306_SWITCHCAPVCC = generate display voltage from 3.3V internally
   if (!ledMatrix.begin(SSD1306_SWITCHCAPVCC, 0x3C, true, true)) {
@@ -56,7 +61,7 @@ void roboFace::exec(int action, String text, int intValue) {
   _text = text;
   _intValue = intValue;
 
-  xTaskCreatePinnedToCore(this->displayTask, "displayTask", 8192, (void*)this, 20, &faceTaskHandle, 1);
+  xTaskCreatePinnedToCore(this->displayTask, "displayTask", 8192, (void*)this, 20, &faceTaskHandle, DISPLAY_ROUTINE_TASK_CORE);
   vTaskDelay(1000 / portTICK_PERIOD_MS);
 };
 
