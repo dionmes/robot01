@@ -8,10 +8,10 @@ class ROBOT:
 		self.timeout = timeout
 
 	def startaudio(self):
-		threading.Thread(target=self.safe_http_call, args=[('http://' + self.ip + '/audiostream?on=1')])
+		threading.Thread(target=self.safe_http_call, args=[('http://' + self.ip + '/audiostream?on=1')]).start()
 
 	def stopaudio(self):
-		threading.Thread(target=self.safe_http_call, args=[('http://' + self.ip + '/audiostream?on=0')])
+		threading.Thread(target=self.safe_http_call, args=[('http://' + self.ip + '/audiostream?on=0')]).start()
 
 	def safe_http_call(self,url):
 		try:

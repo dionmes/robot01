@@ -19,7 +19,7 @@ from sense import SENSE
 tts_max_sentence_lenght = 12
 
 # Ollama LLM Model
-llm_model = "robot01brain"
+llm_model = "robot01brain:latest"
 
 class BRAIN:
 	def __init__(self, robot01_context ):
