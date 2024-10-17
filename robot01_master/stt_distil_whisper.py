@@ -3,8 +3,8 @@ from typing import List
 import numpy as np
 import socket
 import threading
+import time
 import queue
-
 import torch
 from transformers import AutoModelForSpeechSeq2Seq, AutoProcessor, pipeline
 
@@ -18,26 +18,33 @@ UDP_PORT = 3000 # Audio stream receive udp port
 sock = socket.socket(socket.AF_INET,socket.SOCK_DGRAM)
 sock.bind((UDP_IP, UDP_PORT))
 
-# STT Class with VAD
-# uses display engine for direct response to display when speech is detected
-class STT:
-	def __init__(self,display, silence_periond = 75, sensitivity = 0.09, speech_length = 41000):
-	
-		self.sensitivity = sensitivity
-		self.loaded = False
-		self.speech_detected = False
-		self.silence_period = silence_periond
-		self.speech_length = speech_length
-		
-		self.stt_q = queue.Queue(3)
-		self.audiochunks_q =  queue.Queue(2)
-		
-		self.running = False
-		self.display = display
+# VAD PARAMETERS
+MAX_SILENCE_PERIOD = 100
+VAD_SENSITIVITY = 0.09
+MIN_SPEECH_LENGTH = 41000
 
-	# Model loading is deferred so class can be loaded without loading model, speeding up startup of the server
-	def load_models(self):
+# QUEUE size
+AUDIOCHUNKS_Q_SIZE = 2
+
+# STT Class with VAD
+class STT:
+	def __init__(self, brain):
 	
+		# Engine State flags, loaded = model(s)
+		self.loaded = False
+		self.running = False
+		
+		self.brain = brain
+
+		# VAD Parameters
+		self.vad_sensitivity = VAD_SENSITIVITY
+		self.max_silence_period = MAX_SILENCE_PERIOD
+		self.min_speech_length = MIN_SPEECH_LENGTH
+		
+		self.audiochunks_q = queue.Queue(maxsize=AUDIOCHUNKS_Q_SIZE)
+		
+	# Model loading is deferred so class can be loaded without loading model, speeding up startup of the server
+	def loadmodels(self):
 		if not self.loaded:
 			print("Loading STT models")
 			
@@ -66,15 +73,14 @@ class STT:
 		
 		np_audio_chunk = np.empty(0)
 		nonsilence_counter = 0 # Counter for silence period
+		speech_detected = False
 		
 		self.vad_model.reset_states() 
 
-		print("Ready to transcribe...")
+		print("Ready to listen...")
 		
 		while self.running:
-		
-			speech_prob = 0
-			
+			speech_probability = 0
 			try:
 				# Receive data from the socket (with a buffer size of 1024 bytes)
 				# Need a 2048 Sample for VAD so will add two together, as audio packets are 1024 size
@@ -85,20 +91,19 @@ class STT:
 				np_data = np.frombuffer(raw_data, dtype=np.float32)
 				
 				# VAD
-				speech_prob = self.vad_model(torch.tensor(np_data).cpu(), 16000).cpu().item()
-				#print(speech_prob)
+				speech_probability = self.vad_model(torch.tensor(np_data).cpu(), 16000).cpu().item()
+				#print(speech_probability)
 				
 			except Exception as e:
 				print("UDP audio receive & analysis error : ",type(e).__name__ )
 
-			if speech_prob > self.sensitivity:
-			
-				nonsilence_counter = self.silence_period
-				if not self.speech_detected:
-					self.speech_detected = True
+			if speech_probability > self.vad_sensitivity:
+				nonsilence_counter = self.max_silence_period
+				if not speech_detected:
+					speech_detected = True
 					print("STT Detection started")
 					#Send display action
-					self.display.action(19)
+					self.brain.display.action(19)
 
 			# Create Audio transcription sample until silence is detected via nonsilence_counter. 
 			# Currently no max sample size. 
@@ -109,27 +114,28 @@ class STT:
 				
 				# Silende detected
 				if nonsilence_counter <= 0:
-					if np_audio_chunk.size > self.speech_length:		
+					if np_audio_chunk.size > self.min_speech_length:		
 						try:
 							self.audiochunks_q.put_nowait(np_audio_chunk)
 						except Exception as e:
 							print("Audiochunk queue error : " ,e)
 
 					print("STT Detection ended")
-					self.speech_detected = False
+					speech_detected = False
 					nonsilence_counter = 0
 					#self.vad_model.reset_states() 
 
 					#Send display action 
-					self.display.action(3)
+					self.brain.display.action(3)
 					np_audio_chunk = np.empty(0)
 					
 	# async function to do audio transcription
 	def transcribe(self):
+		print("Ready to transcribe...")
 		while self.running:
 			transcription = ""
 			audio_chunk = self.audiochunks_q.get()
-			self.display.action(20)
+			self.brain.display.action(20)
 
 			input_features = self.processor(audio_chunk, sampling_rate=16000, return_tensors="pt", device="cuda").input_features
 			input_features = input_features.to(device, dtype=torch_dtype)
@@ -140,19 +146,26 @@ class STT:
 			transcription = self.processor.batch_decode(pred_ids, skip_special_tokens=True, decode_with_timestamps=gen_kwargs["return_timestamps"])
 
 			try:
-				self.stt_q.put(transcription)
+				self.brain.stt_q.put_nowait(transcription)
 			except Exception as e:
 				print("Transcribe error : ",e)
-				self.display.action(3)
 
 			self.audiochunks_q.task_done()
+			self.brain.display.action(3)
 
 	def start(self):
-		self.running = True
-		threading.Thread(target=self.transcribe, daemon=True).start()
-		threading.Thread(target=self.receive_audio, daemon=True).start()
+		if not self.running:
+			self.running = True
+			if not self.loaded:
+				self.loadmodels()
+
+			threading.Thread(target=self.receive_audio, daemon=True).start()
+			threading.Thread(target=self.transcribe, daemon=True).start()
 	
 	def stop(self):
 		self.running = False
-		
+		self.audiochunks_q = queue.Queue(maxsize=AUDIOCHUNKS_Q_SIZE)
+
+		# Wait for save shutdown of threads and queues
+		time.sleep(1)
 

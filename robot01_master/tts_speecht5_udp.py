@@ -10,54 +10,57 @@ import threading
 import queue
 import soundfile as sf
 import torch
+import time
 
 device="cuda"
 voice=4830
 
+# queue sizes
+AUDIO_Q = 8
+TEXT_Q = 8
+
+# Text to speech class for robot01 project
 class TTS:	
-	def __init__(self, ip, display, sense):
-		self.loaded = False
+	# init
+	# ip = ip of robot01
+	# brain = brain object
+	def __init__(self, ip, brain):
+	
 		self.dest_ip = ip
-		self.display = display
-		self.sense = sense
-		self.audio_q = queue.Queue(maxsize=8)
-		self.text_q = queue.Queue(maxsize=8)
-		self.running = False
-		self.micstopped = False
+		self.brain = brain
 		
-	def loadModel(self):
-		print("Loading TTS models")
+		# Engine State flags, loaded = model(s)
+		self.loaded = False
+		self.running = False
+		
+		#Queues
+		self.text_q = queue.Queue(maxsize=TEXT_Q)
+		self.audio_q = queue.Queue(maxsize=AUDIO_Q)
+	
+	# Load TTS model
+	def loadmodels(self):
+		print("Loading TTS model")
 
 		if not self.loaded:
 			self.synthesiser = pipeline("text-to-speech", "microsoft/speecht5_tts", device=0)
-			
 			embeddings_dataset = load_dataset("Matthijs/cmu-arctic-xvectors", split="validation")
 			self.speaker_embeddings = torch.tensor(embeddings_dataset[voice]["xvector"]).to(device).unsqueeze(0)	
 	
-			threading.Thread(target=self.sendaudio, daemon=True).start()
-
 		print("STT Models loaded")
 		self.loaded = True
 
-	def speak(self, text):
-		try:
-			self.text_q.put_nowait(text)
-		except Exception as e:
-			print("Text queue error : ",type(e).__name__ )
-		
+	# Generate Audio worker : Synthesises text from queue : audio_q
+	# puts audio (16khz mono f32le) into audio_q
+	#
 	def generate_speech(self):
+		print("TTS Speech synthesizer worker started.")	
 		while self.running:
 			text = self.text_q.get()
-			
+
 			speech = self.synthesiser(text, forward_params={"speaker_embeddings": self.speaker_embeddings})
-	
-			if not self.micstopped:
-				self.mic_previous_status = self.sense.micstatus()
-				if not self.mic_previous_status:
-					self.sense.stopmic() # Stop mic to prevent speech loop
-				self.micstopped = True
-				self.display.action(23) # Show chat animation in display
-			
+			if not self.brain.talking:
+				self.brain.talking_started()
+
 			try:
 				self.audio_q.put_nowait(speech)
 			except Exception as e:
@@ -65,10 +68,14 @@ class TTS:
 			
 			self.text_q.task_done()
 
+	# Send Audio worker : Gets audio wave from queue : audio_q
+	# sends audio (16khz mono f32le) over UDP to robot01 ip port 9000
+	#
 	def sendaudio(self):
 		UDP_PORT = 9000
 		sock = socket.socket(socket.AF_INET,socket.SOCK_DGRAM)
 
+		print("TTS Audio over UDP worker started.")
 		while self.running:
 			speech = self.audio_q.get()
 
@@ -86,18 +93,27 @@ class TTS:
 			if self.audio_q.empty() and self.text_q.empty():
 				time.sleep(1) # Wait for queue fill before enabling again
 				if self.audio_q.empty() and self.text_q.empty():
-					self.display.action(3) # Show neutral face
-					if self.mic_previous_status:
-						self.sense.startmic() # Start mic
-						self.micstopped = False
+					if self.brain.talking:
+						self.brain.talking_stopped()
 
+	# returns text_q size
 	def queue_size(self)->int:
 		return self.text_q.qsize()
-		
-	def start(self):
-		self.running = True
-		threading.Thread(target=self.generate_speech, daemon=True).start()
-		threading.Thread(target=self.sendaudio, daemon=True).start()
 	
+	# Start workers
+	def start(self):
+		if not self.running:
+			if not self.loaded:
+				self.loadmodels()		
+			self.running = True
+			threading.Thread(target=self.generate_speech, daemon=True).start()
+			threading.Thread(target=self.sendaudio, daemon=True).start()
+	
+	# Stop workers
 	def stop(self):
 		self.running = False
+		self.text_q = queue.Queue(maxsize=TEXT_Q)
+		self.audio_q = queue.Queue(maxsize=AUDIO_Q)
+		
+		# Wait for save shutdown of threads and queues
+		time.sleep(1)

@@ -8,7 +8,11 @@
 <link rel="stylesheet" href="css/pico.indigo.min.css">
 <script src="js/jquery-3.7.1.min.js"></script>
 
+
 <style>
+	/**
+	Red and green Indicators in css
+	*/
 	.roundred {background-color: red; border-radius:50% 50% 50% 50%; height: 0.8em; width: 0.8em; display: inline-block; }
 	.roundgreen {background-color: red; border-radius:50% 50% 50% 50%; height: 0.8em; width: 0.8em; display: inline-block; }
 </style>
@@ -19,11 +23,10 @@ function ask_robot01() {
 	$("#loader").attr("aria-busy", "true");
 
 	var text = $("#ask_textField").val();
-	var vision = $("#vision").is(":checked");
 
 	$.ajax({
 		url: "/api/ask_robot01",
-		data : JSON.stringify({"text" : text, "vision": vision }),
+		data : JSON.stringify({"text" : text}),
 		type: 'POST',
 		contentType : 'application/json',
 		async: true
@@ -40,7 +43,7 @@ function ask_robot01() {
 
 }
 
-function update_status() {
+function health_update() {
 
 	$.ajax({
 		url: "http://{{context.robot01_ip}}/health",
@@ -75,9 +78,10 @@ function update_status() {
 function audio_control() {
 	$("#loader").attr("aria-busy", "true");
 	var checked = $('input[name="audiostream"]').is(':checked');
+	$("#audiostream").attr("disabled", true);
 	var on = checked ? 1 : 0;
 	$.ajax({
-		url: "http://{{context.robot01_ip}}/audiostream?on=" + on,
+		url: "/api/setting?item=audio&value=" + on,
 		type: 'GET',
 		dataType: 'json',
 		async: true
@@ -87,16 +91,18 @@ function audio_control() {
 		alert(errorThrown);
 	})
 	.always(function() {
+		$("#audiostream").attr("disabled", false);
 		$("#loader").attr("aria-busy", "false");
 	});
 }
-	
+
 function mic_stream() {
 	$("#loader").attr("aria-busy", "true");
 	var checked = $('input[name="micstream"]').is(':checked');
+	$("#micstream").attr("disabled", true);
 	var on = checked ? 1 : 0;
 	$.ajax({
-		url: "http://{{context.robot01sense_ip}}/control?setting=micstreaming&param=" + on,
+		url: "/api/setting?item=mic&value=" + on,
 		type: 'GET',
 		dataType: 'json',
 		async: true
@@ -106,17 +112,18 @@ function mic_stream() {
 		alert(errorThrown);
 	})
 	.always(function() {
+		$("#micstream").attr("disabled", false);
 		$("#loader").attr("aria-busy", "false");
 	});
 }
 
 window.onload = function() {
-	update_status();
-	setInterval("update_status()",60000);
+	health_update();
+	setInterval("health_update()",60000);
 	
 	// Get udp micstream status
 	$.ajax({
-		url: "http://{{context.robot01sense_ip}}/control?setting=micstreaming",
+		url: "/api/get_setting?item=mic",
 		type: 'GET',
 		dataType: 'json',
 		async: true
@@ -124,7 +131,7 @@ window.onload = function() {
 	.done(function (result) {
 		console.log(result);
 		$("#micstream").removeAttr("disabled");
-		if (result.micstreaming == 1 ) {
+		if (result.value == "on" ) {
 			$("#micstream").attr("checked", true);
 		} else {
 			$("#micstream").attr("checked", false);
@@ -133,14 +140,14 @@ window.onload = function() {
 	
 	// Get udp audiostream receive
 	$.ajax({
-		url: "http://{{context.robot01_ip}}/audiostream",
+		url: "/api/get_setting?item=audio",
 		type: 'GET',
 		dataType: 'json',
 		async: true
 	})
 	.done(function (result) {
 		 $("#audiostream").removeAttr("disabled");
-		 if (result.audiostream == 1 ) {
+		 if (result.value == "on" ) {
 		  $("#audiostream").attr("checked", true);
 		 } else {
 		  $("#audiostream").attr("checked", false);
@@ -148,6 +155,7 @@ window.onload = function() {
 		 console.log( result);
 	})
 }
+
 </script>
 <body> 
 
@@ -162,7 +170,7 @@ window.onload = function() {
 		</hgroup>
 		<nav>
 			<ul>
-				<li><a href='masterPage.html'>Master</a></li>
+				<li><a href='managePage.html'>Manage</a></li>
 				<li><a href='controlsPage.html'>Controls</a></li>
 				<li><a href='displayPage.html'>Display</a></li>
 				<li><a href='sensorsPage.html'>Sensors</a></li>
@@ -171,23 +179,14 @@ window.onload = function() {
 		</nav>
 		<hr>
 	</div>
-	<br>
-	<br>
-	<br>
-	<br>
-	<br>
-	<br>
-	<br>
-	<br>
+	<p style="padding-top: 10em;"></p>
+	
 	<div class="container">
 		<div class="container">
 			<form onsubmit="ask_robot01();return false;">
 				<input type="text" placeholder="Ask robot01" id="ask_textField" >
 				<div class="grid">
-					<button class="secondary" onClick="ask_robot01(false);"> Ask </button>
-					<label for="vision_checkbox">
-					<input type="checkbox" name="vision_checkbox" id="vision"/>
-					Vision
+					<button type="submit" class="secondary"> Ask </button>
 					</label>
 				</div>
 			</form> 

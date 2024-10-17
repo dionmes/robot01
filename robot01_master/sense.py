@@ -16,18 +16,15 @@ class SENSE:
 		print("Mic disabled")
 	
 	def micstatus(self)->bool:
-		micstatus = 0
 		try:
 			response = requests.get('http://' + self.ip + "/control?setting=micstreaming", timeout=self.timeout)
 			json_obj = response.json()
-			micstatus = json_obj['micstreaming']
+			mic = True if json_obj['micstreaming'] == 1 else False
 		except Exception as e:
 			print("Request - micstatus error : ",e)
-
-		if micstatus == 1:
-			return True
-		else:
-			return False
+			mic = False
+			
+		return mic
 		
 	def capture(self, resolution=5):
 		image_base64 = ""
@@ -39,7 +36,7 @@ class SENSE:
 			
 		# Get image
 		try:
-			response  = requests.get("http://" + robot01_context['robot01sense_ip'] + '/capture', timeout = self.timeout )
+			response  = requests.get("http://" + self.ip + '/capture', timeout = self.timeout )
 			image_base64 = base64.b64encode(response.content)
 		except:
 			print("Capture request failed")
