@@ -271,11 +271,11 @@ void setup() {
   xTaskCreatePinnedToCore(bno08xUpdateTask, "wrapper_bno08x", 4096, NULL, 10, &wrapper_bno08xUpdateTaskHandle, 0);
 
   // Register with remote master
-  roboFace.exec(faceAction::DISPLAYTEXTSMALL, "Master registration " + WiFi.localIP().toString());
+  roboFace.exec(faceAction::DISPLAYTEXTSMALL, "Check in\n with \n" + WiFi.localIP().toString());
   WiFiClient httpWifiInstance;
   HttpClient http(httpWifiInstance, config_master_ip, 5000);
 
-  String httpPath = "/api/register_ip?ip=" + WiFi.localIP().toString() + "&device=robot01";
+  String httpPath = "/api/setting?item=robot01_ip&value=" + WiFi.localIP().toString();
   int http_err = http.get(httpPath);
   http_err == 0 ? Serial.println(http.responseBody()) : Serial.printf("Got status code: %u \n", http_err);
 
@@ -406,7 +406,7 @@ esp_err_t audiostream_handler(httpd_req_t *request) {
   }
   
   JsonDocument json_obj;
-  json_obj["audiostream"] = String(audioStreamRunning);
+  json_obj["audiostream"] = audioStreamRunning;
   
   Serial.print("Audio streaming :");
   Serial.println(String(audioStreamRunning));

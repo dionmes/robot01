@@ -26,7 +26,10 @@ enum bodyAction {
   TURN = 10,
   BODYSHAKE = 11,
   STOP = 12,
-  BACK_AND_FORTH =13
+  BACK_AND_FORTH = 13,
+  WALK_FORWARD = 14,
+  WALK_BACKWARD = 15
+
 };
 
 /*
@@ -43,42 +46,47 @@ public:
 
 private:
   // Task handler for actions
-  TaskHandle_t bodyTaskHandle;
+  TaskHandle_t bodyTaskHandle;   
 
   // Values for tasks
   int _action;
   bool _direction;
   int _steps;
 
-  bool actionRunning;
+  // indicator of running actions
+  bool actionRunning;   
 
   // Task function to call. Pass struct bodyActionParams for action parameters.
   static void bodyActionTask(void* actionParams);
 
-  // left Upper Arm movement, pass direction boolean (up = true), and steps of movement.
+  // left Upper Arm movement, params: pass direction boolean (up = true), and steps of movement.
   void leftUpperArm(bool up, int steps = 0);
-  // right Upper Arm movement, pass direction boolean (up = true), and steps of movement.
+  // right Upper Arm movement, params: pass direction boolean (up = true), and steps of movement.
   void rightUpperArm(bool up, int steps = 0);
-  // left Lower Arm movement, pass direction boolean (up = true), and steps of movement.
+  // left Lower Arm movement, params: pass direction boolean (up = true), and steps of movement.
   void leftLowerArm(bool up, int steps = 0);
-  // right Lower Arm movement, pass direction boolean (up = true), and steps of movement.
+  // right Lower Arm movement, params: pass direction boolean (up = true), and steps of movement.
   void rightLowerArm(bool up, int steps = 0);
-  // left leg movement, pass direction boolean (forward = true), and steps of movement.
+  // left leg movement, params: pass direction boolean (forward = true), and steps of movement.
   void leftLeg(bool forward, int steps = 0);
-  // right leg movement, pass direction boolean (forward = true), and steps of movement.
+  // right leg movement, params: pass direction boolean (forward = true), and steps of movement.
   void rightLeg(bool forward, int steps = 0);
-  // hip movement, pass direction boolean (left = true), and steps of movement.
+  // hip movement, params: pass direction boolean (left = true), and steps of movement.
   void hip(bool left, int steps = 0);
-  // left Hand ligt, on = true, steps of staying on, 0 is indifinite
+  // left Hand ligt, params: on = true, steps not used
   void leftHandLight(bool on, int steps = 0);
-  // right Hand ligt, on = true, steps of staying on, 0 is indifinite
+  // right Hand ligt, params: on = true, steps not used
   void rightHandLight(bool on, int steps = 0);
-  // Turn body , left = true
+  // Turn body , params: left = true for turning left
   void turn(bool left, int steps);
-  // Shake body , left and steps not used
+  // Shake body , params: left and steps not used
   void shake(bool left, int steps);
-  // Back and Forth, left and steps not used
+  // Back and Forth, params: left and steps not used
   void back_and_forth(bool left, int steps);
+  // Walk forward, params: left not used
+  void walk_forward(bool left, int steps);
+  // Walk backward, params: left not used
+  void walk_backward(bool left, int steps);
 
 };
 

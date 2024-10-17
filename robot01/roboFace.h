@@ -66,38 +66,48 @@ class roboFace {
 
     // display Text with size 2 - medium, or 3 - Large. (to be called from displayTask inside a vtask)
     void displayText(String text, int size);
-    //  Scrolling text. To be implemented. (to be called from displayTask inside a vtask)
+    //  Scrolling text. 
     void scrollText(String text, int size);
-    // Smile.(to be called from displayTask inside a vtask)
-    void smile(int wait);
-    // Set Face neutral. (to be called from displayTask inside a vtask)
+    // Set Face neutral. 
     void neutral();
-    // drawbitmap. (to be called from displayTask inside a vtask)
+    // Smile.
+    void smile();
+    // drawbitmap. 
     void drawbitmap(int index);
-    // IMG Loop(to be called from displayTask inside a vtask)
+    // IMG Loop
     void imgloop();
-    // Look Left Animation. (to be called from displayTask inside a vtask)
+    // Look Left Animation.
     void lookLeftAni(int wait);
-    // Look Right animation. (to be called from displayTask inside a vtask)
+    // Look Right animation. 
     void lookRightAni(int wait);
-    // Startup sequence of multiple animations. (to be called from displayTask inside a vtask)
+    // Blink with both eyes
     void blink(int wait);
-    // Wink left eye. (to be called from displayTask inside a vtask)
+    // Wink left eye.
     void wink(int wait);
-    // Shake eyes left to right and right to left. (to be called from displayTask inside a vtask)
+    // Shake eyes left to right and right to left. 
     void shake(int wait);
-    // Cylon function, moving leds from left to righ and vice versa. To be implemented.(to be called from displayTask inside a vtask)
+    // Cylon function, moving leds from left to righ and vice versa. To be implemented.
     void cylon(int wait);
-    // Fill rectangle patter for test purposes. (to be called from displayTask inside a vtask)
+    // Fill rectangle patter for test purposes. 
     void testfillrect(int wait);
-    // Scroll screen left (to be called from displayTask inside a vtask)
+    // Scroll screen left
     void scrollScreenLeft();
-    // Scroll screen right (to be called from displayTask inside a vtask)
+    // Scroll screen right
     void scrollScreenRight();
     // Stop scrolling
     void stopScrolling();
     // Animation
     void animation(const byte frames[][512], int loop);
+    // Chat animation
+    void chat();
+    // Small circle on face, part ofChat animation
+    void mouth_small_circle();
+    // large circle on face, part ofChat animation
+    void mouth_large_circle();
+    // Small rounded rectangle on face, part ofChat animation
+    void mouth_small_rrect();
+    // Large rounded rectangle on face, part ofChat animation
+    void mouth_large_rrect();
 
 };
 

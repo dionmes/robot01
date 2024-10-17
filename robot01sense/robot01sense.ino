@@ -631,14 +631,9 @@ void setup() {
   WiFiClient httpWifiInstance;
   HttpClient http(httpWifiInstance, config_master_ip, 5000);
 
-  String httpPath = "/api/register_ip?ip=" + WiFi.localIP().toString() + "&device=robot01sense";
-
+  String httpPath = "/api/setting?item=robot01sense_ip&value=" + WiFi.localIP().toString();
   int http_err = http.get(httpPath);
-  if ( http_err == 0 ) {
-    Serial.println(http.responseBody());
-  } else {
-    Serial.printf("Got status code: %u \n", http_err);
-  }
+  http_err == 0 ? Serial.println(http.responseBody()) : Serial.printf("Got status code: %u \n", http_err);
 
   // camera init
 

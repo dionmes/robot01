@@ -12,7 +12,7 @@
 #include "animations.h"
 
 // vTask core
-#define DISPLAY_ROUTINE_TASK_CORE 0
+#define DISPLAY_ROUTINE_TASK_CORE 1
 
 // Face coordinates
 #define rectX1 0
@@ -62,13 +62,15 @@ void roboFace::exec(int action, String text, int intValue) {
   _intValue = intValue;
 
   xTaskCreatePinnedToCore(this->displayTask, "displayTask", 8192, (void*)this, 20, &faceTaskHandle, DISPLAY_ROUTINE_TASK_CORE);
-  vTaskDelay(1000 / portTICK_PERIOD_MS);
+  vTaskDelay(500 / portTICK_PERIOD_MS);
 };
 
 void roboFace::displayTask(void* roboFaceInstance) {
 
   roboFace* roboFaceRef = (roboFace*)roboFaceInstance;
   roboFaceRef->actionRunning = true;
+  Serial.print("Display action : ");
+  Serial.println(roboFaceRef->_action);
 
   switch (roboFaceRef->_action) {
     case faceAction::DISPLAYTEXTSMALL:
@@ -88,7 +90,7 @@ void roboFace::displayTask(void* roboFaceInstance) {
       break;
 
     case faceAction::SMILE:
-      roboFaceRef->smile(roboFaceRef->_intValue);
+      roboFaceRef->smile();
       break;
 
     case faceAction::LOOKLEFT:
@@ -156,7 +158,7 @@ void roboFace::displayTask(void* roboFaceInstance) {
       break;
 
     case faceAction::CHAT_ANIMATION:
-      roboFaceRef->animation(chat_frames,roboFaceRef->_intValue);
+      roboFaceRef->chat();
       break;
 
     case faceAction::IMG_LOOP:
@@ -258,7 +260,7 @@ void roboFace::neutral() {
   ledMatrix.display();
 };
 
-void roboFace::smile(int wait) {
+void roboFace::smile() {
   neutral();
   ledMatrix.fillTriangle(leftEyeX + 17, leftEyeY + 18, rightEyeX - 17, rightEyeY + 18, leftEyeX + ((rightEyeX - leftEyeX) / 2), leftEyeY + 25, 0);
   ledMatrix.display();
@@ -320,7 +322,6 @@ void roboFace::blink(int wait) {
 
   neutral();
 };
-
 
 void roboFace::wink(int wait) {
   int _wait = wait == 0 ? 50 : wait;
@@ -443,7 +444,6 @@ void roboFace::stopScrolling() {
 
 void roboFace::animation(const byte frames[][512], int loop) {
   uint32_t notifyStopValue;
-
   while(true) {
     int frame_count = 27;
     for(int n = 0; n<=loop; n++) {
@@ -462,3 +462,62 @@ void roboFace::animation(const byte frames[][512], int loop) {
     }
   }
 }
+
+void roboFace::chat() {
+  uint32_t notifyStopValue;
+  int arr [] = { 4, 5, 2, 3, 4, 1, 5, 3, 2, 4, 5, 3, 2, 1, 5, 2, 4 };
+  while(true) {
+    
+    for (int i=0; i<sizeof arr/sizeof arr[0]; i++) {
+
+      if (xTaskNotifyWait(0x00, 0x00, &notifyStopValue, 0) == pdTRUE) {
+        vTaskDelay(5);
+        vTaskDelete(NULL);
+      }
+
+      switch (arr[i]) {
+        case 1:
+          neutral();
+          break;
+        case 2:
+          mouth_small_circle();
+          break;
+        case 3:
+          mouth_large_circle();
+          break;
+        case 4:
+          mouth_small_rrect();
+          break;
+        case 5:
+          mouth_large_rrect();
+          break;
+      }
+
+      vTaskDelay(200);
+    }
+  }
+}
+
+void roboFace::mouth_small_circle() {
+  neutral();
+  ledMatrix.fillCircle(leftEyeX + ((rightEyeX - leftEyeX) / 2), leftEyeY + 20, 6, 0);
+  ledMatrix.display();
+};
+
+void roboFace::mouth_large_circle() {
+  neutral();
+  ledMatrix.fillCircle(leftEyeX + ((rightEyeX - leftEyeX) / 2), leftEyeY + 20, 9, 0);
+  ledMatrix.display();
+};
+
+void roboFace::mouth_small_rrect() {
+  neutral();
+  ledMatrix.fillRoundRect(leftEyeX + 16, leftEyeY + 18, 24, 6, 2, 0);
+  ledMatrix.display();
+};
+
+void roboFace::mouth_large_rrect() {
+  neutral();
+  ledMatrix.fillRoundRect(leftEyeX + 14, leftEyeY + 16, 28, 10, 2, 0);
+  ledMatrix.display();
+};
