@@ -12,7 +12,7 @@
 #include "animations.h"
 
 // vTask core
-#define DISPLAY_ROUTINE_TASK_CORE 1
+#define DISPLAY_ROUTINE_TASK_CORE 0
 
 // Face coordinates
 #define rectX1 0
@@ -237,7 +237,6 @@ void roboFace::scrollText(String text, int wait) {
     }
 
     vTaskDelay(wait);
-  
   }
 
 };
@@ -521,3 +520,4 @@ void roboFace::mouth_large_rrect() {
   ledMatrix.fillRoundRect(leftEyeX + 14, leftEyeY + 16, 28, 10, 2, 0);
   ledMatrix.display();
 };
+

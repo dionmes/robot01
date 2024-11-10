@@ -43,7 +43,9 @@ String ROBOT_NAME = "Sappie";
 AsyncUDP udp;
 #define AUDIO_UDP_PORT 9000       // UDP audio over I2S
 
-uint8_t *i2sbuffer = new uint8_t [1500]; // A little over packet length to buffer
+#define I2S_BUFFER_SIZE 8832 // x packets of 1472 bytes
+uint8_t *i2sbuffer = new uint8_t [I2S_BUFFER_SIZE + 1472]; 
+uint16_t i2sbuffer_pointer = 0;
 
 #define robot01_I2S_BCK 16
 #define robot01_I2S_WS 17
@@ -635,6 +637,14 @@ IRAM_ATTR void udpRXCallBack(AsyncUDPPacket &packet) {
 
   const uint8_t *packet_data = (const uint8_t *)packet.data();
   const size_t packet_length = packet.length();
+
+  // Flush buffer on packet of size 1
+  if (packet_length == 1) {
+    I2S.write((uint8_t *)i2sbuffer, i2sbuffer_pointer);
+    i2sbuffer_pointer = 0;
+    return;
+  }
+
   float sample;
   uint8_t *f_ptr = (uint8_t *)&sample;
   uint32_t i2sValue;
@@ -648,15 +658,20 @@ IRAM_ATTR void udpRXCallBack(AsyncUDPPacket &packet) {
     
     i2sValue = static_cast<int32_t>((sample * 32767.0f) * i2sGainMultiplier);
 
-    i2sbuffer[i] = static_cast<uint8_t>(i2sValue & 0xFF);
-    i2sbuffer[i + 1] = static_cast<uint8_t>((i2sValue >> 8) & 0xFF);
-    i2sbuffer[i + 2] = static_cast<uint8_t>((i2sValue >> 16) & 0xFF);
-    i2sbuffer[i + 3] = static_cast<uint8_t>((i2sValue >> 24) & 0xFF);
+    i2sbuffer[i2sbuffer_pointer + i] = static_cast<uint8_t>(i2sValue & 0xFF);
+    i2sbuffer[i2sbuffer_pointer + i + 1] = static_cast<uint8_t>((i2sValue >> 8) & 0xFF);
+    i2sbuffer[i2sbuffer_pointer + i + 2] = static_cast<uint8_t>((i2sValue >> 16) & 0xFF);
+    i2sbuffer[i2sbuffer_pointer + i + 3] = static_cast<uint8_t>((i2sValue >> 24) & 0xFF);
 
   };
-
-  I2S.write((uint8_t *)i2sbuffer, packet_length);
   
+  i2sbuffer_pointer = i2sbuffer_pointer + packet_length;
+
+  if (i2sbuffer_pointer > I2S_BUFFER_SIZE) {
+    I2S.write((uint8_t *)i2sbuffer, i2sbuffer_pointer);
+    i2sbuffer_pointer = 0;
+  }
+
 };
 
 /*
