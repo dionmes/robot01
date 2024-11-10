@@ -3,11 +3,12 @@ import requests
 import time
 
 body_action_url = "/bodyaction?action=" 
+debug = True
 
 # Class robot for managing the robot motors, audio and sensors
 # Uses threading for http call to make it non-blocking
 class ROBOT:
-	def __init__(self, ip, timeout=5):
+	def __init__(self, ip, timeout=3):
 		self.ip = ip
 		self.timeout = timeout
 
@@ -21,7 +22,7 @@ class ROBOT:
 
 	def audiostatus(self)->bool:
 		try:
-			response = requests.get('http://' + self.ip + '/audiostream', timeout=self.timeout)
+			response = requests.get('http://' + self.ip + '/audiostream')
 			json_obj = response.json()
 			audio = True if json_obj['audiostream'] == 1 else False
 
@@ -39,4 +40,8 @@ class ROBOT:
 		try:
 			response = requests.get(url, timeout=self.timeout)
 		except Exception as e:
-			print("Request - " + url + " , error : ",e)
+			if debug:
+				print("Robot01 Request - " + url + " , error : ",e)
+			else:
+				print("Robot01 Request error")
+

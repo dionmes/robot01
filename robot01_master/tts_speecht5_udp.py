@@ -80,21 +80,28 @@ class TTS:
 		sock = socket.socket(socket.AF_INET,socket.SOCK_DGRAM)
 
 		print("TTS Audio over UDP worker started.")
+		
 		while self.running:
-			synth_speech = self.audio_q.get()
-			self.brain.robot_expression(synth_speech[1])
+		
+			speech = self.audio_q.get()
+			synth_speech = speech[0]
+			text = speech[1]
+			self.brain.robot_expression(text)
 
-			audio=synth_speech[0]['audio']
-			sample_rate = synth_speech[0]['sampling_rate']
+			audio=synth_speech['audio']
+			sample_rate = synth_speech['sampling_rate']
 	
+			# Send packets of max. 1472 / 4 byte sample size
 			for x in range(0, audio.shape[0],368):
 				start = x
 				end = x + 368
 				sock.sendto(audio[start:end].tobytes(), (self.dest_ip, UDP_PORT))
 				time.sleep(0.021)
-			
-			self.audio_q.task_done()
 
+			# Send packets of 1 byte to flush buffer on robot side
+			sock.sendto(bytes(1), (self.dest_ip, UDP_PORT))
+			self.audio_q.task_done()
+			
 			if self.audio_q.empty() and self.text_q.empty():
 				time.sleep(1) # Wait for queue fill before enabling again
 				if self.audio_q.empty() and self.text_q.empty():

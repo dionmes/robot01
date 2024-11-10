@@ -79,13 +79,10 @@ class BRAIN:
 		self.robot.bodyaction(16,0,30)
 		self.robot.bodyaction(17,0,30)
 		
-		# STT
-		#self.stt_engine.start()
-
 		# enable audio
 		self.setting('audio',"1")
 		
-		# Worker
+		# STT Worker
 		threading.Thread(target=self.stt_worker, daemon=True).start()
 		# Show neutral face
 		self.display.state(3) 
@@ -139,7 +136,6 @@ class BRAIN:
 			print("Setting " + item + " not found")
 			return False
 
-
 	#
 	# API internal get setting handler
 	#
@@ -165,9 +161,74 @@ class BRAIN:
 				return "off"
 		
 		return "Not found"
-			
+
+	# Callback function from speech synthesiser when speech output started // Do not make blocking
+	# self.talking flag to prevent repeated calling
+	def talking_started(self):
+		self.talking = True
+		self.sense.stopmic()
+		# Display talking animation as default
+		self.display.state(23)
+
+	# Callback function from speech synthesiser when speech output stopped // Do not make blocking
+	def talking_stopped(self):
+		self.talking = False
+		if self.mic: # If mic setting was True enable mic again
+			self.sense.startmic()
+		# Display face neutral
+		self.display.state(3)
+		# Arms Neutral
+		self.robot.bodyaction(16,0,30)
+		self.robot.bodyaction(17,0,30)
+
+# Not used at this moment. Callbacks for STT
+#	
+#		# Callback function from speech to texy when listening starts // Do not make blocking
+#		# self.talking flag to prevent repeated calling
+#		def listening(self):
+#			self.listening = True
+#			# Display talking animation
+#			self.display.state(23)
+#				
+#		# Callback function from speech synthesiser when speech output stopped // Do not make blocking
+#		def listening_stopped(self):
+#			self.listening = False
+#			# Display face neutral
+#			self.display.state(3)
+#
+
+	# direct TTS
+	def speak(self,text):
+		try:
+			self.tts_engine.text_q.put_nowait(text)
+		except Exception as e:
+			print("Text queue error : ",type(e).__name__ )
+
+	#STT worker
+	def stt_worker(self):
+		print("stt queue worker started")
+		while True:
+			text = self.stt_q.get()[0]
+			print("From STT: " + text)
+			self.prompt(text)
+			self.stt_q.task_done()
+
+	# Validate IP Addresses
+	def validate_ip_address(self,ip_string):
+		try:
+			ip_object = ipaddress.ip_address(ip_string)
+			return True
+		except Exception as e:
+			print(e)
+			return False			
+
+
+###############
+############### Agentic/LLM functions ############### 
+###############
+
 	#
-	# prompt handler
+	# long response tool/Agent
 	#
 	def prompt(self,text)->str:
 		self.busybrain = True
@@ -211,22 +272,6 @@ class BRAIN:
 
 		return full_response
 		
-	# direct TTS
-	def speak(self,text):
-		try:
-			self.tts_engine.text_q.put_nowait(text)
-		except Exception as e:
-			print("Text queue error : ",type(e).__name__ )
-
-	#STT worker
-	def stt_worker(self):
-		print("stt queue worker started")
-		while True:
-			text = self.stt_q.get()[0]
-			print("From STT: " + text)
-			self.prompt(text)
-			self.stt_q.task_done()
-
 	#
 	# Robotic expression via a LLM based on sentence
 	#
@@ -253,88 +298,47 @@ class BRAIN:
 
 			return
 		elif "EXCITED" in emotion:
-			self.display.action(10,5)
+			self.display.action(10,3)
 			self.robot.bodyaction(7,1,5)
 
 			return
 		elif "DIFFICULT" in emotion:
-			self.display.action(12,5,52)
+			self.display.action(12,3,52)
 			self.robot.bodyaction(12,1,20)
 
 			return
 		elif "LOVE" in emotion:
-			self.display.action(12,5,19)
+			self.display.action(12,3,19)
 			self.robot.bodyaction(17,0,30)
 
 		elif "LIKE" in emotion:
-			self.display.action(12,5,19)
+			self.display.action(12,3,19)
 			self.robot.bodyaction(17,0,30)
 
 			return
 		elif "DISLIKE" in emotion:
-			self.display.action(12,5,42)
+			self.display.action(12,3,42)
 			self.robot.bodyaction(17,0,30)
 
 			return
 		elif "INTERESTED" in emotion:
-			self.display.action(13,1)
+			self.display.action(4,3)
 			self.robot.bodyaction(16,1,20)
 			self.robot.bodyaction(17,0,20)
 
 			return
 		elif "OK" in emotion:
-			self.display.action(8,1)
+			self.display.action(8,3)
 			self.robot.bodyaction(16,0,20)
 			self.robot.bodyaction(17,0,20)
 
 			return
 		elif "NEUTRAL" in emotion:
-			self.display.action(3,1)
+			self.display.action(8,3)
 			self.robot.bodyaction(16,0,20)
 			self.robot.bodyaction(17,1,20)
 
 			return
 
-	# Callback function from speech synthesiser when speech output started // Do not make blocking
-	# self.talking flag to prevent repeated calling
-	def talking_started(self):
-		self.talking = True
-		self.sense.stopmic()
-		# Display talking animation
-		self.display.state(23)
-
-	# Callback function from speech synthesiser when speech output stopped // Do not make blocking
-	def talking_stopped(self):
-		self.talking = False
-		if self.mic: # If mic setting was True enable mic again
-			self.sense.startmic()
-		# Display face neutral
-		self.display.state(3)
-
-	# Callback function from speech to texy when listening starts // Do not make blocking
-	# self.talking flag to prevent repeated calling
-	def listening(self):
-		self.listening = True
-		# Display talking animation
-		self.display.state(23)
-			
-	# Callback function from speech synthesiser when speech output stopped // Do not make blocking
-	def listening_stopped(self):
-		self.listening = False
-		# Display face neutral
-		self.display.state(3)
-
-###############
-############### Helper functions ############### 
-###############
-
-	# Validate IP Addresses
-	def validate_ip_address(self,ip_string):
-		try:
-			ip_object = ipaddress.ip_address(ip_string)
-			return True
-		except Exception as e:
-			print(e)
-			return False
 
 

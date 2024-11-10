@@ -4,12 +4,13 @@ import time
 
 # url for display action
 display_action_url = '/displayaction?action='
+debug = True
 
 # Class display for driving the led display/face of robot01
 # Uses threading for http call to make it non-blocking
 # See below for Actions & Items
 class DISPLAY:
-	def __init__(self, ip, timeout=7):
+	def __init__(self, ip, timeout=3):
 		# ip of robot/display
 		self.ip = ip
 		# timeout of http request
@@ -49,4 +50,8 @@ class DISPLAY:
 		try:
 			requests.get(url, timeout=self.timeout)
 		except Exception as e:
-			print("Request - " + url + " , error : ",e)
+			if debug:
+				print("Display Request - " + url + " , error : ", e)
+			else:
+				print("Display Request error")
+			
