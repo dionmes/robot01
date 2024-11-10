@@ -115,6 +115,14 @@ void bodyControl::bodyActionTask(void* bodyControlInstance) {
       bodyControlRef->rightUpperArm(bodyControlRef->_direction, bodyControlRef->_steps);
       break;
 
+    case bodyAction::BOTH_LOWER_ARMS:
+      bodyControlRef->bothLowerArms(bodyControlRef->_direction, bodyControlRef->_steps);
+      break;
+
+    case bodyAction::BOTH_UPPER_ARMS:
+      bodyControlRef->bothUpperArms(bodyControlRef->_direction, bodyControlRef->_steps);
+      break;
+
     case bodyAction::LEFTLEG:
       bodyControlRef->leftLeg(bodyControlRef->_direction, bodyControlRef->_steps);
       break;
@@ -228,6 +236,44 @@ void bodyControl::rightUpperArm(bool up, int steps) {
   }
 
   up ? mcp2.digitalWrite(RIGHTUPPERARM_UP_PIN, 0) : mcp2.digitalWrite(RIGHTUPPERARM_DOWN_PIN, 0);
+};
+
+void bodyControl::bothLowerArms(bool up, int steps) {
+  uint32_t notifyStopValue; // vtask notifier to stop
+
+  up ? mcp2.digitalWrite(RIGHTLOWERARM_UP_PIN, 1) : mcp2.digitalWrite(RIGHTLOWERARM_DOWN_PIN, 1);
+  up ? mcp1.digitalWrite(LEFTLOWERARM_UP_PIN, 1) : mcp1.digitalWrite(LEFTLOWERARM_DOWN_PIN, 1);
+
+  // steps routine with vtask notify for stopping  
+  for (int x = 0; x < steps; x = ++x) {
+    if (xTaskNotifyWait(0x00, 0x00, &notifyStopValue, 0) == pdTRUE) {
+      vTaskDelay(5);
+      vTaskDelete(NULL);
+    }
+    vTaskDelay(STEPWAIT);
+  }
+
+  up ? mcp2.digitalWrite(RIGHTLOWERARM_UP_PIN, 0) : mcp2.digitalWrite(RIGHTLOWERARM_DOWN_PIN, 0);
+  up ? mcp1.digitalWrite(LEFTLOWERARM_UP_PIN, 0) : mcp1.digitalWrite(LEFTLOWERARM_DOWN_PIN, 0);
+};
+
+void bodyControl::bothUpperArms(bool up, int steps) {
+  uint32_t notifyStopValue; // vtask notifier to stop
+
+  up ? mcp2.digitalWrite(RIGHTUPPERARM_UP_PIN, 1) : mcp2.digitalWrite(RIGHTUPPERARM_DOWN_PIN, 1);
+  up ? mcp1.digitalWrite(LEFTUPPERARM_UP_PIN, 1) : mcp1.digitalWrite(LEFTUPPERARM_DOWN_PIN, 1);
+
+  // steps routine with vtask notify for stopping  
+  for (int x = 0; x < steps; x = ++x) {
+    if (xTaskNotifyWait(0x00, 0x00, &notifyStopValue, 0) == pdTRUE) {
+      vTaskDelay(5);
+      vTaskDelete(NULL);
+    }
+    vTaskDelay(STEPWAIT);
+  }
+
+  up ? mcp2.digitalWrite(RIGHTUPPERARM_UP_PIN, 0) : mcp2.digitalWrite(RIGHTUPPERARM_DOWN_PIN, 0);
+  up ? mcp1.digitalWrite(LEFTUPPERARM_UP_PIN, 0) : mcp1.digitalWrite(LEFTUPPERARM_DOWN_PIN, 0);
 };
 
 void bodyControl::leftLeg(bool forward, int steps) {

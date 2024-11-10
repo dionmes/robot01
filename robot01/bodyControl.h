@@ -28,8 +28,9 @@ enum bodyAction {
   STOP = 12,
   BACK_AND_FORTH = 13,
   WALK_FORWARD = 14,
-  WALK_BACKWARD = 15
-
+  WALK_BACKWARD = 15,
+  BOTH_UPPER_ARMS=16,
+  BOTH_LOWER_ARMS=17
 };
 
 /*
@@ -64,10 +65,14 @@ private:
   // right Upper Arm movement, params: pass direction boolean (up = true), and steps of movement.
   void rightUpperArm(bool up, int steps = 0);
   // left Lower Arm movement, params: pass direction boolean (up = true), and steps of movement.
+  void bothUpperArms(bool up, int steps = 0);
+  // both upper Arm simultanious movement, params: pass direction boolean (up = true), and steps of movement.
   void leftLowerArm(bool up, int steps = 0);
   // right Lower Arm movement, params: pass direction boolean (up = true), and steps of movement.
   void rightLowerArm(bool up, int steps = 0);
   // left leg movement, params: pass direction boolean (forward = true), and steps of movement.
+  void bothLowerArms(bool up, int steps = 0);
+  // both Lower Arm simultanious movement, params: pass direction boolean (up = true), and steps of movement.
   void leftLeg(bool forward, int steps = 0);
   // right leg movement, params: pass direction boolean (forward = true), and steps of movement.
   void rightLeg(bool forward, int steps = 0);
