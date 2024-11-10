@@ -19,6 +19,9 @@ voice=4830
 AUDIO_Q = 8
 TEXT_Q = 8
 
+# Rececing buffer size for emptying ( RECEIVING_BUFFER * 1472)
+RECEIVING_BUFFER = 6
+
 # Text to speech class for robot01 project
 class TTS:	
 	# init
@@ -55,14 +58,15 @@ class TTS:
 	def generate_speech(self):
 		print("TTS Speech synthesizer worker started.")	
 		while self.running:
+			
 			text = self.text_q.get()
+			synth_speech = self.synthesiser(text, forward_params={"speaker_embeddings": self.speaker_embeddings})
 
-			speech = self.synthesiser(text, forward_params={"speaker_embeddings": self.speaker_embeddings})
 			if not self.brain.talking:
 				self.brain.talking_started()
 
 			try:
-				self.audio_q.put_nowait(speech)
+				self.audio_q.put_nowait([synth_speech,text])
 			except Exception as e:
 				print("Audio queue error : ", type(e).__name__ )
 			
@@ -77,25 +81,26 @@ class TTS:
 
 		print("TTS Audio over UDP worker started.")
 		while self.running:
-			speech = self.audio_q.get()
+			synth_speech = self.audio_q.get()
+			self.brain.robot_expression(synth_speech[1])
 
-			audio=speech['audio']
-			sample_rate = speech['sampling_rate']
+			audio=synth_speech[0]['audio']
+			sample_rate = synth_speech[0]['sampling_rate']
 	
 			for x in range(0, audio.shape[0],368):
 				start = x
 				end = x + 368
 				sock.sendto(audio[start:end].tobytes(), (self.dest_ip, UDP_PORT))
-				time.sleep(0.022) # Audio stream limit
-
-			self.audio_q.task_done()
+				time.sleep(0.021)
 			
+			self.audio_q.task_done()
+
 			if self.audio_q.empty() and self.text_q.empty():
 				time.sleep(1) # Wait for queue fill before enabling again
 				if self.audio_q.empty() and self.text_q.empty():
 					if self.brain.talking:
 						self.brain.talking_stopped()
-
+						
 	# returns text_q size
 	def queue_size(self)->int:
 		return self.text_q.qsize()
@@ -117,3 +122,5 @@ class TTS:
 		
 		# Wait for save shutdown of threads and queues
 		time.sleep(1)
+
+

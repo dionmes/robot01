@@ -103,7 +103,7 @@ class STT:
 					speech_detected = True
 					print("STT Detection started")
 					#Send display action
-					self.brain.display.action(19)
+					self.brain.display.state(19)
 
 			# Create Audio transcription sample until silence is detected via nonsilence_counter. 
 			# Currently no max sample size. 
@@ -126,7 +126,7 @@ class STT:
 					#self.vad_model.reset_states() 
 
 					#Send display action 
-					self.brain.display.action(3)
+					self.brain.display.state(3)
 					np_audio_chunk = np.empty(0)
 					
 	# async function to do audio transcription
@@ -135,7 +135,7 @@ class STT:
 		while self.running:
 			transcription = ""
 			audio_chunk = self.audiochunks_q.get()
-			self.brain.display.action(20)
+			self.brain.display.state(20)
 
 			input_features = self.processor(audio_chunk, sampling_rate=16000, return_tensors="pt", device="cuda").input_features
 			input_features = input_features.to(device, dtype=torch_dtype)
@@ -151,7 +151,7 @@ class STT:
 				print("Transcribe error : ",e)
 
 			self.audiochunks_q.task_done()
-			self.brain.display.action(3)
+			self.brain.display.state(3)
 
 	def start(self):
 		if not self.running:

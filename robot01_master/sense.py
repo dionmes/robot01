@@ -44,7 +44,6 @@ class SENSE:
 		return [image_base64]
 
 	def safe_http_call(self,url):
-		
 		try:
 			requests.get(url, timeout=self.timeout)
 		except Exception as e:

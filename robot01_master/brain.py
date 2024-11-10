@@ -1,13 +1,14 @@
 import os
+from datetime import datetime
 import ipaddress
 import requests
 import json
+import base64
+import time
+
 import threading
 from threading import Timer
 import queue
-import base64
-from datetime import datetime
-import time
 
 from tts_speecht5_udp import TTS
 from stt_distil_whisper import STT
@@ -15,15 +16,24 @@ from robot01 import ROBOT
 from display import DISPLAY
 from sense import SENSE
 
-# max words to tts in one go
-tts_max_sentence_lenght = 12
+import ollama
 
-# Ollama LLM Model
-LLM_MODEL = "robot01brain:latest"
-#llm context
-LLM_CONTEXT_ID = "1"
+# max words to tts in one go
+tts_max_sentence_lenght = 20
+
+# Ollama LLM Models
+LLM_MODEL = "llama3.2"
+LLM_EXPRESSION_MODEL = "gemma2:2b"
+
 # llm url
 LLM_URL = "http://localhost:11434/api/chat"
+
+# LLM system message
+LLM_SYSTEM = """Respond like you are not an AI language model or program, but respond like you are a small robot called Sappie.
+You do not have to introduce yourself everytime, only when asked.
+Do not make robot sounds.
+Only respond with numbers in a written out format.
+"""
 
 # STT Queue size
 STT_Q_SIZE = 3
@@ -48,12 +58,15 @@ class BRAIN:
 		# Audio is on/off		
 		self.audio = False
 
-		# Robot01
-		self.robot = ROBOT(self.robot01_ip)
 		# Display engine
 		self.display = DISPLAY(self.robot01_ip)
+		self.display.state(18) # Show face gears animation
+		
+		# Robot01
+		self.robot = ROBOT(self.robot01_ip)
 		# tts engine
 		self.tts_engine = TTS(self.robot01_ip, self)
+		
 		# Sense engine
 		self.sense = SENSE(self.robot01sense_ip)
 
@@ -63,21 +76,22 @@ class BRAIN:
 
 	# Start brain	
 	def start(self):
-		# Show face gears animation
-		self.display.action(18) 
-
+		self.robot.bodyaction(16,0,30)
+		self.robot.bodyaction(17,0,30)
+		
 		# STT
 		#self.stt_engine.start()
-		#TTS
-		#self.tts_engine.start()
+
+		# enable audio
+		self.setting('audio',"1")
 		
 		# Worker
 		threading.Thread(target=self.stt_worker, daemon=True).start()
 		# Show neutral face
-		self.display.action(3) 
+		self.display.state(3) 
 
 	#
-	# API internal setting handler
+	# API brain setting handler
 	#
 	def setting(self,item,value)->bool:
 		if item in "robot01_ip robot01sense_ip audio mic":	
@@ -125,6 +139,7 @@ class BRAIN:
 			print("Setting " + item + " not found")
 			return False
 
+
 	#
 	# API internal get setting handler
 	#
@@ -154,60 +169,48 @@ class BRAIN:
 	#
 	# prompt handler
 	#
-	def prompt(self,text):
+	def prompt(self,text)->str:
 		self.busybrain = True
 
-		# LLM request object
-		llm_obj = { \
-			"model": LLM_MODEL,	 \
-			"keep_alive": -1, \
-			"context": [LLM_CONTEXT_ID], \
-			"messages" : [ \
-			{ "role" : "user", "content" : text } \
-			]}
-
 		# Show gear animation in display				
-		self.display.action(18)
-	
-		# Streaming post request
-		try:
-			llm_response = requests.post(LLM_URL, json = llm_obj, stream=True, timeout=60)	  
-			llm_response.raise_for_status()
-
-		except Exception as e:
-			print("LLM error : ",e)
-			# Show image 14 (bmp_exploding) in display
-			self.display.action(action=12, reset=5, item=14)
-			return
-	
+		self.display.state(18)
+		
 		# iterate over streaming parts and construct sentences to send to tts
 		message = ""
 		n = 0
 		
-		for line in llm_response.iter_lines():
+		full_response = ""
+		
+		stream = ollama.chat(
+			model = LLM_MODEL,
+			keep_alive = -1,
+			messages=[{'role': 'system', 'content': LLM_SYSTEM},{'role': 'user', 'content': text}],
+			stream=True,
+		)
+		
+		for chunk in stream:  
+			token = chunk['message']['content']
+			full_response = full_response + token
 			
-			body = json.loads(line)
-			token = body['message']['content']
-			#print(token)
+			# print(token)
 			if token in ".,?!...;:" or n > tts_max_sentence_lenght:
 				message = message + token
 				if not message.strip() == "" and len(message) > 1:
 					print("From LLM: " + message)
 					self.speak(message)
 					# Slow down if tts queue gets larger
-					time.sleep(self.tts_engine.queue_size() * 0.500)
+					time.sleep(self.tts_engine.queue_size() * 0.700)
 	
 				message = ""
 				n = 0
 			else:
 				message = message + token
 				n = n + 1
-		
-		if 'context' in body:
-			print(body['context'])
-		
+				
 		self.busybrain = False
 
+		return full_response
+		
 	# direct TTS
 	def speak(self,text):
 		try:
@@ -223,14 +226,82 @@ class BRAIN:
 			print("From STT: " + text)
 			self.prompt(text)
 			self.stt_q.task_done()
-	
+
+	#
+	# Robotic expression via a LLM based on sentence
+	#
+	def robot_expression(self,sentence):
+		expression_system = """"Express yourself in 1 word based on the user sentence with one of the following categories: 
+		 SAD, HAPPY, EXCITED, NEUTRAL, DIFFICULT, LOVE, DISLIKE, INTERESTED, OK, LIKE. """
+		response = ollama.chat(
+			model = LLM_EXPRESSION_MODEL,
+			keep_alive = -1,
+			messages=[{'role': 'system', 'content': expression_system},{'role': 'user', 'content': sentence}],
+		)
+		
+		emotion =  response['message']['content']
+		if "SAD" in emotion:
+			self.display.action(12,5,38)
+			self.robot.bodyaction(16,0,30)
+			self.robot.bodyaction(17,0,30)
+			
+			return
+		elif "HAPPY" in emotion:
+			self.display.action(12,5,44)
+			self.robot.bodyaction(16,1,30)
+			self.robot.bodyaction(17,1,30)
+
+			return
+		elif "EXCITED" in emotion:
+			self.display.action(10,5)
+			self.robot.bodyaction(7,1,5)
+
+			return
+		elif "DIFFICULT" in emotion:
+			self.display.action(12,5,52)
+			self.robot.bodyaction(12,1,20)
+
+			return
+		elif "LOVE" in emotion:
+			self.display.action(12,5,19)
+			self.robot.bodyaction(17,0,30)
+
+		elif "LIKE" in emotion:
+			self.display.action(12,5,19)
+			self.robot.bodyaction(17,0,30)
+
+			return
+		elif "DISLIKE" in emotion:
+			self.display.action(12,5,42)
+			self.robot.bodyaction(17,0,30)
+
+			return
+		elif "INTERESTED" in emotion:
+			self.display.action(13,1)
+			self.robot.bodyaction(16,1,20)
+			self.robot.bodyaction(17,0,20)
+
+			return
+		elif "OK" in emotion:
+			self.display.action(8,1)
+			self.robot.bodyaction(16,0,20)
+			self.robot.bodyaction(17,0,20)
+
+			return
+		elif "NEUTRAL" in emotion:
+			self.display.action(3,1)
+			self.robot.bodyaction(16,0,20)
+			self.robot.bodyaction(17,1,20)
+
+			return
+
 	# Callback function from speech synthesiser when speech output started // Do not make blocking
 	# self.talking flag to prevent repeated calling
 	def talking_started(self):
 		self.talking = True
 		self.sense.stopmic()
 		# Display talking animation
-		self.display.action(23)
+		self.display.state(23)
 
 	# Callback function from speech synthesiser when speech output stopped // Do not make blocking
 	def talking_stopped(self):
@@ -238,20 +309,20 @@ class BRAIN:
 		if self.mic: # If mic setting was True enable mic again
 			self.sense.startmic()
 		# Display face neutral
-		self.display.action(3)
+		self.display.state(3)
 
 	# Callback function from speech to texy when listening starts // Do not make blocking
 	# self.talking flag to prevent repeated calling
 	def listening(self):
 		self.listening = True
 		# Display talking animation
-		self.display.action(23)
+		self.display.state(23)
 			
 	# Callback function from speech synthesiser when speech output stopped // Do not make blocking
 	def listening_stopped(self):
 		self.listening = False
 		# Display face neutral
-		self.display.action(3)
+		self.display.state(3)
 
 ###############
 ############### Helper functions ############### 

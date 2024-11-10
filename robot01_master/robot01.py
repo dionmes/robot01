@@ -2,6 +2,10 @@ import threading
 import requests
 import time
 
+body_action_url = "/bodyaction?action=" 
+
+# Class robot for managing the robot motors, audio and sensors
+# Uses threading for http call to make it non-blocking
 class ROBOT:
 	def __init__(self, ip, timeout=5):
 		self.ip = ip
@@ -27,7 +31,11 @@ class ROBOT:
 		
 		return audio
 
-	def safe_http_call(self,url):
+	def bodyaction(self, action, direction, steps):
+		threading.Thread( target=self.safe_http_call, args=['http://' + self.ip + body_action_url + str(action) + "&direction=" + str(direction) + "&steps=" + str(steps)] ).start()
+		print("Body action")
+
+	def safe_http_call(self, url):
 		try:
 			response = requests.get(url, timeout=self.timeout)
 		except Exception as e:
