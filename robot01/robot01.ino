@@ -9,15 +9,25 @@
 #include <ESP_I2S.h>
 #include <FS.h>
 #include <SPIFFS.h>
+
 #define FORMAT_SPIFFS_IF_FAILED true
+
+/*
+* Define CPU cores for vtasks
+*/
+#define HTTPD_TASK_CORE 1
+#define BODY_TEST_TASK_CORE 1
+#define bno08x_TASK_CORE 1
 
 /*
 * Master server or 'brain'
 */
-IPAddress master_server_ip;
-
+char config_master_ip[40];
 #include <WiFiManager.h>
+
 WiFiManager wm;
+WiFiManagerParameter custom_masterserver("server", "Master server IP", config_master_ip, 40);
+
 bool shouldSaveConfig = false;
 
 /*
@@ -28,7 +38,7 @@ httpd_handle_t server_httpd = NULL;
 
 // http client
 #include <ArduinoHttpClient.h>
-
+// Json library
 #include <ArduinoJson.h>
 
 /*
@@ -82,7 +92,6 @@ bodyControl bodyControl;
 * Task handlers
 */
 TaskHandle_t wrapper_bno08xUpdateTaskHandle;
-TaskHandle_t AudioStreamTaskHandle;
 TaskHandle_t robotRoutineTask;
 
 /*
@@ -127,36 +136,9 @@ void setup() {
   roboFace.exec(faceAction::DISPLAYTEXTLARGE, "Server");
   Serial.println("Webserver starting");
 
-  char config_master_ip[40];
-
-  // Load config.json from SPIFFS
-  if (SPIFFS.begin(FORMAT_SPIFFS_IF_FAILED)) {
-    Serial.println("mounted file system");
-    if (SPIFFS.exists("/config.json")) {
-      Serial.println(" SPIFFS.open ");
-      File configFile = SPIFFS.open("/config.json", "r");
-      if (configFile) {
-        JsonDocument json;
-        String input = configFile.readString();
-        if (input != NULL) {
-
-          DeserializationError deserializeError = deserializeJson(json, input);
-
-          if (!deserializeError) {
-            strcpy(config_master_ip, json["master_ip"]);
-            Serial.println("config_master_ip");
-          } else {
-            Serial.println("failed to load json config");
-          }
-          configFile.close();
-        }
-      } else {
-        Serial.println("No config file.");
-      }
-    }
-  } else {
-    Serial.println("failed to mount FS");
-  }
+  // load json config
+  loadGlobalConfig();
+  custom_masterserver.setValue(config_master_ip, 40);
 
   // Wifi Manager
   wm.setConnectTimeout(20);
@@ -164,10 +146,7 @@ void setup() {
   // Custom title HTML for the WiFiManager portal
   String customTitle = "<h1>Robot01 config</h1>";
   wm.setCustomHeadElement(customTitle.c_str());
-
-  WiFiManagerParameter custom_masterserver("server", "Master server IP", config_master_ip, 40);
   wm.addParameter(&custom_masterserver);
-
   wm.setSaveConfigCallback(saveConfigCallback);
   
   bool wificonnect = wm.autoConnect("ESP32_robot01", "123456789");
@@ -193,14 +172,18 @@ void setup() {
     configFile.close();
   }
 
-  master_server_ip.fromString(config_master_ip);
-  Serial.printf("Remote master server IP: %s \n", master_server_ip.toString().c_str());
-
   // HTTP API server
   Serial.println("Webserver starting");
 
   httpd_config_t httpd_config = HTTPD_DEFAULT_CONFIG();
   httpd_config.max_uri_handlers = 16;
+  httpd_config.core_id =  HTTPD_TASK_CORE;
+  httpd_config.task_priority = tskIDLE_PRIORITY + 10;
+  httpd_config.backlog_conn = 5;
+  httpd_config.lru_purge_enable = true;
+  httpd_config.max_open_sockets = 3; 
+  httpd_config.recv_wait_timeout = 3;
+  httpd_config.send_wait_timeout = 3;
 
   // Add request handlers to webserver
   httpd_uri_t VL53L1X_url = { .uri = "//VL53L1X_Info", .method = HTTP_GET, .handler = webhandler_VL53L1X_Info, .user_ctx = NULL };
@@ -213,7 +196,9 @@ void setup() {
   httpd_uri_t health_url = { .uri = "/health", .method = HTTP_GET, .handler = webhealth_handler, .user_ctx = NULL };
   httpd_uri_t erase_url = { .uri = "/eraseconfig", .method = HTTP_GET, .handler = config_erase_handler, .user_ctx = NULL };
   httpd_uri_t reset_url = { .uri = "/reset", .method = HTTP_GET, .handler = reset_handler, .user_ctx = NULL };
+  httpd_uri_t wifimanager = { .uri = "/wifimanager", .method = HTTP_GET, .handler = wm_handler, .user_ctx = NULL };
 
+  // Start httpd server
   if (httpd_start(&server_httpd, &httpd_config) == ESP_OK) {
     httpd_register_uri_handler(server_httpd, &VL53L1X_url);
     httpd_register_uri_handler(server_httpd, &BNO08X_url);
@@ -225,6 +210,7 @@ void setup() {
     httpd_register_uri_handler(server_httpd, &health_url);
     httpd_register_uri_handler(server_httpd, &reset_url);
     httpd_register_uri_handler(server_httpd, &erase_url);
+    httpd_register_uri_handler(server_httpd, &wifimanager);
 
     Serial.printf("Server on port: %d \n", httpd_config.server_port);
   } else {
@@ -232,14 +218,25 @@ void setup() {
   }
 
   delay(100);
-  Serial.println("Robot01 API IP : ");
-  Serial.print(WiFi.localIP());
+  Serial.print("Robot01 API IP : ");
+  Serial.println(WiFi.localIP());
+
+  delay(100);
+
+  Serial.printf("Remote master server IP: %s \n", config_master_ip);
+
+  // Register with remote master
+  roboFace.exec(faceAction::DISPLAYTEXTSMALL, "Check in\n with \n" + WiFi.localIP().toString());
+  WiFiClient httpWifiInstance;
+  HttpClient http(httpWifiInstance, config_master_ip, 5000);
+
+  String httpPath = "/api/setting?item=robot01_ip&value=" + WiFi.localIP().toString();
+  int http_err = http.get(httpPath);
+  if (http_err != 0) { Serial.println("Error registering at master"); };
 
   // Audio / I2S init.
   roboFace.exec(faceAction::DISPLAYTEXTLARGE, "AUDIO/I2S");
   I2S.setPins(robot01_I2S_BCK, robot01_I2S_WS, robot01_I2S_OUT, -1, 0); //SCK, WS, SDOUT, SDIN, MCLK
-
-  delay(100);
 
   // Starting VL53L1X
   roboFace.exec(faceAction::DISPLAYTEXTLARGE, "VL53L1X");
@@ -253,6 +250,7 @@ void setup() {
   } else {
     Serial.println("Failed to detect and initialize vl53l1x (range) sensor!");
   }
+
   delay(100);
 
   // Starting wrapper_bno08x
@@ -270,17 +268,8 @@ void setup() {
   Serial.println("Tasks starting");
 
   Serial.println("wrapper_bno08x update task starting");
-  xTaskCreatePinnedToCore(bno08xUpdateTask, "wrapper_bno08x", 4096, NULL, 10, &wrapper_bno08xUpdateTaskHandle, 0);
-
-  // Register with remote master
-  roboFace.exec(faceAction::DISPLAYTEXTSMALL, "Check in\n with \n" + WiFi.localIP().toString());
-  WiFiClient httpWifiInstance;
-  HttpClient http(httpWifiInstance, config_master_ip, 5000);
-
-  String httpPath = "/api/setting?item=robot01_ip&value=" + WiFi.localIP().toString();
-  int http_err = http.get(httpPath);
-  http_err == 0 ? Serial.println(http.responseBody()) : Serial.printf("Got status code: %u \n", http_err);
-
+  xTaskCreatePinnedToCore(bno08xUpdateTask, "wrapper_bno08x", 4096, NULL, 10, &wrapper_bno08xUpdateTaskHandle, bno08x_TASK_CORE);
+  
   // Boot complete
   Serial.println("Boot complete...");
   delay(100);
@@ -294,6 +283,7 @@ void setup() {
   delay(1000);
   roboFace.exec(faceAction::NEUTRAL);
   vTaskDelete(NULL);
+
 }
 
 /*
@@ -390,8 +380,10 @@ esp_err_t audiostream_handler(httpd_req_t *request) {
   
   const char* param_name = "on";
   String param_value = get_url_param(request, param_name, 2);
-
+  
   if (param_value != "invalid") {
+
+    roboFace.exec(faceAction::DISPLAYTEXTSMALL, "Audio : " + param_value);
 
     int value = param_value.toInt();
     
@@ -404,6 +396,8 @@ esp_err_t audiostream_handler(httpd_req_t *request) {
       Serial.println("Audio streaming stopping\n");
       startAudio(false);
     }
+
+    roboFace.exec(faceAction::NEUTRAL);
 
   }
   
@@ -434,6 +428,8 @@ esp_err_t volume_handler(httpd_req_t *request) {
   String param_value = get_url_param(request,param_name, 4);
 
   if (param_value != "invalid") {
+    roboFace.exec(faceAction::DISPLAYTEXTSMALL, "Volume : " + param_value);
+
     int value = param_value.toInt();
     if (value >= 0 && value <= MAX_VOLUME) {
       i2sGainMultiplier = value;
@@ -449,6 +445,8 @@ esp_err_t volume_handler(httpd_req_t *request) {
   serializeJson(json_obj, json_response, jsonSize );
   
   httpd_resp_send(request, json_response , jsonSize );
+
+  roboFace.exec(faceAction::NEUTRAL);
 
   return ESP_OK;
 }
@@ -485,7 +483,7 @@ esp_err_t body_action_handler(httpd_req_t *request) {
 
   } else {
     json_obj["command"] = "success";
-    xTaskCreatePinnedToCore(bodyTestRoutine, "BodyTestRoutine", 4096, NULL, 5, &robotRoutineTask, 1);
+    xTaskCreatePinnedToCore(bodyTestRoutine, "BodyTestRoutine", 4096, NULL, 5, &robotRoutineTask, BODY_TEST_TASK_CORE);
   }
 
   size_t jsonSize = measureJson(json_obj);
@@ -542,6 +540,8 @@ esp_err_t wakeupsense_handler(httpd_req_t *request) {
   httpd_resp_set_hdr(request, "Access-Control-Allow-Origin", "*");
   httpd_resp_set_type(request, HTTPD_TYPE_JSON);
 
+  roboFace.exec(faceAction::DISPLAYTEXTSMALL, "Wake up Sense");
+
   JsonDocument json_obj;
   json_obj["command"] = "succes";
   size_t jsonSize = measureJson(json_obj);
@@ -553,6 +553,9 @@ esp_err_t wakeupsense_handler(httpd_req_t *request) {
   digitalWrite(25, LOW);
 
   httpd_resp_send(request, json_response , jsonSize );  
+
+  roboFace.exec(faceAction::NEUTRAL);
+
   return ESP_OK;
 }
 
@@ -583,10 +586,50 @@ esp_err_t webhealth_handler(httpd_req_t *req) {
 * Restart ESP32
 */
 static esp_err_t reset_handler(httpd_req_t *req) {
+  roboFace.exec(faceAction::DISPLAYTEXTSMALL, "Restart");
   delay(1000);
   Serial.print("Resetting on request.");
+  
+  httpd_resp_set_hdr(req, "Access-Control-Allow-Origin", "*");
+  httpd_resp_set_type(req, HTTPD_TYPE_JSON);  
+
+  JsonDocument json_obj;
+  json_obj["Reset"] = "ok";
+  size_t jsonSize = measureJson(json_obj);
+  char json_response[jsonSize];
+  serializeJson(json_obj, json_response, jsonSize );
+  httpd_resp_send(req, json_response , jsonSize );
+
+  delay(1000);
+
   esp_restart();
-  // No return response neccesary
+
+  return ESP_OK;
+}
+
+/*
+* wm_handler for httpd
+*
+* Wifimanager on demand
+*/
+static esp_err_t wm_handler(httpd_req_t *req) {
+  roboFace.exec(faceAction::DISPLAYTEXTSMALL, "Wifimanager");
+
+  wm.setDebugOutput(true, WM_DEBUG_VERBOSE);
+  
+  wm.setHttpPort(81);
+  wm.setEnableConfigPortal(true);
+
+  // Redirect to portal
+  httpd_resp_set_type(req, "text/html");
+  String redirect_url = "http://" + WiFi.localIP().toString() + ":81/";
+  String redirect_page = "<br><A href='" + redirect_url + "'> Click for redirect to wifimanager. </A><br>";
+  httpd_resp_send(req, redirect_page.c_str() , redirect_page.length());
+  Serial.println(redirect_url);
+
+  wm.startConfigPortal();
+  
+  return ESP_OK;
 }
 
 /*
@@ -595,11 +638,27 @@ static esp_err_t reset_handler(httpd_req_t *req) {
 * Erase config and wifi settings and Restart ESP32
 */
 static esp_err_t config_erase_handler(httpd_req_t *req) {
+  roboFace.exec(faceAction::DISPLAYTEXTSMALL, "Config erase");
+  
   Serial.print("Config erase on request.");
   delay(2000);
+
+  httpd_resp_set_hdr(req, "Access-Control-Allow-Origin", "*");
+  httpd_resp_set_type(req, HTTPD_TYPE_JSON);  
+
+  JsonDocument json_obj;
+  json_obj["Erase"] = "ok";
+  size_t jsonSize = measureJson(json_obj);
+  char json_response[jsonSize];
+  serializeJson(json_obj, json_response, jsonSize );
+  httpd_resp_send(req, json_response , jsonSize );
+
+  delay(1000);
+
   wm.erase();
   esp_restart();
-  // No return response neccesary
+
+  return ESP_OK;
 }
 
 /////////////////////////////// helper function to get param from webrequest //////////////////////////////////////
@@ -706,7 +765,42 @@ void startAudio(bool start) {
   }
 }
 
-////////////////////////////////  Robot Functions  /////////////////////////////////////////
+/*
+* Load json config file. put item(s) in global variables
+*/
+void loadGlobalConfig() {
+
+  // Load config.json from SPIFFS
+  if (SPIFFS.begin(FORMAT_SPIFFS_IF_FAILED)) {
+    Serial.println("mounted file system");
+    if (SPIFFS.exists("/config.json")) {
+      Serial.println(" SPIFFS.open ");
+      File configFile = SPIFFS.open("/config.json", "r");
+      if (configFile) {
+        JsonDocument json;
+        String input = configFile.readString();
+        if (input != NULL) {
+
+          DeserializationError deserializeError = deserializeJson(json, input);
+
+          if (!deserializeError) {
+            // Global variables from config
+            strcpy(config_master_ip, json["master_ip"]);            
+            Serial.println("config_master_ip");
+
+          } else {
+            Serial.println("failed to load json config");
+          }
+          configFile.close();
+        }
+      } else {
+        Serial.println("No config file.");
+      }
+    }
+  } else {
+    Serial.println("failed to mount FS");
+  }
+};
 
 /*
 * Body test Routine

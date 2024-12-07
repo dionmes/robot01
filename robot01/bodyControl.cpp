@@ -9,6 +9,10 @@
 
 #define STEPWAIT 50
 
+// vTask core
+#define ROBOT_TASK_CORE 0
+
+// define pins
 #define LEFTLOWERARM_DOWN_PIN 9 // mcp1
 #define LEFTLOWERARM_UP_PIN 8 // mcp1
 #define LEFTUPPERARM_UP_PIN 11 // mcp1
@@ -40,15 +44,16 @@ void bodyControl::begin() {
   mcp1.init();
   mcp2.init();
 
-  mcp1.portMode(MCP23017Port::A, 0b11111111);          //Port B as input
-  mcp1.portMode(MCP23017Port::B, 0);                   //Port A as output
+  mcp1.portMode(MCP23017Port::A, 0b11111111);          //Port A as input
+  mcp1.portMode(MCP23017Port::B, 0);                   //Port B as output
   mcp1.writeRegister(MCP23017Register::GPIO_A, 0x00);  //Reset port A
   mcp1.writeRegister(MCP23017Register::GPIO_B, 0x00);  //Reset port B
 
-  mcp2.portMode(MCP23017Port::A, 0);                   //Port B as output
-  mcp2.portMode(MCP23017Port::B, 0b11111111);          //Port A as input
+  mcp2.portMode(MCP23017Port::A, 0);                   //Port A as output
+  mcp2.portMode(MCP23017Port::B, 0b11111111);          //Port B as input
   mcp2.writeRegister(MCP23017Register::GPIO_A, 0x00);  //Reset port A
   mcp2.writeRegister(MCP23017Register::GPIO_B, 0x00);  //Reset port B
+
 };
 
 void bodyControl::exec(int action, bool direction, int steps) {
@@ -61,33 +66,20 @@ void bodyControl::exec(int action, bool direction, int steps) {
     
     xTaskNotify( bodyTaskHandle, 1, eSetValueWithOverwrite );
     this->actionRunning = false;
+    vTaskDelay(500 / portTICK_PERIOD_MS);
 
-    mcp1.digitalWrite(LEFTLOWERARM_DOWN_PIN, 0);
-    mcp1.digitalWrite(LEFTLOWERARM_UP_PIN, 0);
-    mcp1.digitalWrite(LEFTUPPERARM_UP_PIN, 0);
-    mcp1.digitalWrite(LEFTUPPERARM_DOWN_PIN, 0);
+    mcp1.writeRegister(MCP23017Register::GPIO_A, 0x00);  //Reset port A
+    mcp1.writeRegister(MCP23017Register::GPIO_B, 0x00);  //Reset port B
 
-    mcp2.digitalWrite(RIGHTLOWERARM_DOWN_PIN, 0);
-    mcp2.digitalWrite(RIGHTLOWERARM_UP_PIN, 0);
-    mcp2.digitalWrite(RIGHTUPPERARM_UP_PIN, 0);
-    mcp2.digitalWrite(RIGHTUPPERARM_DOWN_PIN, 0);
-
-    mcp1.digitalWrite(LEFTLEG_BACK_PIN, 0);
-    mcp1.digitalWrite(LEFTLEG_FORWARD_PIN, 0);
-    mcp2.digitalWrite(RIGHTLEG_FORWARD_PIN, 0);
-    mcp2.digitalWrite(RIGHTLEG_BACK_PIN, 0);
-
-    mcp1.digitalWrite(HIP_RIGHT_PIN, 0);
-    mcp1.digitalWrite(HIP_LEFT_PIN, 0);
-    mcp2.digitalWrite(LEFTHAND_LIGHT_PIN, 0);
-    mcp2.digitalWrite(RIGHTHAND_LIGHT_PIN, 0);
+    mcp2.writeRegister(MCP23017Register::GPIO_A, 0x00);  //Reset port A
+    mcp2.writeRegister(MCP23017Register::GPIO_B, 0x00);  //Reset port B
 
     vTaskDelay(500 / portTICK_PERIOD_MS);
 
     return;
   }
 
-  xTaskCreatePinnedToCore(bodyActionTask, "bodyActionTask", 4096, (void*)this, 10, &bodyTaskHandle, 1);
+  xTaskCreatePinnedToCore(bodyActionTask, "bodyActionTask", 4096, (void*)this, 10, &bodyTaskHandle, ROBOT_TASK_CORE);
 
 }
 

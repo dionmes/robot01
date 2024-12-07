@@ -12,7 +12,7 @@
 #include "animations.h"
 
 // vTask core
-#define DISPLAY_ROUTINE_TASK_CORE 0
+#define DISPLAY_TASK_CORE 0
 
 // Face coordinates
 #define rectX1 0
@@ -61,7 +61,7 @@ void roboFace::exec(int action, String text, int intValue) {
   _text = text;
   _intValue = intValue;
 
-  xTaskCreatePinnedToCore(this->displayTask, "displayTask", 8192, (void*)this, 20, &faceTaskHandle, DISPLAY_ROUTINE_TASK_CORE);
+  xTaskCreatePinnedToCore(this->displayTask, "displayTask", 8192, (void*)this, 20, &faceTaskHandle, DISPLAY_TASK_CORE);
   vTaskDelay(500 / portTICK_PERIOD_MS);
 };
 
@@ -209,6 +209,7 @@ void roboFace::displayText(String text, int size) {
   ledMatrix.display();
 
 };
+
 
 void roboFace::scrollText(String text, int wait) {
   uint32_t notifyStopValue;
