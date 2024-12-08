@@ -178,13 +178,8 @@ void setup() {
   httpd_config_t httpd_config = HTTPD_DEFAULT_CONFIG();
   httpd_config.max_uri_handlers = 16;
   httpd_config.core_id =  HTTPD_TASK_CORE;
-  httpd_config.task_priority = tskIDLE_PRIORITY + 10;
-  httpd_config.backlog_conn = 5;
-  httpd_config.lru_purge_enable = true;
-  httpd_config.max_open_sockets = 3; 
-  httpd_config.recv_wait_timeout = 3;
-  httpd_config.send_wait_timeout = 3;
-
+  httpd_config.task_priority = configMAX_PRIORITIES - 10;
+  
   // Add request handlers to webserver
   httpd_uri_t VL53L1X_url = { .uri = "//VL53L1X_Info", .method = HTTP_GET, .handler = webhandler_VL53L1X_Info, .user_ctx = NULL };
   httpd_uri_t BNO08X_url = { .uri = "/BNO08X_Info", .method = HTTP_GET, .handler = webhandler_wrapper_bno08xInfo, .user_ctx = NULL };
