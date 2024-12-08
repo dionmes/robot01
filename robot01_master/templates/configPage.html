@@ -23,6 +23,7 @@
 		.done(function (result) {
 			config = result;
 			$('#llm_system').val(config.llm_system);
+			$('#agent_system').val(config.agent_system);
 			$('#weather_api_key').val(config.weather_api_key);
 		})
 		.fail(function (xhr, status,errorThrown) {
@@ -37,6 +38,7 @@
 		$("#loader").attr("aria-busy", "true");
 	
 		config.llm_system = $('#llm_system').val();
+		config.agent_system = $('#agent_system').val();
 		config.weather_api_key = $('#weather_api_key').val();
 	
 		$.ajax({
@@ -83,6 +85,8 @@
 	<br><br>
 	<h6>LLM System message</h6>
 	<textarea name="system" id="llm_system" aria-label="llm system"></textarea>	
+	<h6>Agent System message</h6>
+	<textarea name="system" id="agent_system" aria-label="agent system"></textarea>	
 	<h6>Weather API Key</h6>
 	<input type="text" id="weather_api_key" aria-label="weather_api_key">
 	</div>

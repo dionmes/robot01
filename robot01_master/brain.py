@@ -34,6 +34,7 @@ tts_max_sentence_lenght = 20
 
 # Ollama LLM Models
 LLM_MODEL = "llama3.2"
+AGENT_MODEL = "qwen2.5:14b"
 LLM_EXPRESSION_MODEL = "gemma2:2b"
 VISION_MODEL = "llava"
 OLLAMA_KEEP_ALIVE = -1
@@ -45,12 +46,16 @@ CONFIG_FILE = "config.json"
 
 # Default configuration
 default_config = {
-    "llm_system":  """Respond like you are not an AI language model or program, but respond like you are a small robot called Sappie.
-You do not have to introduce yourself everytime, only when asked.
+"llm_system":  """Respond like you are not an AI language model or program, but respond like you are a small robot called Sappie.
+You do not have to introduce yourself, only when asked.
 Do not make robot sounds.
 Only respond with numbers in a written out format. Do not use digits as output.
 """,
-    "weather_api_key": "",
+"agent_system": """ You are the brain of a robot. As a robot you have different tools available.
+These tools allow you to take action and gather information.
+Only respond with numbers in a written out format. Do not use digits as output. This also applies to date and time.
+""",
+"weather_api_key": "",
 }
 
 # Class brain for robot01
@@ -347,10 +352,11 @@ class BRAIN:
 
 		# Langchain prompt
 		supervisor_prompt_template = ChatPromptTemplate.from_messages([
-		("system", self.config["llm_system"] + """
-		Use the looking tool to see what is in front of you. You can use the looking tool to see, to view what is in front you.
-		Use the current_time_and_date tool to get the current date and time.
-		Make sure you output numbers only in written out numbers. Do this also for date and times, they need to be written out completely. Do not use digits as output.
+		("system", self.config["agent_system"] + """
+		Functions and tools are the same and can be treated as such.
+		When as a robot you need to see what is in front of you, use the looking tool.
+		When as a robot you need information about the current date and time, use the current_time_and_date tool.
+		When as a robot you need information about the current weather or the weather forecast, use the weather_forecast tool.
 		"""),
 		("human", "{input}"), 
 		("placeholder", "{agent_scratchpad}"),
@@ -360,12 +366,13 @@ class BRAIN:
 		llm_tools = [
 			StructuredTool.from_function(self.current_time_and_date),
 			StructuredTool.from_function(self.looking),
+			StructuredTool.from_function(self.weather_forecast),
 		]
 		
 		# Langchain llm
 		supervisor_llm = ChatOllama(
-			model="llama3.2",
-			temperature=0.,
+			model=AGENT_MODEL,
+			temperature=0.3,
 			stream=True,
 			keep_alive = OLLAMA_KEEP_ALIVE,
 		)
@@ -410,8 +417,7 @@ class BRAIN:
 	# Looking tool
 	def looking(self) :
 		""" 
-		If asked what do you see, use this tool / function.
-		This function/tool provides the ability to see or look.
+		This function/tool provides the ability to see or look what is in front of you.
 		It will return a description of what it can currently see.
 
 		Args:
@@ -452,7 +458,7 @@ class BRAIN:
 
 		return
 
-	# Looking tool
+	# can you see tool
 	def can_you_see(self, prompt)->str :
 		""" 
 		If asked if you can see a certain object, person, entity or action, use this tool / function.
@@ -490,8 +496,7 @@ class BRAIN:
 		
 	# Current date and time tool
 	def current_time_and_date(self)->str :
-		""" This function / tool provides the current date in realtime, 
-		it will respond with the current day, month, year and time. 
+		""" This tool provides the current date and time. It provides both the date and time.
 
 		Args:
 			none
@@ -502,32 +507,35 @@ class BRAIN:
 		
 		now = datetime.now()	
 		# Format the current date and time as a string
-		formatted_date_time = now.strftime("%A %Y-%m-%d %H:%M:%S")
 		
-		return formatted_date_time
+		output = "The current date is " + now.strftime("%A %Y-%m-%d") + "."
+		output = output + "The current time is " +  now.strftime("%H:%M") + "."
+		print(output)
+		
+		return output
 
-	# Weather forecast and current
+	# Current Weather and weather forecast tool
 	def weather_forecast(self)->str :
-		""" This function / tool provides the current weather and a four day weather forecast. 
+		""" This tool provides the current weather and a five day weather forecast. 
 
 		Args:
 			none
 				
 		Returns:
-			str: a four day weather forecast in json format.
+			str: a five day weather forecast in json format.
 		"""	
-		
-		url = ""
+		# Weather Vleuten		
+		url = "https://api.openweathermap.org/data/2.5/forecast?lat=52.1099315&lon=5.0019636&units=metric&appid=" + self.config["weather_api_key"]
 		
 		try:
-			weather.text = requests.get(url, timeout=self.timeout)
+			response = requests.get(url, timeout=6)
 		except Exception as e:
 			if debug:
 				print("Weather Request - " + url + " , error : ", e)
 			else:
 				print("Weather Request error")
 
-		return formatted_date_time
+		return response.text
 
 ###############
 ############### End of Agentic Tools ############### 

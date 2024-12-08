@@ -16,8 +16,8 @@ device="cuda"
 voice=4830
 
 # queue sizes
-AUDIO_Q = 8
-TEXT_Q = 15
+AUDIO_Q_SIZE = 8
+TEXT_Q_SIZE = 15
 
 # Rececing buffer size for emptying ( RECEIVING_BUFFER * 1472)
 RECEIVING_BUFFER = 6
@@ -37,9 +37,9 @@ class TTS:
 		self.running = False
 		
 		#Queues
-		self.text_q = queue.Queue(maxsize=TEXT_Q)
-		self.audio_q = queue.Queue(maxsize=AUDIO_Q)
-	
+		self.text_q = queue.Queue(maxsize=TEXT_Q_SIZE)
+		self.audio_q = queue.Queue(maxsize=AUDIO_Q_SIZE)
+
 	# Load TTS model
 	def loadmodels(self):
 		print("Loading TTS model")
