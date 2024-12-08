@@ -66,6 +66,8 @@ class roboFace {
 
     // display Text with size 2 - medium, or 3 - Large. (to be called from displayTask inside a vtask)
     void displayText(String text, int size);
+    //  Display text for amount of seconds
+    void displayTextTimed(String text, int seconds );
     //  Scrolling text. 
     void scrollText(String text, int size);
     // Set Face neutral. 

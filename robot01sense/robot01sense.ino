@@ -5,18 +5,26 @@
 #include <WiFiUdp.h>
 #include <FS.h>
 #include <SPIFFS.h>
-#define FORMAT_SPIFFS_IF_FAILED true
 #include <ArduinoJson.h>
 #include <ArduinoHttpClient.h>
 
-#include <WiFiManager.h>
-WiFiManager wm;
-bool shouldSaveConfig = false;
+#define FORMAT_SPIFFS_IF_FAILED true
+
+/*
+* Define CPU cores for vtasks
+*/
+#define HTTPD_TASK_CORE 1
+#define MIC_STREAMING_CORE 0
 
 /*
 * Master server or 'brain'
 */
-IPAddress master_server_ip;
+char config_master_ip[40];
+
+#include <WiFiManager.h>
+WiFiManager wm;
+WiFiManagerParameter custom_masterserver("server", "Master server IP", config_master_ip, 40);
+bool shouldSaveConfig = false;
 
 /*
 * Webserver
@@ -75,9 +83,11 @@ char i2sBuffer[I2S_BUFFER_LEN * 2];
 void MicStreamTask(void *pvParameters) {
   // vtask stop notify
   uint32_t notifyStopValue;
+  
+  IPAddress master_server_ip;
+  master_server_ip.fromString(config_master_ip);
 
-  String ip = master_server_ip.toString();
-  Serial.printf("Micstream running to : %s , port %u \n", ip.c_str(), outPort);
+  Serial.printf("Micstream running to : %s , port %u \n", config_master_ip, outPort);
 
   while (xTaskNotifyWait(0x00, 0x00, &notifyStopValue, 0) != pdTRUE) {
     // Get I2S data and place in data buffer
@@ -107,6 +117,7 @@ void MicStreamTask(void *pvParameters) {
       Udp.beginPacket(master_server_ip, outPort);
       Udp.write((const uint8_t *)audio_block_float, read_bytes * 2);
       Udp.endPacket();
+
     } else {
         Serial.println("BAD ESP result... ");
     }
@@ -383,7 +394,7 @@ static esp_err_t cmd_handler(httpd_req_t *req) {
     if (req_value != -1) {
       if (req_value == 1 && !micIsStreaming) {
         micIsStreaming = true;
-        xTaskCreatePinnedToCore(MicStreamTask, "Micstream", 5000, NULL, 10, &micStreamTaskHandle, 0);
+        xTaskCreatePinnedToCore(MicStreamTask, "Micstream", 5000, NULL, 10, &micStreamTaskHandle, MIC_STREAMING_CORE);
       } else if (micIsStreaming) {
         xTaskNotify( micStreamTaskHandle, 1, eSetValueWithOverwrite );
         micIsStreaming = false;
@@ -455,6 +466,17 @@ static esp_err_t go2sleep_handler(httpd_req_t *req) {
 static esp_err_t reset_handler(httpd_req_t *req) {
   delay(1000);
   Serial.print("Resetting on request.");
+
+  httpd_resp_set_hdr(req, "Access-Control-Allow-Origin", "*");
+  httpd_resp_set_type(req, HTTPD_TYPE_JSON);  
+
+  JsonDocument json_obj;
+  json_obj["Reset"] = "ok";
+  size_t jsonSize = measureJson(json_obj);
+  char json_response[jsonSize];
+  serializeJson(json_obj, json_response, jsonSize );
+  httpd_resp_send(req, json_response , jsonSize );
+
   esp_restart();
   // No return response neccesary
 }
@@ -467,9 +489,44 @@ static esp_err_t reset_handler(httpd_req_t *req) {
 static esp_err_t config_erase_handler(httpd_req_t *req) {
   Serial.print("Config erase on request.");
   delay(2000);
+  
+  httpd_resp_set_hdr(req, "Access-Control-Allow-Origin", "*");
+  httpd_resp_set_type(req, HTTPD_TYPE_JSON);  
+
+  JsonDocument json_obj;
+  json_obj["Erase"] = "ok";
+  size_t jsonSize = measureJson(json_obj);
+  char json_response[jsonSize];
+  serializeJson(json_obj, json_response, jsonSize );
+  httpd_resp_send(req, json_response , jsonSize );
+
   wm.erase();
   esp_restart();
   // No return response neccesary
+}
+
+/*
+* wm_handler for httpd
+*
+* Wifimanager on demand
+*/
+static esp_err_t wm_handler(httpd_req_t *req) {
+
+  Serial.println("Starting wifi manager.");
+  wm.setDebugOutput(true, WM_DEBUG_VERBOSE);
+  
+  wm.setHttpPort(86);
+  wm.setEnableConfigPortal(true);
+
+  // Redirect to portal
+  httpd_resp_set_type(req, "text/html");
+  String redirect_url = "http://" + WiFi.localIP().toString() + ":86/";
+  String redirect_page = "<br><A href='" + redirect_url + "'> Click for redirect to wifimanager. </A><br>";
+  httpd_resp_send(req, redirect_page.c_str() , redirect_page.length());
+
+  wm.startConfigPortal();
+  
+  return ESP_OK;
 }
 
 /*
@@ -515,36 +572,9 @@ void setup() {
   esp_sleep_wakeup_cause_t cause = esp_sleep_get_wakeup_cause();
   Serial.printf("Wake up cause : %i \n", cause);
 
-  char config_master_ip[40];
-
-  // Load config.json from SPIFFS
-  if (SPIFFS.begin(FORMAT_SPIFFS_IF_FAILED)) {
-    Serial.println("mounted file system");
-    if (SPIFFS.exists("/config.json")) {
-      Serial.println(" SPIFFS.open ");
-      File configFile = SPIFFS.open("/config.json", "r");
-      if (configFile) {
-        JsonDocument json;
-        String input = configFile.readString();
-        if (input != NULL) {
-
-          DeserializationError deserializeError = deserializeJson(json, input);
-
-          if (!deserializeError) {
-            strcpy(config_master_ip, json["master_ip"]);
-            Serial.println("config_master_ip");
-          } else {
-            Serial.println("failed to load json config");
-          }
-          configFile.close();
-        }
-      } else {
-        Serial.println("No config file.");
-      }
-    }
-  } else {
-    Serial.println("failed to mount FS");
-  }
+  // load json config
+  loadGlobalConfig();
+  custom_masterserver.setValue(config_master_ip, 40);
 
   // Wifi Manager
   wm.setConnectTimeout(20);
@@ -553,7 +583,6 @@ void setup() {
   String customTitle = "<h1>Robot01 Sense config</h1>";
   wm.setCustomHeadElement(customTitle.c_str());
 
-  WiFiManagerParameter custom_masterserver("server", "Master server IP", config_master_ip, 40);
   wm.addParameter(&custom_masterserver);
 
   wm.setSaveConfigCallback(saveConfigCallback);
@@ -581,8 +610,7 @@ void setup() {
     configFile.close();
   }
 
-  master_server_ip.fromString(config_master_ip);
-  Serial.printf("Remote master server IP: %s \n", master_server_ip.toString().c_str());
+  Serial.printf("Remote master server IP: %s \n", config_master_ip);
 
   Serial.print(WiFi.localIP());
   Serial.println("' to connect to server ");
@@ -593,6 +621,7 @@ void setup() {
 
   httpd_config_t httpd_config = HTTPD_DEFAULT_CONFIG();
   httpd_config.max_uri_handlers = 16;
+  httpd_config.core_id =  HTTPD_TASK_CORE;
 
   httpd_uri_t health_url = { .uri = "/health", .method = HTTP_GET, .handler = health_handler, .user_ctx = NULL };
   httpd_uri_t cmd_url = { .uri = "/control", .method = HTTP_GET, .handler = cmd_handler, .user_ctx = NULL };
@@ -600,6 +629,7 @@ void setup() {
   httpd_uri_t go2sleep_url = { .uri = "/go2sleep", .method = HTTP_GET, .handler = go2sleep_handler, .user_ctx = NULL };
   httpd_uri_t reset_url = { .uri = "/reset", .method = HTTP_GET, .handler = reset_handler, .user_ctx = NULL };
   httpd_uri_t erase_url = { .uri = "/eraseconfig", .method = HTTP_GET, .handler = config_erase_handler, .user_ctx = NULL };
+  httpd_uri_t wifimanager = { .uri = "/wifimanager", .method = HTTP_GET, .handler = wm_handler, .user_ctx = NULL };
 
   if (httpd_start(&server_httpd, &httpd_config) == ESP_OK) {
     httpd_register_uri_handler(server_httpd, &health_url);
@@ -608,6 +638,7 @@ void setup() {
     httpd_register_uri_handler(server_httpd, &go2sleep_url);
     httpd_register_uri_handler(server_httpd, &reset_url);
     httpd_register_uri_handler(server_httpd, &erase_url);
+    httpd_register_uri_handler(server_httpd, &wifimanager);
 
     Serial.printf("Server on port: %d \n", httpd_config.server_port);
   } else {
@@ -685,3 +716,42 @@ void loop() {
   // Do nothing. Everything is done in another task by the web server
   delay(10000);
 }
+
+
+/*
+* Load json config file. put item(s) in global variables
+*/
+void loadGlobalConfig() {
+
+  // Load config.json from SPIFFS
+  if (SPIFFS.begin(FORMAT_SPIFFS_IF_FAILED)) {
+    Serial.println("mounted file system");
+    if (SPIFFS.exists("/config.json")) {
+      Serial.println(" SPIFFS.open ");
+      File configFile = SPIFFS.open("/config.json", "r");
+      if (configFile) {
+        JsonDocument json;
+        String input = configFile.readString();
+        if (input != NULL) {
+
+          DeserializationError deserializeError = deserializeJson(json, input);
+
+          if (!deserializeError) {
+            // Global variables from config
+            strcpy(config_master_ip, json["master_ip"]);            
+            Serial.println("config_master_ip");
+
+          } else {
+            Serial.println("failed to load json config");
+          }
+          configFile.close();
+        }
+      } else {
+        Serial.println("No config file.");
+      }
+    }
+  } else {
+    Serial.println("failed to mount FS");
+  }
+};
+
