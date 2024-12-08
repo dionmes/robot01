@@ -8,7 +8,6 @@
 <link rel="stylesheet" href="css/pico.indigo.min.css">
 <script src="js/jquery-3.7.1.min.js"></script>
 
-
 <style>
 	/**
 	Red and green Indicators in css
@@ -40,7 +39,6 @@ function ask_robot01() {
 	.always(function() {
 		$("#loader").attr("aria-busy", "false");
 	});
-
 }
 
 function health_update() {
@@ -117,6 +115,24 @@ function mic_stream() {
 	});
 }
 
+function change_llm_mode() {
+	$("#loader").attr("aria-busy", "true");
+	var mode = $('#llm_mode').val();
+	
+	$.ajax({
+		url: "/api/setting?item=llm_mode&value=" + mode,
+		type: 'GET',
+		dataType: 'json',
+		async: true
+	})
+	.fail(function (xhr, status, errorThrown) {
+		alert(errorThrown);
+	})
+	.always(function() {
+		$("#loader").attr("aria-busy", "false");
+	});
+}
+
 window.onload = function() {
 	health_update();
 	setInterval("health_update()",60000);
@@ -154,6 +170,19 @@ window.onload = function() {
 		 }
 		 console.log( result);
 	})
+
+	// Get LLM mode
+	$.ajax({
+		url: "/api/get_setting?item=llm_mode",
+		type: 'GET',
+		dataType: 'json',
+		async: true
+	})
+	.done(function (result) {
+		$("#llm_mode").val(result.value);
+		console.log(result);
+	})
+
 }
 
 </script>
@@ -175,6 +204,7 @@ window.onload = function() {
 				<li><a href='displayPage.html'>Display</a></li>
 				<li><a href='sensorsPage.html'>Sensors</a></li>
 				<li><a href='sensePage.html'>Sense</a></li>
+				<li><a href='configPage.html'>Config</a></li>
 			</ul>
 		</nav>
 		<hr>
@@ -190,27 +220,27 @@ window.onload = function() {
 					</label>
 				</div>
 			</form> 
-			<div class="container">
-				<progress id="progress" style="display:none"></progress>
-			</div>	
-			<br>
 			<hr>
 			<div class="grid">
+				<select name="LLM_Mode" aria-label="llm_mode" id="llm_mode" required onchange="change_llm_mode();">
+					  <option>chat mode</option>
+					  <option>agent mode</option>
+				</select>
 				<label>
 				<input id="audiostream" onchange="audio_control();" name="audiostream" type="checkbox" role="switch" disabled/>
-				Receive UDP Audio
+				Audio / Speech
 				</label>
 				<label>
 				<input id="micstream" onchange="mic_stream();" name="micstream" type="checkbox" role="switch" disabled/>
-				Microphone stream
+				Microphone
 				</label>
 			</div>	
 		</div>
 		<hr>
-		<div class="container"">
-			<h6>Robot01 <div id="robot01status" class="roundred"></div> Sense <div id="sensestatus" class="roundred"></div></h6>
-		</div>
 		<div class="grid"">
+			<div class="container"">
+				<h6>Robot01 <div id="robot01status" class="roundred"></div> Sense <div id="sensestatus" class="roundred"></div></h6>
+			</div>
 			<figure style="width:10em;">
 				<img class="img_centered" src="images/robot01v1.png" />
 			</figure>
@@ -222,3 +252,4 @@ window.onload = function() {
 <br>
 </body>
 </html>
+

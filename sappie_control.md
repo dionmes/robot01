@@ -54,7 +54,6 @@ BELL_ANIMATION=22,
 CHAT_ANIMATION=23,
 IMG_LOOP=24
 
-
 ### Images
 1	bmp_apple,
 2	bmp_bat,

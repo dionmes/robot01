@@ -10,16 +10,14 @@ debug = True
 # Uses threading for http call to make it non-blocking
 # See below for Actions & Items
 class DISPLAY:
-	def __init__(self, ip, timeout=3):
+	def __init__(self, ip, timeout=2):
 		# ip of robot/display
 		self.ip = ip
 		# timeout of http request
 		self.timeout = timeout
 		# default state (3=neutral)
 		self.default_state = 3
-		# default item, 0 is none
-		self.item = 0
-	
+
 	# set state of display
 	def state(self, state):
 		print("Display state : " + str(state))
@@ -27,10 +25,10 @@ class DISPLAY:
 		threading.Thread( target=self.safe_http_call, args=['http://' + self.ip + display_action_url + str(self.default_state)] ).start()
 	
 	# set temporary state of display
-	def action(self, action, reset, item = 0):
-		print("Display action : " + str(action) + " item : " + str(item))
-		if item > 0:
-			threading.Thread( target=self.safe_http_call, args=['http://' + self.ip + display_action_url + str(action) + "&index=" + str(item)] ).start()
+	def action(self, action, reset, icon = 0):
+		print("Display action : " + str(action) + " item : " + str(icon))
+		if icon > 0:
+			threading.Thread( target=self.safe_http_call, args=['http://' + self.ip + display_action_url + str(action) + "&index=" + str(icon)] ).start()
 		else:
 			threading.Thread( target=self.safe_http_call, args=['http://' + self.ip + display_action_url + str(action)] ).start()
 		

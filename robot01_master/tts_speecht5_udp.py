@@ -17,7 +17,7 @@ voice=4830
 
 # queue sizes
 AUDIO_Q = 8
-TEXT_Q = 8
+TEXT_Q = 15
 
 # Rececing buffer size for emptying ( RECEIVING_BUFFER * 1472)
 RECEIVING_BUFFER = 6
@@ -62,15 +62,15 @@ class TTS:
 			text = self.text_q.get()
 			synth_speech = self.synthesiser(text, forward_params={"speaker_embeddings": self.speaker_embeddings})
 
-			if not self.brain.talking:
-				self.brain.talking_started()
-
 			try:
 				self.audio_q.put_nowait([synth_speech,text])
 			except Exception as e:
 				print("Audio queue error : ", type(e).__name__ )
 			
 			self.text_q.task_done()
+
+			if not self.brain.talking:
+				self.brain.talking_started()
 
 	# Send Audio worker : Gets audio wave from queue : audio_q
 	# sends audio (16khz mono f32le) over UDP to robot01 ip port 9000
@@ -103,11 +103,9 @@ class TTS:
 			self.audio_q.task_done()
 			
 			if self.audio_q.empty() and self.text_q.empty():
-				time.sleep(1) # Wait for queue fill before enabling again
-				if self.audio_q.empty() and self.text_q.empty():
-					if self.brain.talking:
-						self.brain.talking_stopped()
-						
+				if self.brain.talking:
+					self.brain.talking_stopped()
+
 	# returns text_q size
 	def queue_size(self)->int:
 		return self.text_q.qsize()

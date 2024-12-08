@@ -1,0 +1,90 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+	<title>Robot01 config</title>
+</head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="stylesheet" href="css/pico.indigo.min.css">
+<script src="js/jquery-3.7.1.min.js"></script>
+
+<script>
+	var config;
+	
+	function load_config() {
+		$("#loader").attr("aria-busy", "true");
+	
+		$.ajax({
+			url: '/api/load_config',
+			type: 'GET',
+			dataType: 'json',
+			async: true
+		})
+		.done(function (result) {
+			config = result;
+			$('#llm_system').val(config.llm_system);
+			$('#weather_api_key').val(config.weather_api_key);
+		})
+		.fail(function (xhr, status,errorThrown) {
+			alert(errorThrown);
+		})
+		.always(function() {
+			$("#loader").attr("aria-busy", "false");
+		});	
+	}
+
+	function save_config() {
+		$("#loader").attr("aria-busy", "true");
+	
+		config.llm_system = $('#llm_system').val();
+		config.weather_api_key = $('#weather_api_key').val();
+	
+		$.ajax({
+			url: '/api/save_config',
+			type: 'POST',
+			async: true,
+			data : JSON.stringify(config),
+			contentType : 'application/json',
+		})
+		.done(function (result) {
+			alert("Config saved.");
+		})
+		.fail(function (xhr, status,errorThrown) {
+			alert(errorThrown);
+		})
+		.always(function() {
+			$("#loader").attr("aria-busy", "false");
+		});	
+	}
+
+	window.onload = function() {
+		load_config();
+	}
+	
+
+</script>
+
+<div class="container-fluid">
+
+	<div class="container-fluid" style="position: fixed; background: var(--pico-background-color);">
+		<hgroup">
+			<br>
+			<h1 class="centered" style="color: var(--pico-secondary);">
+			Config
+			<div id="loader" aria-busy="false" style="display:inline-block;margin-left:2em;"></div>
+			</h1>
+			<a href='index.html'>Back</a>
+		</hgroup>
+		<hr>
+	</div>
+	<p style="padding-top: 10em;"></p>
+	<div class="container">
+	<button class="secondary" style="float:right;" onclick="save_config();">Save</button>
+	<br><br>
+	<h6>LLM System message</h6>
+	<textarea name="system" id="llm_system" aria-label="llm system"></textarea>	
+	<h6>Weather API Key</h6>
+	<input type="text" id="weather_api_key" aria-label="weather_api_key">
+	</div>
+
+</div>

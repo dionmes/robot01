@@ -8,7 +8,7 @@ debug = True
 # Class robot for managing the robot motors, audio and sensors
 # Uses threading for http call to make it non-blocking
 class ROBOT:
-	def __init__(self, ip, timeout=3):
+	def __init__(self, ip, timeout=2):
 		self.ip = ip
 		self.timeout = timeout
 

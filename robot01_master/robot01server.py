@@ -37,7 +37,7 @@ def index():
 @app.route('/<filename>')
 def serve_html(filename):
 	robot01_context = {"robot01_ip": brain.robot01_ip, "robot01sense_ip" : brain.robot01sense_ip}
-
+	
 	if filename.endswith('.html'):
 		try:
 			return render_template(filename,context=robot01_context) 
@@ -77,6 +77,57 @@ def serve_images(filename):
 		abort(404)
 
 ###############	 API Endpoints ############### 
+#
+# Load config
+# GET: /api/load_config {config}
+#
+@app.route('/api/load_config', methods=['GET'])
+def load_config():
+	try:
+		api_response = brain.config
+	except Exception as e:
+		print(e)
+		abort(404)
+	
+	return jsonify(api_response)
+
+#
+# Save config
+# POST: /api/save_config {config}
+#
+@app.route('/api/save_config', methods=['POST'])
+def save_config():
+	try:
+		data = request.get_json()
+		brain.config = data
+		brain.save_config()
+	except Exception as e:
+		print(e)
+		abort(404)
+	
+	api_response = { 'save': 'ok' }
+
+	return jsonify(api_response)
+
+#
+# Restart master
+# GET: /api/restart_master {"text" : string }
+#
+@app.route('/api/restart_master', methods=['GET'])
+def restart_master():
+	try:
+		brain = BRAIN()
+		brain.start()
+
+	except Exception as e:
+		print(e)
+		abort(404)
+	
+	api_response = { 'restart': 'ok' }
+
+	return jsonify(api_response)
+
+
 
 #
 # Text and image to robot post request

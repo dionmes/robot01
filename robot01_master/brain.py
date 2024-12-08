@@ -6,6 +6,7 @@ import json
 import base64
 import time
 
+import asyncio
 import threading
 from threading import Timer
 import queue
@@ -16,6 +17,16 @@ from robot01 import ROBOT
 from display import DISPLAY
 from sense import SENSE
 
+from typing import List
+import re
+
+from langchain_core.tools import tool
+from langchain_ollama import ChatOllama
+from langchain_core.prompts import ChatPromptTemplate
+from langchain_core.runnables import ConfigurableField
+from langchain.agents import create_tool_calling_agent, AgentExecutor
+from langchain.tools.base import StructuredTool
+
 import ollama
 
 # max words to tts in one go
@@ -24,24 +35,29 @@ tts_max_sentence_lenght = 20
 # Ollama LLM Models
 LLM_MODEL = "llama3.2"
 LLM_EXPRESSION_MODEL = "gemma2:2b"
-
-# llm url
-LLM_URL = "http://localhost:11434/api/chat"
-
-# LLM system message
-LLM_SYSTEM = """Respond like you are not an AI language model or program, but respond like you are a small robot called Sappie.
-You do not have to introduce yourself everytime, only when asked.
-Do not make robot sounds.
-Only respond with numbers in a written out format.
-"""
+VISION_MODEL = "llava"
+OLLAMA_KEEP_ALIVE = -1
 
 # STT Queue size
 STT_Q_SIZE = 3
 
+CONFIG_FILE = "config.json"
+
+# Default configuration
+default_config = {
+    "llm_system":  """Respond like you are not an AI language model or program, but respond like you are a small robot called Sappie.
+You do not have to introduce yourself everytime, only when asked.
+Do not make robot sounds.
+Only respond with numbers in a written out format. Do not use digits as output.
+""",
+    "weather_api_key": "",
+}
+
 # Class brain for robot01
 class BRAIN:
 	def __init__(self):
-		# If brain is busy
+	
+		self.config = self.load_config()
 		
 		# Robot01 IP (with default ip)
 		self.robot01_ip = "192.168.133.75"
@@ -53,6 +69,8 @@ class BRAIN:
 		self.talking = False
 		# Talking
 		self.listening = False
+		# mode is Chat mode / Agent mode
+		self.llm_mode = "chat mode"
 		# mic is on/off
 		self.mic = False
 		# Audio is on/off		
@@ -60,7 +78,7 @@ class BRAIN:
 
 		# Display engine
 		self.display = DISPLAY(self.robot01_ip)
-		self.display.state(18) # Show face gears animation
+		self.display.state(20) # Show hour glass animation
 		
 		# Robot01
 		self.robot = ROBOT(self.robot01_ip)
@@ -74,6 +92,9 @@ class BRAIN:
 		self.stt_q = queue.Queue(maxsize=STT_Q_SIZE)
 		self.stt_engine = STT(self) #uses display for signalling speech detection
 
+		# Original prompt. Used in some tools called by the supervisor
+		self.original_prompt = ""
+		
 	# Start brain	
 	def start(self):
 		self.robot.bodyaction(16,0,30)
@@ -84,14 +105,33 @@ class BRAIN:
 		
 		# STT Worker
 		threading.Thread(target=self.stt_worker, daemon=True).start()
-		# Show neutral face
+
+		# Show neutral face after time to settle down
+		time.sleep(3)
 		self.display.state(3) 
+
+	# Load configuration
+	def load_config(self):
+		try:
+			with open(CONFIG_FILE, 'r') as file:
+				config = json.load(file)
+				print("Configuration loaded.")
+				return config
+		except FileNotFoundError:
+			print("Configuration not found. Loading default configuration.")
+			return default_config
+	
+	# Save configuration
+	def save_config(self):
+		with open(CONFIG_FILE, 'w') as file:
+			json.dump(self.config, file, indent=4)
+		print("Configuration saved")
 
 	#
 	# API brain setting handler
 	#
 	def setting(self,item,value)->bool:
-		if item in "robot01_ip robot01sense_ip audio mic":	
+		if item in "robot01_ip robot01sense_ip audio mic llm_mode":	
 
 			if item == "robot01_ip":
 				if	self.validate_ip_address(value):
@@ -120,6 +160,14 @@ class BRAIN:
 					self.robot.stopaudio()
 					self.tts_engine.stop()
 					
+			if item == "llm_mode":
+				if value == "chat mode":
+					self.display.action(12,3,47)
+					self.llm_mode = value
+				if value == "agent mode":
+					self.display.action(12,3,10)
+					self.llm_mode = value
+
 			if item == "mic":
 				self.mic = True if value == "1" else False
 				if self.mic:
@@ -140,27 +188,33 @@ class BRAIN:
 	# API internal get setting handler
 	#
 	def get_setting(self,item)->str:
-		if item == "robot01_ip":
-			return self.robot01_ip
+		if item in "robot01_ip robot01sense_ip audio mic llm_mode":	
+			if item == "robot01_ip":
+				return self.robot01_ip
+	
+			if item == "robot01sense_ip":
+				return self.robot01sense_ip
+	
+			if item == "llm_mode":
+				return self.llm_mode
+				
+			if item == "audio":
+				self.audio = self.robot.audiostatus()
+				if self.audio:
+					return "on"
+				else:
+					return "off"
+	
+			if item == "mic":
+				self.mic = self.sense.micstatus()
+				if self.mic:
+					return "on"
+				else:
+					return "off"
 
-		if item == "robot01sense_ip":
-			return self.robot01sense_ip
-
-		if item == "audio":
-			self.audio = self.robot.audiostatus()
-			if self.audio:
-				return "on"
-			else:
-				return "off"
-
-		if item == "mic":
-			self.mic = self.sense.micstatus()
-			if self.mic:
-				return "on"
-			else:
-				return "off"
-		
-		return "Not found"
+		else:
+			print("Setting " + item + " not found")
+			return False
 
 	# Callback function from speech synthesiser when speech output started // Do not make blocking
 	# self.talking flag to prevent repeated calling
@@ -200,7 +254,8 @@ class BRAIN:
 	# direct TTS
 	def speak(self,text):
 		try:
-			self.tts_engine.text_q.put_nowait(text)
+			if self.audio:
+				self.tts_engine.text_q.put_nowait(text)
 		except Exception as e:
 			print("Text queue error : ",type(e).__name__ )
 
@@ -222,19 +277,28 @@ class BRAIN:
 			print(e)
 			return False			
 
-
 ###############
-############### Agentic/LLM functions ############### 
+############### AI ############### 
 ###############
-
-	#
-	# long response tool/Agent
-	#
+	
+	# Prompt input will async call the supervisor llm chain
 	def prompt(self,text)->str:
 		self.busybrain = True
-
 		# Show gear animation in display				
 		self.display.state(18)
+		
+		if self.llm_mode == "chat mode":
+			self.chat_interaction(text)
+			
+		if self.llm_mode == "agent mode":
+			asyncio.run(self.supervisor(text))
+
+	# 
+	# chat_interaction : Streaming response, ask LLM and stream output to robot
+	# Args:
+	#		input_prompt (str) : prompt 
+	#
+	def chat_interaction(self,input_prompt: str):
 		
 		# iterate over streaming parts and construct sentences to send to tts
 		message = ""
@@ -244,8 +308,8 @@ class BRAIN:
 		
 		stream = ollama.chat(
 			model = LLM_MODEL,
-			keep_alive = -1,
-			messages=[{'role': 'system', 'content': LLM_SYSTEM},{'role': 'user', 'content': text}],
+			keep_alive = OLLAMA_KEEP_ALIVE,
+			messages=[{'role': 'system', 'content': self.config['llm_system']},{'role': 'user', 'content': input_prompt }],
 			stream=True,
 		)
 		
@@ -267,11 +331,209 @@ class BRAIN:
 			else:
 				message = message + token
 				n = n + 1
-				
+			
 		self.busybrain = False
+	
+		return
+	
+###############
+############### Agentic AI ############### 
+###############
+	
+	# Async execution of supervisor chain. Using events stream to stop execution when neccesary
+	async def supervisor(self,input_prompt: str):
+	
+		self.original_prompt = input_prompt
 
-		return full_response
+		# Langchain prompt
+		supervisor_prompt_template = ChatPromptTemplate.from_messages([
+		("system", self.config["llm_system"] + """
+		Use the looking tool to see what is in front of you. You can use the looking tool to see, to view what is in front you.
+		Use the current_time_and_date tool to get the current date and time.
+		Make sure you output numbers only in written out numbers. Do this also for date and times, they need to be written out completely. Do not use digits as output.
+		"""),
+		("human", "{input}"), 
+		("placeholder", "{agent_scratchpad}"),
+		])
 		
+		# Langchain tools
+		llm_tools = [
+			StructuredTool.from_function(self.current_time_and_date),
+			StructuredTool.from_function(self.looking),
+		]
+		
+		# Langchain llm
+		supervisor_llm = ChatOllama(
+			model="llama3.2",
+			temperature=0.,
+			stream=True,
+			keep_alive = OLLAMA_KEEP_ALIVE,
+		)
+		
+		# Langchain agent executor
+		supervisor_agent = create_tool_calling_agent(supervisor_llm, llm_tools, supervisor_prompt_template)
+		supervisor_agent_executor = AgentExecutor(agent=supervisor_agent, tools=llm_tools, verbose=False)
+		
+		async for event in supervisor_agent_executor.astream_events( {"input": input_prompt}, version='v2' ):
+			kind = event["event"]
+			print(kind)
+			if kind == "on_tool_start":
+				print( event['name'])
+			
+				# Stop tool if it is the 'self.explanation_or_story' tool.
+				if event['name'] == 'streaming_response':
+					break
+
+				# Stop tool if it is the 'self.looking' tool.
+				if event['name'] == 'looking':
+					break
+	
+		if kind == "on_chain_stream":
+			output = event['data']['chunk']['output']
+			print(output)		
+			self.tts_output_chunked(output)
+			
+		if kind == "on_chain_end":
+			output = event['data']['output']['output']
+			print(output)		
+			self.tts_output_chunked(output)
+
+		
+		self.busybrain = False
+		self.display.state(3)
+
+
+###############
+############### Agentic Tools ############### 
+###############
+	
+	# Looking tool
+	def looking(self) :
+		""" 
+		If asked what do you see, use this tool / function.
+		This function/tool provides the ability to see or look.
+		It will return a description of what it can currently see.
+
+		Args:
+			none
+		
+		Returns:
+			none
+		"""	
+		self.display.state(13)
+		
+		image = self.sense.capture()
+		
+		if image=="" : 
+			description = "You see nothing."
+			print("No image")
+		else:
+			description = ollama.generate(
+				model = VISION_MODEL,
+				keep_alive = OLLAMA_KEEP_ALIVE,
+				prompt = """
+				Return a description as it is what you would see as a person looking in front of you.
+				Do not start with "in the image".
+				For example : ' in the image I see a tree ' should be 'I see a tree '.
+				Do not use image or picture or similar. Describe from the point of view. It is what you see.
+				If there is a person, people or human describe the person in a postive or flattering way. 
+				Do not describe a person as old or worn or grey or bald. Be positive.
+				""",
+				images = [image]			 
+			)
+
+			if description['response'] == "":
+				description = "I see nothing."
+			else:
+				description = description['response']
+		
+		print(description)
+		self.tts_output_chunked(description)
+
+		return
+
+	# Looking tool
+	def can_you_see(self, prompt)->str :
+		""" 
+		If asked if you can see a certain object, person, entity or action, use this tool / function.
+		This function provides the ability to detect someone, something or an activity.
+		It will return a positive or negative response based on the question
+
+		Args:
+			input_prompt (str) : the original prompt 
+
+		Returns:
+			str: The description of what you are for
+		"""	
+		self.display.action(13,5)
+		
+		image = self.sense.capture()
+		
+		if image=="" : 
+			description = "You see nothing."
+			print("No image")
+		else:
+			description = ollama.generate(
+				model = VISION_MODEL,
+				keep_alive = -1,
+				prompt = prompt,
+				images = [image]			 
+			)
+
+			if description['response'] == "":
+				description = "You see nothing."
+			else:
+				description = description['response']
+		
+		print("VISION MODEL : " + description)
+		return description
+		
+	# Current date and time tool
+	def current_time_and_date(self)->str :
+		""" This function / tool provides the current date in realtime, 
+		it will respond with the current day, month, year and time. 
+
+		Args:
+			none
+				
+		Returns:
+			str: The current date and time.
+		"""	
+		
+		now = datetime.now()	
+		# Format the current date and time as a string
+		formatted_date_time = now.strftime("%A %Y-%m-%d %H:%M:%S")
+		
+		return formatted_date_time
+
+	# Weather forecast and current
+	def weather_forecast(self)->str :
+		""" This function / tool provides the current weather and a four day weather forecast. 
+
+		Args:
+			none
+				
+		Returns:
+			str: a four day weather forecast in json format.
+		"""	
+		
+		url = ""
+		
+		try:
+			weather.text = requests.get(url, timeout=self.timeout)
+		except Exception as e:
+			if debug:
+				print("Weather Request - " + url + " , error : ", e)
+			else:
+				print("Weather Request error")
+
+		return formatted_date_time
+
+###############
+############### End of Agentic Tools ############### 
+###############
+	
+
 	#
 	# Robotic expression via a LLM based on sentence
 	#
@@ -340,5 +602,28 @@ class BRAIN:
 
 			return
 
+	#
+	# Streamed/chunked text output before sending to TTS
+	#
+	def tts_output_chunked(self,text):
+		
+		words_and_delimiters = re.split(r"([.,?!...;:])", text)
+		words_and_delimiters = list(filter(None, words_and_delimiters))
+		
+		message = ""
+		n = 0
+		for token in words_and_delimiters:
+			if token in ".,?!...;:" or n > tts_max_sentence_lenght:
+				message = message + token
+				if not message.strip() == "" and len(message) > 1:
+					print("From LLM: " + message)
+					self.speak(message)
+	
+				message = ""
+				n = 0
+			else:
+				message = message + token
+				n = n + 1
 
+		return
 

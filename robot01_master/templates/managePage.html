@@ -33,49 +33,34 @@ function tts() {
 	});
 }
 
-function reset_robot01() {
-	$("#loader").attr("aria-busy", "true");
+function restart_robot01() {
+  	$("#loader").attr("aria-busy", "true");
+
 	$.ajax({
 		url: "http://{{context.robot01_ip}}/reset",
 		type: 'GET',
-		timeout: 1000,
-    	async: true
+		timeout: 5000,
+		async: true
+	})
+	.fail(function (xhr, status,errorThrown ) {
+		alert(errorThrown);
 	})
 	.always(function() {
 		$("#loader").attr("aria-busy", "false");
-		alert("Reset request sense send.");
 	});
-
 }
 
-function reset_sense() {
-	$("#loader").attr("aria-busy", "true");
+function restart_sense() {
+  	$("#loader").attr("aria-busy", "true");
+
 	$.ajax({
 		url: "http://{{context.robot01sense_ip}}/reset",
 		type: 'GET',
-		timeout: 1000,
-    	async: true		
+		timeout: 5000,
+		async: true		
 	})
-	.always(function() {
-		$("#loader").attr("aria-busy", "false");
-		alert("Reset request sense send.");
-	});
-
-}
-
-function clearips() {
-	$("#loader").attr("aria-busy", "true");
-	$.ajax({
-		url: "/api/clearips",
-		type: 'GET',
-		timeout: 1000,
-    	async: true		
-	})
-	.done(function (result) {
-		location.reload();
-	})
-	.fail(function (xhr, status) {
-		alert("Error sending clear ips.");
+	.fail(function (xhr, status,errorThrown ) {
+		alert(errorThrown);
 	})
 	.always(function() {
 		$("#loader").attr("aria-busy", "false");
@@ -83,18 +68,81 @@ function clearips() {
 }
 
 function erase_robot01_config() {
-	$.ajax({
-		url: "http://{{context.robot01sense_ip}}/eraseconfig",
-		type: 'GET',
-    	dataType: 'text',
-    	async: true 
-    })
-	.done(function (result) {
-		alert("Erase config initiated.");
-	})
-	.fail(function (xhr, status,errorThrown ) {
-		alert(errorThrown);
-	})
+  	if (confirm("Do you want to erase the sense wifi configuration ?") == true) {
+  		$("#loader").attr("aria-busy", "true");
+		$.ajax({
+			url: "http://{{context.robot01_ip}}/eraseconfig",
+			type: 'GET',
+			dataType: 'text',
+			async: true 
+		})
+		.always(function() {
+			$("#loader").attr("aria-busy", "false");
+		})
+		.fail(function (xhr, status,errorThrown ) {
+			alert(errorThrown);
+		})
+	}
+}
+
+
+function erase_sense_config() {
+  	if (confirm("Do you want to erase the sense wifi configuration ?") == true) {
+  		$("#loader").attr("aria-busy", "true");
+		$.ajax({
+			url: "http://{{context.robot01sense_ip}}/eraseconfig",
+			type: 'GET',
+			dataType: 'text',
+			async: true 
+		})
+		.always(function() {
+			$("#loader").attr("aria-busy", "false");
+		})
+		.fail(function (xhr, status,errorThrown ) {
+			alert(errorThrown);
+		})
+	}
+}
+
+function restart_master() {
+  	if (confirm("Are you sure you want to restart the master ?") == true) {
+  		$("#loader").attr("aria-busy", "true");
+		$.ajax({
+			url: "/api/restart_master",
+			type: 'GET',
+			async: true		
+		})
+		.done(function (result) {
+			location.reload();
+		})
+		.fail(function (xhr, status) {
+			alert("Error restarting master.");
+		})
+		.always(function() {
+			$("#loader").attr("aria-busy", "false");
+		});
+	}
+}
+
+function clearips() {
+  	if (confirm("Are you sure you want to erase the IP addresses ?") == true) {
+		$("#loader").attr("aria-busy", "true");
+		$.ajax({
+			url: "/api/clearips",
+			type: 'GET',
+			timeout: 1000,
+			async: true		
+		})
+		.done(function (result) {
+			location.reload();
+		})
+		.fail(function (xhr, status) {
+			alert("Error sending clear ips.");
+		})
+		.always(function() {
+			$("#loader").attr("aria-busy", "false");
+		});
+	}	
 }
 
 </script>
@@ -133,29 +181,48 @@ function erase_robot01_config() {
 				<strong>robot01 IP : </strong>{{context.robot01_ip}}
 			</div>
 			<div>
-				<button onClick="reset_robot01();">Reset robot01</button>
-			</div>
-			<div>
 				<strong>Sense IP  : </strong>{{context.robot01sense_ip}}
-			</div>
-			<div>
-				<button onClick="reset_sense();">Reset Sense</button>
 			</div>
 		</div>
 		<br>
+		<div class="grid">
+			<div>
+				<button onClick="restart_robot01();">Restart robot01</button>
+			</div>
+			<div>
+				<button onClick="restart_sense();">Restart Sense</button>
+			</div>
+		</div>
+		<br>
+		<div class="grid">
+			<div>
+				<button id="eraseconfig" style="background-color: red;" onClick="erase_robot01_config();">Erase Robot01 </button>
+			</div>
+			<div>
+				<button id="eraseconfig" style="background-color: red;"onClick="erase_sense_config();">Erase Sense</button>
+			</div>
+		</div>
+		<br>
+		<div class="grid">
+			<div>
+				<A href="http://{{context.robot01_ip}}/wifimanager" >Robot01 wifimanager </A>
+			</div>
+			<div>
+				<A href="http://{{context.robot01sense_ip}}/wifimanager" >Sense wifimanager </A>
+			</div>
+		</div>
 		<hr>		
-		<button class="secondary" onClick="clearips();">Clear IP's</button>
+		<div class="grid">
+			<div>
+				<button class="secondary" onClick="clearips();">Clear IP's</button>
+			</div>
+			<div>
+				<button class="secondary" onClick="restart_master();">Restart master</button>
+			</div>
+		</div>
 	</div>
 	<hr>
 	<div class="container">
-		<div class="grid">
-			<div>
-				<button id="eraseconfig" style="background-color: red;" onClick="erase_config();">Robot01 Erase</button>
-			</div>
-			<div>
-			<br>
-			</div>
-		</div>
 	</div>
 </div>
 <br>
