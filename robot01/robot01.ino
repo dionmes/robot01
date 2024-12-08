@@ -15,7 +15,7 @@
 /*
 * Define CPU cores for vtasks
 */
-#define HTTPD_TASK_CORE 1
+#define HTTPD_TASK_CORE 0
 #define BODY_TEST_TASK_CORE 1
 #define bno08x_TASK_CORE 1
 
