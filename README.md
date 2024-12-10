@@ -30,6 +30,7 @@ A ripped Robosapien Agentic / LLM powered robot.
 		- AGENT_MODEL : qwen2.5:32b
 		- LLM_EXPRESSION_MODEL : gemma2:2b
 		- VISION_MODEL llava
+	- Agentic: Langchain
 	- All models run locally (tts, stt, llm, Agentic)
 	- Python based webserver (Flask) for Web interface and API
 
