@@ -2,7 +2,7 @@
 
 ![Robot image](./img/robot01.png)
 
-A ripped Robosapien LLM powered robot.  
+A ripped Robosapien Agentic / LLM powered robot.  
 
 - **Hardware**
 	- Robosapien V1
