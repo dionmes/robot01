@@ -6,11 +6,11 @@ A ripped Robosapien LLM powered robot.
 
 - **Hardware**
 	- Robosapien V1
-	- Nvidia AGX Xavier
-	- Adafruit HUZZAH32 ESP32 Feather (Main)
+	- Nvidia AGX Xavier (the brain)
+	- Adafruit HUZZAH32 ESP32 Feather (Main board)
 	- XIAO ESP32S3 Sense (camera/mic)
-	- DFRobot MAX98357 I2S Amplifier Module - 2.5W
-	- VL53L1X Time of Flight Sensor 
+	- DFRobot MAX98357 (I2S Amplifier Module - 2.5W)
+	- VL53L1X (Time of Flight Sensor)
 	- BNO085 ( 9-DOF Orientation )
 	- SSD_1306 - Led Screen I2C
 	- Custom motor control board
@@ -18,13 +18,18 @@ A ripped Robosapien LLM powered robot.
 		- LD293D (Dual H-Bridge Motor Driver) x 4
 
 - **Firmware**  
-	Two ESP32 boards
-	- Main : body movement, display, speaker and sensors.
-	- Sense : the camera and mic (sense).
+	Two ESP32 firmwares:
+	- Main : body movement, display, sensors and speaker (udp streaming).
+	- Sense : the camera and mic (udp streaming).
 
-- **Web interface & AI models, "The brain" **  
-	- Implemented on a Nvidia AGX Xavier development board. All models run locally (tts, stt, llm)
-	- Python based webserver (Flask) for Wen interface and API calls
+- **Backend software**
+	Web interface & AI models
+	- Backend Implemented on a Nvidia AGX Xavier development board
+	- All models run locally (tts, stt, llm, Agentic)
+	- Python based webserver (Flask) for Web interface and API
+
+- **Frontend**
+	- Simple HTML frontend based on PicoCSS and jQuery
 
 
 ## Intro

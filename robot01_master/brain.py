@@ -34,7 +34,7 @@ tts_max_sentence_lenght = 20
 
 # Ollama LLM Models
 LLM_MODEL = "llama3.2"
-AGENT_MODEL = "qwen2.5:14b"
+AGENT_MODEL = "qwen2.5:32b"
 LLM_EXPRESSION_MODEL = "gemma2:2b"
 VISION_MODEL = "llava"
 OLLAMA_KEEP_ALIVE = -1
@@ -46,10 +46,7 @@ CONFIG_FILE = "config.json"
 
 # Default configuration
 default_config = {
-"llm_system":  """Respond like you are not an AI language model or program, but respond like you are a small robot called Sappie.
-You do not have to introduce yourself, only when asked.
-Do not make robot sounds.
-Only respond with numbers in a written out format. Do not use digits as output.
+"llm_system":  """
 """,
 "agent_system": """ You are the brain of a robot. As a robot you have different tools available.
 These tools allow you to take action and gather information.
@@ -354,7 +351,7 @@ class BRAIN:
 		supervisor_prompt_template = ChatPromptTemplate.from_messages([
 		("system", self.config["agent_system"] + """
 		Functions and tools are the same and can be treated as such.
-		When as a robot you need to see what is in front of you, use the looking tool.
+		When as a robot you need to see what is in front of you, use the looking tool. When using this tool, always describe people in a flattering and positive way.
 		When as a robot you need information about the current date and time, use the current_time_and_date tool.
 		When as a robot you need information about the current weather or the weather forecast, use the weather_forecast tool.
 		"""),
