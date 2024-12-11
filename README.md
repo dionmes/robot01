@@ -25,18 +25,19 @@ A ripped Robosapien Agentic / LLM powered robot.
 - **Backend software**
 	Web interface & AI models
 	- Backend Implemented on a Nvidia AGX Xavier development board
+	- All models run local (tts, stt, llm, agentic)
 	- LLM : Ollama engine
-		- LLM_MODEL : llama3.2
-		- AGENT_MODEL : qwen2.5:32b
-		- LLM_EXPRESSION_MODEL : gemma2:2b
-		- VISION_MODEL llava
+		- LLM_MODEL: llama3.2 (can change)
+		- AGENT_MODEL: qwen2.5:32b (can change)
+		- LLM_EXPRESSION_MODEL: gemma2:2b (can change)
+		- VISION_MODEL: llava (can change)
 	- Agentic: Langchain
-	- All models run locally (tts, stt, llm, Agentic)
+	- TTS: speecht5_tts
+	- STT: distil-large-v3, VAD: silero_vad  
 	- Python based webserver (Flask) for Web interface and API
 
 - **Frontend**
 	- Simple HTML frontend based on PicoCSS and jQuery
-
 
 ## Intro
 
