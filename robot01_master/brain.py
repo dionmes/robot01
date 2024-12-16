@@ -34,10 +34,11 @@ tts_max_sentence_lenght = 20
 
 # Ollama LLM Models
 LLM_MODEL = "llama3.2"
-AGENT_MODEL = "qwen2.5:32b"
+AGENT_MODEL = "llama3.2"
 LLM_EXPRESSION_MODEL = "gemma2:2b"
-VISION_MODEL = "llava"
+VISION_MODEL = "minicpm-v"
 OLLAMA_KEEP_ALIVE = -1
+AGENT_TEMP = 0.1
 
 # STT Queue size
 STT_Q_SIZE = 3
@@ -72,7 +73,7 @@ class BRAIN:
 		# Talking
 		self.listening = False
 		# mode is Chat mode / Agent mode
-		self.llm_mode = "chat mode"
+		self.llm_mode = "agent mode"
 		# mic is on/off
 		self.mic = False
 		# Audio is on/off		
@@ -109,7 +110,7 @@ class BRAIN:
 		threading.Thread(target=self.stt_worker, daemon=True).start()
 
 		# Show neutral face after time to settle down
-		time.sleep(3)
+		time.sleep(5)
 		self.display.state(3) 
 
 	# Load configuration
@@ -129,11 +130,16 @@ class BRAIN:
 			json.dump(self.config, file, indent=4)
 		print("Configuration saved")
 
+	# Save configuration
+	def health_monitor(self):
+		health = {"robot01" :  self.robot.health_ok , "sense" : self.sense.health_ok }
+		return health
+
 	#
 	# API brain setting handler
 	#
 	def setting(self,item,value)->bool:
-		if item in "robot01_ip robot01sense_ip audio mic llm_mode":	
+		if item in "robot01_ip robot01sense_ip audio mic llm_mode bodyactions":	
 
 			if item == "robot01_ip":
 				if	self.validate_ip_address(value):
@@ -162,6 +168,13 @@ class BRAIN:
 					self.robot.stopaudio()
 					self.tts_engine.stop()
 					
+			if item == "bodyactions":
+				self.robot.robot_actions = True if value == "1" else False
+				if self.robot.robot_actions:
+					self.robot.startactions()
+				else:
+					self.robot.stopactions()
+
 			if item == "llm_mode":
 				if value == "chat mode":
 					self.display.action(12,3,47)
@@ -190,7 +203,7 @@ class BRAIN:
 	# API internal get setting handler
 	#
 	def get_setting(self,item)->str:
-		if item in "robot01_ip robot01sense_ip audio mic llm_mode":	
+		if item in "robot01_ip robot01sense_ip audio mic llm_mode bodyactions":	
 			if item == "robot01_ip":
 				return self.robot01_ip
 	
@@ -200,6 +213,12 @@ class BRAIN:
 			if item == "llm_mode":
 				return self.llm_mode
 				
+			if item == "bodyactions":
+				if  self.robot.robot_actions:
+					return "on"
+				else:
+					return "off"
+
 			if item == "audio":
 				self.audio = self.robot.audiostatus()
 				if self.audio:
@@ -223,6 +242,7 @@ class BRAIN:
 	def talking_started(self):
 		self.talking = True
 		self.sense.stopmic()
+
 		# Display talking animation as default
 		self.display.state(23)
 
@@ -231,8 +251,10 @@ class BRAIN:
 		self.talking = False
 		if self.mic: # If mic setting was True enable mic again
 			self.sense.startmic()
+
 		# Display face neutral
 		self.display.state(3)
+
 		# Arms Neutral
 		self.robot.bodyaction(16,0,30)
 		self.robot.bodyaction(17,0,30)
@@ -323,7 +345,7 @@ class BRAIN:
 			if token in ".,?!...;:" or n > tts_max_sentence_lenght:
 				message = message + token
 				if not message.strip() == "" and len(message) > 1:
-					print("From LLM: " + message)
+					print("From LLM (chat): " + message)
 					self.speak(message)
 					# Slow down if tts queue gets larger
 					time.sleep(self.tts_engine.queue_size() * 0.700)
@@ -350,10 +372,13 @@ class BRAIN:
 		# Langchain prompt
 		supervisor_prompt_template = ChatPromptTemplate.from_messages([
 		("system", self.config["agent_system"] + """
-		Functions and tools are the same and can be treated as such.
-		When as a robot you need to see what is in front of you, use the looking tool. When using this tool, always describe people in a flattering and positive way.
-		When as a robot you need information about the current date and time, use the current_time_and_date tool.
-		When as a robot you need information about the current weather or the weather forecast, use the weather_forecast tool.
+			Functions and tools are the same and can be treated as such.
+			When as a robot you are asked to determine if you see an specific object, activity, environment, item or person, use the "find_in_view" tool. 
+			When as a robot you need to describe what is in front of you, use the "describe_view" tool. This tool will provide you with a description and list what you can see as a robot.
+			When as a robot you need information about the current date and time, use the "current_time_and_date" tool.
+			When as a robot you need information about the current weather or the weather forecast, use the "weather_forecast" tool. When responding with the temperatures convert digits to written out numerical.
+			When as a robot you need to move use the "walk_forward", "walk_backward", "turn_left", "turn_right" or "shake" tools, with the number of movements you need to do.
+			When as a robot you need to move your arms use the "move_right_lower_arm", "walk_backward", "move_left_lower_arm", "move_right_upper_arm" or "move_left_upper_arm" tools, with the number of movements you need to do.
 		"""),
 		("human", "{input}"), 
 		("placeholder", "{agent_scratchpad}"),
@@ -361,72 +386,68 @@ class BRAIN:
 		
 		# Langchain tools
 		llm_tools = [
+			StructuredTool.from_function(self.find_in_view),
 			StructuredTool.from_function(self.current_time_and_date),
-			StructuredTool.from_function(self.looking),
+			StructuredTool.from_function(self.describe_view),
 			StructuredTool.from_function(self.weather_forecast),
+			StructuredTool.from_function(self.walk_forward),
+			StructuredTool.from_function(self.walk_backward),
+			StructuredTool.from_function(self.turn_left),
+			StructuredTool.from_function(self.turn_right),
+			StructuredTool.from_function(self.shake),
+			StructuredTool.from_function(self.move_right_lower_arm),
+			StructuredTool.from_function(self.move_left_lower_arm),
+			StructuredTool.from_function(self.move_right_upper_arm),
+			StructuredTool.from_function(self.move_left_upper_arm)
+			
 		]
 		
 		# Langchain llm
 		supervisor_llm = ChatOllama(
 			model=AGENT_MODEL,
-			temperature=0.3,
-			stream=True,
+			temperature=AGENT_TEMP,
 			keep_alive = OLLAMA_KEEP_ALIVE,
 		)
 		
 		# Langchain agent executor
 		supervisor_agent = create_tool_calling_agent(supervisor_llm, llm_tools, supervisor_prompt_template)
-		supervisor_agent_executor = AgentExecutor(agent=supervisor_agent, tools=llm_tools, verbose=False)
+		supervisor_agent_executor = AgentExecutor(agent=supervisor_agent, tools=llm_tools, max_iterations=999,max_execution_time=300.0, return_intermediate_steps=True, verbose=True, )
 		
-		async for event in supervisor_agent_executor.astream_events( {"input": input_prompt}, version='v2' ):
-			kind = event["event"]
-			print(kind)
-			if kind == "on_tool_start":
-				print( event['name'])
-			
-				# Stop tool if it is the 'self.explanation_or_story' tool.
-				if event['name'] == 'streaming_response':
-					break
+		output = supervisor_agent_executor.invoke({"input": input_prompt})
 
-				# Stop tool if it is the 'self.looking' tool.
-				if event['name'] == 'looking':
-					break
-	
-		if kind == "on_chain_stream":
-			output = event['data']['chunk']['output']
-			print(output)		
-			self.tts_output_chunked(output)
-			
-		if kind == "on_chain_end":
-			output = event['data']['output']['output']
-			print(output)		
-			self.tts_output_chunked(output)
+		response = output['output']		
+		print(response)		
+		self.tts_output_chunked(response)
 
-		
 		self.busybrain = False
 		self.display.state(3)
-
 
 ###############
 ############### Agentic Tools ############### 
 ###############
 	
 	# Looking tool
-	def looking(self) :
+	def describe_view(self,prompt = "")->str :
 		""" 
 		This function/tool provides the ability to see or look what is in front of you.
-		It will return a description of what it can currently see.
-
+		The tool can refer in the response as to what you see as an image. What is in the image is actually in front of you.
+		It will return a description of the environment and list of what you can currently see.
+		It can also return an response of anything visible.
+		
 		Args:
-			none
+			input_prompt (str) : if anything specific needs to be described
 		
 		Returns:
-			none
+			str: what you see in front of you.
 		"""	
-		self.display.state(13)
 		
+		
+		self.display.state(13)
+		print("Tool : describe_view.")
 		image = self.sense.capture()
 		
+		self.display.state(20)
+
 		if image=="" : 
 			description = "You see nothing."
 			print("No image")
@@ -435,13 +456,10 @@ class BRAIN:
 				model = VISION_MODEL,
 				keep_alive = OLLAMA_KEEP_ALIVE,
 				prompt = """
-				Return a description as it is what you would see as a person looking in front of you.
-				Do not start with "in the image".
-				For example : ' in the image I see a tree ' should be 'I see a tree '.
-				Do not use image or picture or similar. Describe from the point of view. It is what you see.
-				If there is a person, people or human describe the person in a postive or flattering way. 
-				Do not describe a person as old or worn or grey or bald. Be positive.
-				""",
+				Limit any interpretation in your respond, be concise. 
+				Do not describe any person/human as old or worn, describe them in a flattering way. 
+				Give a always positive description of any persons that you find.
+				""" + prompt,
 				images = [image]			 
 			)
 
@@ -451,26 +469,32 @@ class BRAIN:
 				description = description['response']
 		
 		print(description)
-		self.tts_output_chunked(description)
 
-		return
+		self.display.state(3)
+
+		return description
 
 	# can you see tool
-	def can_you_see(self, prompt)->str :
+	def find_in_view(self, prompt)->str :
 		""" 
-		If asked if you can see a certain object, person, entity or action, use this tool / function.
+		If asked if you can see a certain object, item, person, entity or activity, use this tool / function.
 		This function provides the ability to detect someone, something or an activity.
-		It will return a positive or negative response based on the question
+		It will return a positive or negative response based on the question.
 
 		Args:
-			input_prompt (str) : the original prompt 
+			input_prompt (str) : the prompt 
 
 		Returns:
-			str: The description of what you are for
+			str: if the the requested object, item, person, entity or activity is visible.
 		"""	
-		self.display.action(13,5)
+		
+		
+		self.display.state(13)
+		print("Tool : find_in_view.")
 		
 		image = self.sense.capture()
+
+		self.display.state(20)
 		
 		if image=="" : 
 			description = "You see nothing."
@@ -479,7 +503,7 @@ class BRAIN:
 			description = ollama.generate(
 				model = VISION_MODEL,
 				keep_alive = -1,
-				prompt = prompt,
+				prompt = "Do you see a " + prompt + " in the image: ",
 				images = [image]			 
 			)
 
@@ -489,6 +513,9 @@ class BRAIN:
 				description = description['response']
 		
 		print("VISION MODEL : " + description)
+		
+		self.display.state(3)
+
 		return description
 		
 	# Current date and time tool
@@ -502,6 +529,8 @@ class BRAIN:
 			str: The current date and time.
 		"""	
 		
+		print("Tool : DateTime.")
+
 		now = datetime.now()	
 		# Format the current date and time as a string
 		
@@ -513,7 +542,8 @@ class BRAIN:
 
 	# Current Weather and weather forecast tool
 	def weather_forecast(self)->str :
-		""" This tool provides the current weather and a five day weather forecast. 
+		""" This tool provides the current weather and a five day weather forecast.
+		It responds with a json structure with the current weather and weather forecast in the json data.
 
 		Args:
 			none
@@ -521,8 +551,11 @@ class BRAIN:
 		Returns:
 			str: a five day weather forecast in json format.
 		"""	
+		
+		print("Tool : weather_forecast.")
+
 		# Weather Vleuten		
-		url = "https://api.openweathermap.org/data/2.5/forecast?lat=52.1099315&lon=5.0019636&units=metric&appid=" + self.config["weather_api_key"]
+		url = "https://api.openweathermap.org/data/2.5/forecast?exclude=minutely,hourly,alerts&lat=52.1099315&lon=5.0019636&units=metric&appid=" + self.config["weather_api_key"]
 		
 		try:
 			response = requests.get(url, timeout=6)
@@ -532,7 +565,279 @@ class BRAIN:
 			else:
 				print("Weather Request error")
 
-		return response.text
+		json_response = response.json()
+		# Format output
+		
+		output = "Current temperature is : " + str(round(json_response["list"][0]["main"]["temp"])) + " celsius. "
+		output = output + "The current temperature feels like : " + str(round(json_response["list"][0]["main"]["feels_like"])) + " celsius. "
+		output = output + "The current weather is like : " + json_response["list"][0]["weather"][0]["description"]
+		output = output + "\n--------------------------------------------\n"
+		output = output + "Tomorrow the temperature will be : " + str(round(json_response["list"][9]["main"]["temp"])) + " celsius. "
+		output = output + "Tomorrow the temperature feels like : " + str(round(json_response["list"][9]["main"]["feels_like"])) + " celsius. "
+		output = output + "Tomorrow the weather is likely going to be : " + json_response["list"][9]["weather"][0]["description"]
+		output = output + "\n--------------------------------------------\n"
+		output = output + "The day after tomorrow the temperature will be : " + str(round(json_response["list"][17]["main"]["temp"])) + " celsius. "
+		output = output + "The day after tomorrow the temperature feels like : " + str(round(json_response["list"][17]["main"]["feels_like"])) + " celsius. "
+		output = output + "The day after tomorrow the weather is likely going to be : " + json_response["list"][17]["weather"][0]["description"]
+
+		return output
+
+	# Walk forward tool
+	def walk_forward(self, steps):
+		""" This tool allows the robot to take steps in a forward direction / motions.
+			Call this tool with an integer as input
+
+		Args:
+			steps (int) : the number of steps to take 
+				
+		Returns:
+			none
+		"""	
+
+		self.display.action(12,3,26)
+		
+		if (type(steps) == str):
+			try:
+				steps = int(steps)
+			except:
+				print("Tool :Error - cannot use input")
+				return
+					
+		print("Tool : walk forward " + str(steps) + " steps.")
+		self.robot.bodyaction(14,0,steps)
+
+		time.sleep(steps)
+
+		return
+
+	# Walk backwards tool
+	def walk_backward(self, steps):
+		""" This tool allows the robot to take steps in a backward direction / motions.
+			Call this tool with an integer as input
+
+		Args:
+			steps (int) : the number of steps to take 
+				
+		Returns:
+			none
+		"""	
+
+		self.display.action(12,3,26)
+
+		if (type(steps) == str):
+			try:
+				steps = int(steps)
+			except:
+				print("Tool :Error - cannot use input")
+				return
+			
+		print("Tool : walk backwards " + str(steps) + " steps.")
+		self.robot.bodyaction(15,0,steps)
+
+		time.sleep(steps)
+
+		return
+
+	# Turn right tool
+	def turn_right(self, steps):
+		""" This tool allows the robot to take steps to turn right.
+			Call this tool with an integer as input
+
+		Args:
+			steps (int) : the number of steps to take 
+				
+		Returns:
+			none
+		"""	
+
+		self.display.action(12,3,26)
+		
+		if (type(steps) == str):
+			try:
+				steps = int(steps)
+			except:
+				print("Tool :Error - cannot use input")
+				return
+			
+		print("Tool : Turn right " + str(steps) + " steps.")
+		self.robot.bodyaction(10,0,steps)
+
+		time.sleep(steps)
+
+		return
+
+	# Turn left tool
+	def turn_left(self, steps):
+		""" This tool allows the robot to take steps to turn left.
+			Call this tool with an integer as input
+
+		Args:
+			steps (int) : the number of steps to take 
+				
+		Returns:
+			none
+		"""	
+
+		self.display.action(12,3,26)
+
+
+		if (type(steps) == str):
+			try:
+				steps = int(steps)
+			except:
+				print("Tool :Error - cannot use input")
+				return
+			
+		print("Tool : Turn left " + str(steps) + " steps.")
+		self.robot.bodyaction(10,1,steps)
+
+		time.sleep(steps)
+
+		return
+
+	# Shake tool
+	def shake(self, steps):
+		""" This tool allows the robot to shake its body
+			Call this tool with an integer as input
+		Args:
+			steps (int) : the number of shakes to do
+				
+		Returns:
+			none
+		"""	
+
+		self.display.action(12,3,26)
+
+		if (type(steps) == str):
+			try:
+				steps = int(steps)
+			except:
+				print("Tool :Error - cannot use input")
+				return
+			
+		print("Tool : Shake " + str(steps) + " shakes.")
+		self.robot.bodyaction(11,0,steps)
+		
+		time.sleep(steps)
+		
+		return
+
+	# Move right lower arm tool
+	def move_right_lower_arm(self, steps, direction=0):
+		""" This tool allows the robot to move its lower right arm up or down.
+			Use direction 1 to move the arm up, Use direction 0 to move the arm down.
+			Call this tool with an integers as input
+		Args:
+			steps (int) : the number of steps/movements to do
+			direction (int) : the direction, 1 for up, 0 for down.
+		Returns:
+			none
+		"""	
+
+		self.display.action(12,3,26)
+		
+		if (type(steps) == str):
+			try:
+				steps = int(steps)
+			except:
+				print("Tool :Error - cannot use input")
+				return
+	
+		if steps < 5:
+			steps = 40
+
+		print("Tool : Move right lower arm  " + str(steps) + " steps.")
+		self.robot.bodyaction(4,direction,steps)
+				
+		return
+
+	# Move left lower arm tool
+	def move_left_lower_arm(self, steps, direction=0):
+		""" This tool allows the robot to move its lower left arm up or down.
+			Use direction 1 to move the arm up, Use direction 0 to move the arm down.
+			Call this tool with an integers as input
+		Args:
+			steps (int) : the number of steps/movements to do
+			direction (int) : the direction, 1 for up, 0 for down.
+		Returns:
+			none
+		"""	
+		
+		self.display.action(12,3,26)
+
+		if (type(steps) == str):
+			try:
+				steps = int(steps)
+			except:
+				print("Tool :Error - cannot use input")
+				return
+			
+		if steps < 5:
+			steps = 40
+
+		print("Tool : Move left lower arm " + str(steps) + " steps.")
+		self.robot.bodyaction(3,direction,steps)
+				
+		return
+
+	# Move right upper arm tool
+	def move_right_upper_arm(self, steps, direction=0):
+		""" This tool allows the robot to move its upper right arm up or down.
+			Use direction 1 to move the arm up, Use direction 0 to move the arm down.
+			Call this tool with an integers as input
+		Args:
+			steps (int) : the number of steps/movements to do
+			direction (int) : the direction, 1 for up, 0 for down.
+		Returns:
+			none
+		"""	
+		
+		self.display.action(12,3,26)
+
+		if (type(steps) == str):
+			try:
+				steps = int(steps)
+			except:
+				print("Tool :Error - cannot use input")
+				return
+
+		if steps < 5:
+			steps = 40
+			
+		print("Tool : Move right upper " + str(steps) + " steps.")
+		self.robot.bodyaction(2,direction,steps)
+		
+		return
+
+
+	# Move left upper arm tool
+	def move_left_upper_arm(self, steps, direction=0):
+		""" This tool allows the robot to move its upper left arm up or down.
+			Use direction 1 to move the arm up, Use direction 0 to move the arm down.
+			Call this tool with an integers as input
+		Args:
+			steps (int) : the number of steps/movements to do
+			direction (int) : the direction, 1 for up, 0 for down.
+		Returns:
+			none
+		"""	
+
+		self.display.action(12,3,26)
+
+		if (type(steps) == str):
+			try:
+				steps = int(steps)
+			except:
+				print("Tool :Error - cannot use input")
+				return
+
+		if steps < 5:
+			steps = 40
+			
+		print("Tool : Move left upper arm " + str(steps) + " steps.")
+		self.robot.bodyaction(1,direction,steps)
+				
+		return
 
 ###############
 ############### End of Agentic Tools ############### 
@@ -543,15 +848,24 @@ class BRAIN:
 	# Robotic expression via a LLM based on sentence
 	#
 	def robot_expression(self,sentence):
-		expression_system = """"Express yourself in 1 word based on the user sentence with one of the following categories: 
-		 SAD, HAPPY, EXCITED, NEUTRAL, DIFFICULT, LOVE, DISLIKE, INTERESTED, OK, LIKE. """
+		
+		if len(sentence) < 3:
+			return
+		prompt = """"Express yourself, 
+		based on the following sentence respond with one of these words, and only that word:
+		SAD, HAPPY, EXCITED, NEUTRAL, DIFFICULT, LOVE, DISLIKE, INTERESTED, OK or LIKE.
+		The sentence is : """ + sentence
+
 		response = ollama.chat(
 			model = LLM_EXPRESSION_MODEL,
 			keep_alive = -1,
-			messages=[{'role': 'system', 'content': expression_system},{'role': 'user', 'content': sentence}],
+			messages=[{'role': 'user', 'content': prompt}],
 		)
 		
 		emotion =  response['message']['content']
+
+		print("Robot expression: " + emotion)
+
 		if "SAD" in emotion:
 			self.display.action(12,5,38)
 			self.robot.bodyaction(16,0,30)
@@ -565,7 +879,7 @@ class BRAIN:
 
 			return
 		elif "EXCITED" in emotion:
-			self.display.action(10,3)
+			self.display.action(12,3,13)
 			self.robot.bodyaction(7,1,5)
 
 			return
@@ -579,7 +893,7 @@ class BRAIN:
 			self.robot.bodyaction(17,0,30)
 
 		elif "LIKE" in emotion:
-			self.display.action(12,3,19)
+			self.display.action(12,3,13)
 			self.robot.bodyaction(17,0,30)
 
 			return
@@ -589,13 +903,13 @@ class BRAIN:
 
 			return
 		elif "INTERESTED" in emotion:
-			self.display.action(4,3)
+			self.display.action(12,3,44)
 			self.robot.bodyaction(16,1,20)
 			self.robot.bodyaction(17,0,20)
 
 			return
 		elif "OK" in emotion:
-			self.display.action(8,3)
+			self.display.action(12,3,7)
 			self.robot.bodyaction(16,0,20)
 			self.robot.bodyaction(17,0,20)
 
@@ -621,7 +935,7 @@ class BRAIN:
 			if token in ".,?!...;:" or n > tts_max_sentence_lenght:
 				message = message + token
 				if not message.strip() == "" and len(message) > 1:
-					print("From LLM: " + message)
+					print("From LLM (chunked response): " + message)
 					self.speak(message)
 	
 				message = ""
@@ -631,4 +945,13 @@ class BRAIN:
 				n = n + 1
 
 		return
+
+	def safe_http_call(self, url, timeout):
+		try:
+			response = requests.get(url, timeout=timeout)
+		except Exception as e:
+			if debug:
+				print("Request - " + url + " , error : ",e)
+			else:
+				print("Request error : " + url)
 

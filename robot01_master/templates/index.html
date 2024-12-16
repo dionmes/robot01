@@ -94,6 +94,27 @@ function audio_control() {
 	});
 }
 
+function body_control() {
+	$("#loader").attr("aria-busy", "true");
+	var checked = $('input[name="bodyactions"]').is(':checked');
+	$("#bodyactions").attr("disabled", true);
+	var on = checked ? 1 : 0;
+	$.ajax({
+		url: "/api/setting?item=bodyactions&value=" + on,
+		type: 'GET',
+		dataType: 'json',
+		async: true
+		})
+	.fail(function (xhr, status, errorThrown) {
+		$("#bodyactions").attr("checked", false);
+		alert(errorThrown);
+	})
+	.always(function() {
+		$("#bodyactions").attr("disabled", false);
+		$("#loader").attr("aria-busy", "false");
+	});
+}
+
 function mic_stream() {
 	$("#loader").attr("aria-busy", "true");
 	var checked = $('input[name="micstream"]').is(':checked');
@@ -171,6 +192,23 @@ window.onload = function() {
 		 console.log( result);
 	})
 
+	// Get body actions status
+	$.ajax({
+		url: "/api/get_setting?item=bodyactions",
+		type: 'GET',
+		dataType: 'json',
+		async: true
+	})
+	.done(function (result) {
+		 $("#bodyactions").removeAttr("disabled");
+		 if (result.value == "on" ) {
+		  $("#bodyactions").attr("checked", true);
+		 } else {
+		  $("#bodyactions").attr("checked", false);
+		 }
+		 console.log( result);
+	})
+
 	// Get LLM mode
 	$.ajax({
 		url: "/api/get_setting?item=llm_mode",
@@ -229,6 +267,10 @@ window.onload = function() {
 				<label>
 				<input id="audiostream" onchange="audio_control();" name="audiostream" type="checkbox" role="switch" disabled/>
 				Audio / Speech
+				</label>
+				<label>
+				<input id="bodyactions" onchange="body_control();" name="bodyactions" type="checkbox" role="switch" disabled/>
+				Body Actions
 				</label>
 				<label>
 				<input id="micstream" onchange="mic_stream();" name="micstream" type="checkbox" role="switch" disabled/>

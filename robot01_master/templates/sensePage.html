@@ -59,7 +59,7 @@ function wakeUpSense() {
 	$("#loader").attr("aria-busy", "true");
 
 	$.ajax({
-		url: "/wakeupsense",
+		url: "http://{{context.robot01_ip}}/wakeupsense",
 		type: 'GET',
     	dataType: 'text',
     	async: true 

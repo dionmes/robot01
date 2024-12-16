@@ -69,9 +69,6 @@ class TTS:
 			
 			self.text_q.task_done()
 
-			if not self.brain.talking:
-				self.brain.talking_started()
-
 	# Send Audio worker : Gets audio wave from queue : audio_q
 	# sends audio (16khz mono f32le) over UDP to robot01 ip port 9000
 	#
@@ -91,7 +88,10 @@ class TTS:
 			audio=synth_speech['audio']
 			sample_rate = synth_speech['sampling_rate']
 	
-			# Send packets of max. 1472 / 4 byte sample size
+			if not self.brain.talking:
+				self.brain.talking_started()
+
+			# Send packets of max. 1472 / 4 byte sample size (2 channels)
 			for x in range(0, audio.shape[0],368):
 				start = x
 				end = x + 368
@@ -115,6 +115,8 @@ class TTS:
 		if not self.running:
 			if not self.loaded:
 				self.loadmodels()		
+			self.text_q = queue.Queue(maxsize=TEXT_Q_SIZE)
+			self.audio_q = queue.Queue(maxsize=AUDIO_Q_SIZE)
 			self.running = True
 			threading.Thread(target=self.generate_speech, daemon=True).start()
 			threading.Thread(target=self.sendaudio, daemon=True).start()
@@ -122,9 +124,6 @@ class TTS:
 	# Stop workers
 	def stop(self):
 		self.running = False
-		self.text_q = queue.Queue(maxsize=TEXT_Q)
-		self.audio_q = queue.Queue(maxsize=AUDIO_Q)
-		
 		# Wait for save shutdown of threads and queues
 		time.sleep(1)
 

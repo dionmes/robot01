@@ -15,18 +15,21 @@ MINIMAL_SLEEP = 3
 # Uses threading for http call to make it non-blocking
 class ROBOT:
 	def __init__(self, ip, timeout=2):
+
+		self.health_ok = False
+
 		self.ip = ip
 		self.timeout = timeout
-
 		#Queue
 		self.body_q = queue.Queue(maxsize=BODY_Q_SIZE)
 		# Start Queue worker
+		self.robot_actions = True
 		threading.Thread(target=self.handle_actions, daemon=True).start()
 
 	# Generate Display worker : Actions from queue : display_q
 	def handle_actions(self):
 		print("Robot worker started.")	
-		while True:	
+		while self.robot_actions:	
 			task = self.body_q.get()
 			print("Robot action : " + str(task['action']) )
 
@@ -34,7 +37,10 @@ class ROBOT:
 	
 			try:
 				response = requests.get(url, timeout=self.timeout)
+				self.heath_ok = True
 			except Exception as e:
+				self.health_ok = False
+
 				if debug:
 					print("Robot01 Request - " + url + " , error : ",e)
 				else:
@@ -42,7 +48,32 @@ class ROBOT:
 
 			time.sleep(MINIMAL_SLEEP)		
 			self.body_q.task_done()			
-			
+
+	def stopactions(self):
+		self.robot_actions = False		
+		# Stop action to robot
+		url = 'http://' + self.ip + body_action_url + "13&direction=0&steps=0"
+
+		try:
+			response = requests.get(url, timeout=self.timeout)
+			self.heath_ok = True
+		except Exception as e:
+			self.health_ok = False
+			if debug:
+				print("Robot01 Request - " + url + " , error : ",e)
+			else:
+				print("Robot01 Request error")
+
+		time.sleep(1)		
+
+		print("Robot body actions stopped")
+
+	def startactions(self):
+		self.body_q = queue.Queue(maxsize=BODY_Q_SIZE)
+		self.robot_actions = True
+		threading.Thread(target=self.handle_actions, daemon=True).start()
+		print("Robot body actions enabled")
+
 	def bodyaction(self, action, direction, steps):
 		task = { "action" : action, "direction" : direction, "steps" : steps } 
 		try:
@@ -66,6 +97,7 @@ class ROBOT:
 			audio = True if json_obj['audiostream'] == 1 else False
 
 		except Exception as e:
+			self.health_ok = False
 			print("Request - audiostatus error : ",e)
 			audio = False
 		
@@ -73,8 +105,10 @@ class ROBOT:
 
 	def safe_http_call(self, url):
 		try:
-			response = requests.get(url, timeout=self.timeout)
+			response = requests.get(url, timeout=self.timeout
+			self.heath_ok = True
 		except Exception as e:
+			self.health_ok = False
 			if debug:
 				print("Robot01 Request - " + url + " , error : ",e)
 			else:

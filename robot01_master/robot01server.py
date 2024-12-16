@@ -127,8 +127,6 @@ def restart_master():
 
 	return jsonify(api_response)
 
-
-
 #
 # Text and image to robot post request
 # POST: /api/ask_robot01 {"text" : string }
