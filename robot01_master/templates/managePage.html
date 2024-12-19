@@ -37,7 +37,7 @@ function restart_robot01() {
   	$("#loader").attr("aria-busy", "true");
 
 	$.ajax({
-		url: "http://{{context.robot01_ip}}/reset",
+		url: "/api/robot01_reset",
 		type: 'GET',
 		timeout: 5000,
 		async: true
@@ -54,7 +54,7 @@ function restart_sense() {
   	$("#loader").attr("aria-busy", "true");
 
 	$.ajax({
-		url: "http://{{context.robot01sense_ip}}/reset",
+		url: "/api/sense_reset",
 		type: 'GET',
 		timeout: 5000,
 		async: true		
@@ -68,10 +68,10 @@ function restart_sense() {
 }
 
 function erase_robot01_config() {
-  	if (confirm("Do you want to erase the sense wifi configuration ?") == true) {
+  	if (confirm("Do you want to erase the z wifi configuration ?") == true) {
   		$("#loader").attr("aria-busy", "true");
 		$.ajax({
-			url: "http://{{context.robot01_ip}}/eraseconfig",
+			url: "/api/robot01_eraseconfig",
 			type: 'GET',
 			dataType: 'text',
 			async: true 
@@ -85,12 +85,11 @@ function erase_robot01_config() {
 	}
 }
 
-
 function erase_sense_config() {
   	if (confirm("Do you want to erase the sense wifi configuration ?") == true) {
   		$("#loader").attr("aria-busy", "true");
 		$.ajax({
-			url: "http://{{context.robot01sense_ip}}/eraseconfig",
+			url: "/api/sense_eraseconfig",
 			type: 'GET',
 			dataType: 'text',
 			async: true 

@@ -44,30 +44,24 @@ function ask_robot01() {
 function health_update() {
 
 	$.ajax({
-		url: "http://{{context.robot01_ip}}/health",
+		url: "/api/health",
 		type: 'GET',
 		dataType: 'json',
 		async: true
 	})
 	.done(function (result) {
-		$("#robot01status").css({backgroundColor: 'green'});
+		if (result.robot01) {
+			$("#robot01status").css({backgroundColor: 'green'});
+		} else {
+			$("#robot01status").css({backgroundColor: 'red'});
+		}
+		if (result.sense) {
+			$("#sensestatus").css({backgroundColor: 'green'});
+		} else {
+			$("#sensestatus").css({backgroundColor: 'red'});
+		}
 	})
 	.fail(function (xhr, status, errorThrown) {
-		$("#robot01status").css({backgroundColor: 'red'});
-		console.log( errorThrown);	
-	});
-
-	$.ajax({
-		url: "http://{{context.robot01sense_ip}}/health",
-		type: 'GET',
-		dataType: 'json',
-		async: true
-	})
-	.done(function (result) {
-		$("#sensestatus").css({backgroundColor: 'green'});
-	})
-	.fail(function (xhr, status, errorThrown) {
-		$("#sensestatus").css({backgroundColor: 'red'});
 		console.log( errorThrown);	
 	});
 		
@@ -121,7 +115,7 @@ function mic_stream() {
 	$("#micstream").attr("disabled", true);
 	var on = checked ? 1 : 0;
 	$.ajax({
-		url: "/api/setting?item=mic&value=" + on,
+		url: "/api/setting?item=micstreaming&value=" + on,
 		type: 'GET',
 		dataType: 'json',
 		async: true
@@ -160,7 +154,7 @@ window.onload = function() {
 	
 	// Get udp micstream status
 	$.ajax({
-		url: "/api/get_setting?item=mic",
+		url: "/api/get_setting?item=micstreaming",
 		type: 'GET',
 		dataType: 'json',
 		async: true
@@ -168,7 +162,7 @@ window.onload = function() {
 	.done(function (result) {
 		console.log(result);
 		$("#micstream").removeAttr("disabled");
-		if (result.value == "on" ) {
+		if (result.value) {
 			$("#micstream").attr("checked", true);
 		} else {
 			$("#micstream").attr("checked", false);
@@ -184,7 +178,7 @@ window.onload = function() {
 	})
 	.done(function (result) {
 		 $("#audiostream").removeAttr("disabled");
-		 if (result.value == "on" ) {
+		 if (result.value) {
 		  $("#audiostream").attr("checked", true);
 		 } else {
 		  $("#audiostream").attr("checked", false);
@@ -201,7 +195,7 @@ window.onload = function() {
 	})
 	.done(function (result) {
 		 $("#bodyactions").removeAttr("disabled");
-		 if (result.value == "on" ) {
+		 if (result.value ) {
 		  $("#bodyactions").attr("checked", true);
 		 } else {
 		  $("#bodyactions").attr("checked", false);

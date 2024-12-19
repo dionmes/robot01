@@ -21,8 +21,9 @@ class DISPLAY:
 		self.ip = ip
 		# timeout of http request
 		self.timeout = timeout
-		# state (default = 3 : Neutral)
-		self.display_state  = 3
+		# Latest state (default Neutral)
+		self.display_latest_state_task = {"type": "state", "action" : 3, "reset" : 0, "img_index" : 0, "text" : ""}
+
 		#Queue
 		self.display_q = queue.Queue(maxsize=DISPLAY_Q_SIZE)
 		# Start Queue worker
@@ -33,13 +34,20 @@ class DISPLAY:
 		print("DISPLAY worker started.")	
 		
 		while True:	
-			task = self.display_q.get()
-
-			print("Display action : " + str(task) )
+			task = self.display_q.get()			
+			action = task['action']
 			
 			if task['type'] == "state":
-				self.display_state = task['action']
-				url = 'http://' + self.ip + display_action_url + str(task['action'])
+				self.display_latest_state_task = task
+
+				url = 'http://' + self.ip + display_action_url + str(action)
+
+				# text display
+				if action == 1 or action == 2 or action == 14:
+					url = url + "&text=" + task['text']
+
+				if task['img_index'] > 0:
+					url = url + "&index=" + str(task['img_index'])
 
 				try:
 					requests.get(url, timeout=self.timeout)
@@ -50,11 +58,15 @@ class DISPLAY:
 						print("Display Request error")
 					
 			elif  task['type'] == "action":
-			
-				url = 'http://' + self.ip + display_action_url + str(task['action'])
+				
+				url = 'http://' + self.ip + display_action_url + str(action)
 
-				if task['icon'] > 0:
-					url = url + "&index=" + str(task['icon'])
+				# text display
+				if action == 1 or action == 2 or action == 14:
+					url = url + "&text='" + task['text']
+
+				if task['img_index'] > 0:
+					url = url + "&index=" + str(task['img_index'])
 
 				try:
 					requests.get(url, timeout=self.timeout)
@@ -64,27 +76,21 @@ class DISPLAY:
 					else:
 						print("Display Request error")
 
-			if task['reset'] < MINIMAL_SLEEP:
-				sleep = MINIMAL_SLEEP
-			else:
-				sleep = task['reset']
-				
-			time.sleep(sleep)
+				if task['reset'] < 3:
+					time.sleep(MINIMAL_SLEEP)
 			
+			# Reset to latest state
 			if self.display_q.empty():				
 				if task['type'] == "action":
-					try:
-						requests.get('http://' + self.ip + display_action_url + str(self.display_state), timeout=self.timeout)
-					except Exception as e:
-						print("Request - " + display_action_url + " , error : ",e)
+					self.display_q.put_nowait(self.display_latest_state_task)
 	
 				time.sleep(MINIMAL_SLEEP)
 					
 			self.display_q.task_done()
 
 	# set state of display
-	def state(self, action, reset=0):
-		task = {"type": "state", "action" : action, "reset" : reset }
+	def state(self, action, img_index = 0, text = ""):
+		task = {"type": "state", "action" : action, "img_index" : img_index, "text" : text}
 		
 		try:
 			# Empty the queue
@@ -97,11 +103,13 @@ class DISPLAY:
 			print("Display queue error : ", type(e).__name__ )
 
 	# set temporary state of display
-	def action(self, action, reset, icon = 0):
-		task = {"type": "action", "action" : action, "reset" : reset, "icon" : icon } 
+	def action(self, action, reset=0, img_index = 0, text=""):
+		task = {"type": "action", "action" : action, "reset" : reset, "img_index" : img_index, "text" : text}
+		
 		try:
 			# Add state to queue
 			self.display_q.put_nowait(task)
 		except Exception as e:
 			print("Display queue error : ", type(e).__name__ )
+
 

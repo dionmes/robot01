@@ -12,9 +12,8 @@
 
 function mic_gain() {
 	var gain = $("#micgain").val();
-
 	$.ajax({
-		url: "http://{{context.robot01sense_ip}}/control?setting=micgain&param=" + gain ,
+		url: "/api/setting?item=micgain&value=" + gain,
 		type: 'GET',
     	dataType: 'json',
     	async: true
@@ -38,7 +37,7 @@ function cam_stream() {
 	console.log(on);
 
 	$.ajax({
-		url: "http://{{context.robot01sense_ip}}/control?setting=camstreaming&param=" + on,
+		url: "/api/setting?item=camstreaming&value=" + on,
 		type: 'GET',
     	dataType: 'json',
     	async: true
@@ -59,7 +58,7 @@ function wakeUpSense() {
 	$("#loader").attr("aria-busy", "true");
 
 	$.ajax({
-		url: "http://{{context.robot01_ip}}/wakeupsense",
+		url: "/api/wakeupsense",
 		type: 'GET',
     	dataType: 'text',
     	async: true 
@@ -72,14 +71,28 @@ function wakeUpSense() {
 	});	
 }
 
+
 function cam_capture() {
-	$("#loader").attr("aria-busy", "true");
-    d = new Date();
-    $("#capture-img").attr('src', "http://{{context.robot01sense_ip}}:80/capture?"+d.getTime());
-	$("#loader").attr("aria-busy", "false");
+	d = new Date();
+
+	$.ajax({
+		url: "/api/img_capture?"+d.getTime(),
+		type: 'GET',
+    	dataType: 'text',
+    	async: true 
+    })
+	.done(function (result) {
+		$("#capture-img").attr('src', "data:image/png;base64, " + result);
+	})
+	.fail(function (xhr, status,errorThrown ) {
+		alert(errorThrown);
+	})
+	.always(function() {
+		$("#loader").attr("aria-busy", "false");
+	});	
 }
 
-function cam_receive() {
+function cam_stream_receive() {
 	$("#loader").attr("aria-busy", "true");
     $("#capture-img").attr('src', "http://{{context.robot01sense_ip}}:81/stream");
 	$("#loader").attr("aria-busy", "false");
@@ -88,7 +101,7 @@ function cam_receive() {
 function cam_resolution(res) {
 	$("#loader").attr("aria-busy", "true");
 	$.ajax({
-		url: "http://{{context.robot01sense_ip}}/control?setting=framesize&param=" + res,
+		url: "/api/setting?item=cam_resolution&value=" + res,
 		type: 'GET',
     	dataType: 'json',
     	async: true 
@@ -103,12 +116,12 @@ function cam_resolution(res) {
 		$("#loader").attr("aria-busy", "false");
 	});	
 }
-  
+
 window.onload = function() {
 
 	// Get mic gain
 	$.ajax({
-		url: "http://{{context.robot01sense_ip}}/control?setting=micgain",
+		url: "/api/get_setting?item=micgain",
 		type: 'GET',
     	dataType: 'json',
     	async: true
@@ -116,12 +129,12 @@ window.onload = function() {
     .done(function (result) {
 		console.log(result);
 		$("#micgain").removeAttr("disabled");
-    	$("#micgain").val(result.micgain);
+    	$("#micgain").val(result.value);
 	})
 
 	// Get camstream status
 	$.ajax({
-		url: "http://{{context.robot01sense_ip}}/control?setting=camstreaming",
+		url: "/api/get_setting?item=camstreaming",
 		type: 'GET',
     	dataType: 'json',
     	async: true
@@ -129,7 +142,7 @@ window.onload = function() {
     .done(function (result) {
 		console.log(result);
 		$("#camstream").removeAttr("disabled");
-		if (result.camstreaming === 1 ) {
+		if (result.value) {
 			$("#camstream").attr("checked", true);
 		} else {
 			$("#camstream").attr("checked", false);
@@ -175,7 +188,7 @@ window.onload = function() {
 		<hr>
 		<div class="grid">
 			<button id="capture" class="secondary" onClick="cam_capture();">Show Capture</button>
-			<button id="stream" class="secondary" onClick="cam_receive();">Show Stream</button>
+			<button id="stream" class="secondary" onClick="cam_stream_receive();">Show Stream</button>
 		</div>	
 		<br>
 		<article style="display: block; margin: 0 auto; width: 50%;">

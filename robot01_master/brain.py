@@ -56,16 +56,15 @@ Only respond with numbers in a written out format. Do not use digits as output. 
 "weather_api_key": "",
 }
 
+ROBOT01_DEFAULT_IP = "192.168.133.75"
+SENSE_DEFAULT_IP = "192.168.133.226"
+
 # Class brain for robot01
 class BRAIN:
 	def __init__(self):
 	
 		self.config = self.load_config()
 		
-		# Robot01 IP (with default ip)
-		self.robot01_ip = "192.168.133.75"
-		# Sense IP	(with default ip)
-		self.robot01sense_ip = "192.168.133.226"
 		# Brain status
 		self.busybrain = False
 		# Talking
@@ -80,16 +79,16 @@ class BRAIN:
 		self.audio = False
 
 		# Display engine
-		self.display = DISPLAY(self.robot01_ip)
+		self.display = DISPLAY(ROBOT01_DEFAULT_IP)
 		self.display.state(20) # Show hour glass animation
 		
 		# Robot01
-		self.robot = ROBOT(self.robot01_ip)
+		self.robot = ROBOT(ROBOT01_DEFAULT_IP)
 		# tts engine
-		self.tts_engine = TTS(self.robot01_ip, self)
+		self.tts_engine = TTS(ROBOT01_DEFAULT_IP, self)
 		
 		# Sense engine
-		self.sense = SENSE(self.robot01sense_ip)
+		self.sense = SENSE(SENSE_DEFAULT_IP)
 
 		# stt engine
 		self.stt_q = queue.Queue(maxsize=STT_Q_SIZE)
@@ -131,7 +130,7 @@ class BRAIN:
 		print("Configuration saved")
 
 	# Save configuration
-	def health_monitor(self):
+	def health_status(self):
 		health = {"robot01" :  self.robot.health_ok , "sense" : self.sense.health_ok }
 		return health
 
@@ -139,41 +138,37 @@ class BRAIN:
 	# API brain setting handler
 	#
 	def setting(self,item,value)->bool:
-		if item in "robot01_ip robot01sense_ip audio mic llm_mode bodyactions":	
+		if item in "robot01_ip robot01sense_ip audio micstreaming cam_resolution camstreaming micgain llm_mode bodyactions volume":	
 
 			if item == "robot01_ip":
 				if	self.validate_ip_address(value):
-					self.robot01_ip = value
 					# update objects with new id
-					self.robot = ROBOT(self.robot01_ip)
-					self.display = DISPLAY(self.robot01_ip)
-					self.tts_engine = TTS(self.robot01_ip, self)
+					self.robot.ip = value
+					self.display.ip = value
+					self.tts_engine.ip = value
 				else:
 					print("Error updating robot01_ip : ", value)
 
 			if item == "robot01sense_ip":
 				if self.validate_ip_address(value):
-					self.robot01sense_ip = value
-					# Sense engine update with new id
-					self.sense = SENSE(self.robot01sense_ip)
+					self.sense.ip = value
 				else:
 					print("Error updating robot01sense_ip : ", value)
 
+			if item == "volume":
+				self.robot.volume(value)
+
 			if item == "audio":
 				self.audio = True if value == "1" else False
+				self.robot.audio_output(value)
 				if self.audio:
 					self.tts_engine.start()
-					self.robot.startaudio()
 				else:
-					self.robot.stopaudio()
 					self.tts_engine.stop()
 					
 			if item == "bodyactions":
-				self.robot.robot_actions = True if value == "1" else False
-				if self.robot.robot_actions:
-					self.robot.startactions()
-				else:
-					self.robot.stopactions()
+				running = True if value == "1" else False
+				self.robot.bodyactions_set_state(running)
 
 			if item == "llm_mode":
 				if value == "chat mode":
@@ -183,14 +178,22 @@ class BRAIN:
 					self.display.action(12,3,10)
 					self.llm_mode = value
 
-			if item == "mic":
-				self.mic = True if value == "1" else False
-				if self.mic:
+			if item == "micstreaming":
+				self.mic = value
+				self.sense.micstreaming(self.mic)
+				if self.mic == 1:
 					self.stt_engine.start()
-					self.sense.startmic()
 				else:
 					self.stt_engine.stop()
-					self.sense.stopmic()
+
+			if item == "micgain":
+				self.sense.micgain(value)
+
+			if item == "camstreaming":
+				self.sense.camstreaming(value)
+
+			if item == "cam_resolution":
+				self.sense.cam_resolution(value)
 
 			print("Update " + item + " with value :", value)
 			
@@ -203,35 +206,35 @@ class BRAIN:
 	# API internal get setting handler
 	#
 	def get_setting(self,item)->str:
-		if item in "robot01_ip robot01sense_ip audio mic llm_mode bodyactions":	
+		if item in "robot01_ip robot01sense_ip audio micstreaming camstreaming micgain llm_mode bodyactions volume":	
 			if item == "robot01_ip":
-				return self.robot01_ip
+				return self.robot.ip
 	
 			if item == "robot01sense_ip":
-				return self.robot01sense_ip
+				return self.sense.ip
 	
 			if item == "llm_mode":
 				return self.llm_mode
 				
 			if item == "bodyactions":
-				if  self.robot.robot_actions:
-					return "on"
-				else:
-					return "off"
+				return self.robot.robot_actions
 
+			if item == "volume":
+				return self.robot.volume()
+				
+			if item == "micgain":
+				return self.sense.micgain()
+				
 			if item == "audio":
-				self.audio = self.robot.audiostatus()
-				if self.audio:
-					return "on"
-				else:
-					return "off"
+				self.audio  = self.robot.audio_output()
+				return self.audio
 	
-			if item == "mic":
-				self.mic = self.sense.micstatus()
-				if self.mic:
-					return "on"
-				else:
-					return "off"
+			if item == "micstreaming":
+				self.mic = self.sense.micstreaming()
+				return self.mic
+
+			if item == "camstreaming":
+				return self.sense.camstreaming()
 
 		else:
 			print("Setting " + item + " not found")
@@ -241,7 +244,7 @@ class BRAIN:
 	# self.talking flag to prevent repeated calling
 	def talking_started(self):
 		self.talking = True
-		self.sense.stopmic()
+		self.sense.micstreaming(0)
 
 		# Display talking animation as default
 		self.display.state(23)
@@ -250,7 +253,7 @@ class BRAIN:
 	def talking_stopped(self):
 		self.talking = False
 		if self.mic: # If mic setting was True enable mic again
-			self.sense.startmic()
+			self.sense.micstreaming(1)
 
 		# Display face neutral
 		self.display.state(3)
@@ -374,11 +377,12 @@ class BRAIN:
 		("system", self.config["agent_system"] + """
 			Functions and tools are the same and can be treated as such.
 			When as a robot you are asked to determine if you see an specific object, activity, environment, item or person, use the "find_in_view" tool. 
-			When as a robot you need to describe what is in front of you, use the "describe_view" tool. This tool will provide you with a description and list what you can see as a robot.
-			When as a robot you need information about the current date and time, use the "current_time_and_date" tool.
-			When as a robot you need information about the current weather or the weather forecast, use the "weather_forecast" tool. When responding with the temperatures convert digits to written out numerical.
-			When as a robot you need to move use the "walk_forward", "walk_backward", "turn_left", "turn_right" or "shake" tools, with the number of movements you need to do.
-			When as a robot you need to move your arms use the "move_right_lower_arm", "walk_backward", "move_left_lower_arm", "move_right_upper_arm" or "move_left_upper_arm" tools, with the number of movements you need to do.
+			When as a robot you need or want to describe what is in front of you, use the "describe_view" tool. This tool will provide you with a description and list what you can see as a robot.
+			When as a robot you need or want information about the current date and time, use the "current_time_and_date" tool.
+			When as a robot you need or want information about the current weather or the weather forecast, use the "weather_forecast" tool. When responding with the temperatures convert digits to written out numerical.
+			When as a robot you need or want to move use the "walk_forward", "walk_backward", "turn_left" or "turn_right" tool with the number of steps you need to take.
+			When as a robot you need or want to shake use the "shake" tool with the number of times you need to shake.
+			When as a robot you need or want to move your arms use the "move_right_lower_arm", "walk_backward", "move_left_lower_arm", "move_right_upper_arm" or "move_left_upper_arm" tools, with the number of movements you need to do.
 		"""),
 		("human", "{input}"), 
 		("placeholder", "{agent_scratchpad}"),
@@ -398,8 +402,7 @@ class BRAIN:
 			StructuredTool.from_function(self.move_right_lower_arm),
 			StructuredTool.from_function(self.move_left_lower_arm),
 			StructuredTool.from_function(self.move_right_upper_arm),
-			StructuredTool.from_function(self.move_left_upper_arm)
-			
+			StructuredTool.from_function(self.move_left_upper_arm)	
 		]
 		
 		# Langchain llm
@@ -696,11 +699,11 @@ class BRAIN:
 		return
 
 	# Shake tool
-	def shake(self, steps):
+	def shake(self, times):
 		""" This tool allows the robot to shake its body
 			Call this tool with an integer as input
 		Args:
-			steps (int) : the number of shakes to do
+			times (int) : the number of shakes to do
 				
 		Returns:
 			none
@@ -708,17 +711,19 @@ class BRAIN:
 
 		self.display.action(12,3,26)
 
-		if (type(steps) == str):
+		if (type(times) == str):
 			try:
-				steps = int(steps)
+				times = int(times)
 			except:
-				print("Tool :Error - cannot use input")
-				return
+				times = 0
 			
-		print("Tool : Shake " + str(steps) + " shakes.")
-		self.robot.bodyaction(11,0,steps)
+		if times < 3:
+			times = 3
+
+		print("Tool : Shake " + str(times) + " shakes.")
+		self.robot.bodyaction(11,0,times)
 		
-		time.sleep(steps)
+		time.sleep(times)
 		
 		return
 
@@ -839,6 +844,7 @@ class BRAIN:
 				
 		return
 
+		
 ###############
 ############### End of Agentic Tools ############### 
 ###############

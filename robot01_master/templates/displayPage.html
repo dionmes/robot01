@@ -13,36 +13,19 @@
 function displayAction(action) {
 	$("#loader").attr("aria-busy", "true");
 
-	var url = "http://{{context.robot01_ip}}/displayaction?action=" + action;
+	var url = "api/displayaction?action=" + action;
+	
 	if (action == 1 || action == 2 || action == 14) {
-		url = "http://{{context.robot01_ip}}/displayaction?action=" + action + "&text=" + $("#textField").val(); 	
+		url = "api/displayaction?action=" + action + "&text=" + $("#textField").val(); 	
 	}
 	if (action==12) {
-		url = "http://{{context.robot01_ip}}/displayaction?action=" + action + "&index=" + $("#img_index").val();	
+		url = "api/displayaction?action=" + action + "&index=" + $("#img_index").val();	
 	}
 	$.ajax({
 		url: url,
 		type: 'GET',
     	dataType: 'text',
     	async: true
-	})
-	.done(function (result) {
-	})
-	.fail(function (xhr, status,errorThrown) {
-		alert(errorThrown);
-	})
-	.always(function() {
-		$("#loader").attr("aria-busy", "false");
-	});
-}
-
-function imgloop() {
-	$("#loader").attr("aria-busy", "true");
-	$.ajax({
-		url: "http://{{context.robot01_ip}}/displayaction?action=24",
-		type: 'GET',
-		dataType: 'text',
-		async: true
 	})
 	.done(function (result) {
 	})
@@ -170,7 +153,7 @@ function imgloop() {
 		</div>
 		
 		<div class="grid" style="margin: var(--pico-spacing");>
-			<button class="outline" onClick="imgloop();">Image loop</button>
+			<button class="outline" onClick="displayAction(24);">Image loop</button>
 		</div>
 	  	<h4>Face</h4>
 		<div class="grid" style="margin: var(--pico-spacing");>

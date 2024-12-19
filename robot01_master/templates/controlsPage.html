@@ -15,9 +15,8 @@ function volume() {
 	var volume = $("#volume").val();
 
 	$.ajax({
-		url: "http://{{context.robot01_ip}}/volume?power=" + volume,
+		url: "/api/setting?item=volume&value=" + volume,
 		type: 'GET',
-    	dataType: 'json',
     	async: true
     })
     .fail(function (xhr, status, errorThrown) {
@@ -31,26 +30,9 @@ function volume() {
 function bodyaction(action, direction) {
 	$("#loader").attr("aria-busy", "true");
 
-	var url = "http://{{context.robot01_ip}}/bodyaction?action=" + action + "&direction=" + direction + "&steps=" + $("#movesteps").val(); 	
+	var url = "api/bodyaction?action=" + action + "&direction=" + direction + "&steps=" + $("#movesteps").val(); 	
 	$.ajax({
 		url: url,
-		type: 'GET',
-    	dataType: 'text',
-    	async: true
-    })
-    .fail(function (xhr, status, errorThrown) {
-		alert(errorThrown);
-	})
-	.always(function() {
-		$("#loader").attr("aria-busy", "false");
-	});
-}
-
-function bodytest() {
-	$("#loader").attr("aria-busy", "true");
-
-	$.ajax({
-		url: "http://{{context.robot01_ip}}/bodyaction",
 		type: 'GET',
     	dataType: 'text',
     	async: true
@@ -67,15 +49,15 @@ window.onload = function() {
 
 	// Get volume
 	$.ajax({
-		url: "http://{{context.robot01_ip}}/volume",
+		url: "/api/get_setting?item=volume",
 		type: 'GET',
     	dataType: 'json',
     	async: true
     })
     .done(function (result) {
     	 $("#volume").removeAttr("disabled");
-    	 $("#volume").val(result.volume);
-    	 console.log(result.volume);
+    	 $("#volume").val(result.value);
+    	 console.log(result.value);
 	})
 	
 };

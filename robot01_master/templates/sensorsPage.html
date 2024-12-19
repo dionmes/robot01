@@ -12,7 +12,7 @@
 
 function update_VL53L1X() {
 	$.ajax({
-		url: "http://{{context.robot01_ip}}/VL53L1X_Info",
+		url: "api/VL53L1X_Info",
 		type: 'GET',
     	dataType: 'json',
     	async: true
@@ -30,7 +30,7 @@ function update_VL53L1X() {
 
 function update_BNO08X() {
 	$.ajax({
-		url: "http://{{context.robot01_ip}}/BNO08X_Info",
+		url: "api/BNO08X_Info",
 		type: 'GET',
     	dataType: 'json',
     	async: true
@@ -55,8 +55,8 @@ function update_BNO08X() {
 }
 
 window.onload = function() {
-	setInterval("update_VL53L1X()",500);
-	setInterval("update_BNO08X()",500);
+	setInterval("update_VL53L1X()",1000);
+	setInterval("update_BNO08X()",1000);
 }
 
 </script>
