@@ -44,15 +44,15 @@ void bodyControl::begin() {
   mcp1.init();
   mcp2.init();
 
-  mcp1.portMode(MCP23017Port::A, 0b11111111);          //Port A as input
-  mcp1.portMode(MCP23017Port::B, 0);                   //Port B as output
   mcp1.writeRegister(MCP23017Register::GPIO_A, 0x00);  //Reset port A
   mcp1.writeRegister(MCP23017Register::GPIO_B, 0x00);  //Reset port B
+  mcp1.portMode(MCP23017Port::A, 0b11111111);          //Port A as input
+  mcp1.portMode(MCP23017Port::B, 0);                   //Port B as output
 
-  mcp2.portMode(MCP23017Port::A, 0);                   //Port A as output
-  mcp2.portMode(MCP23017Port::B, 0b11111111);          //Port B as input
   mcp2.writeRegister(MCP23017Register::GPIO_A, 0x00);  //Reset port A
   mcp2.writeRegister(MCP23017Register::GPIO_B, 0x00);  //Reset port B
+  mcp2.portMode(MCP23017Port::A, 0);                   //Port A as output
+  mcp2.portMode(MCP23017Port::B, 0b11111111);          //Port B as input
 
 };
 
@@ -88,7 +88,7 @@ void bodyControl::bodyActionTask(void* bodyControlInstance) {
   bodyControl* bodyControlRef = (bodyControl*)bodyControlInstance;
   bodyControlRef->actionRunning = true;
 
-  Serial.printf("Body Action : %i \n", bodyControlRef->_action);
+  // Serial.printf("Body Action : %i \n", bodyControlRef->_action);
 
   switch (bodyControlRef->_action) {
     case bodyAction::LEFTLOWERARM:

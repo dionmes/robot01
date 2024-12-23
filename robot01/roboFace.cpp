@@ -12,7 +12,7 @@
 #include "animations.h"
 
 // vTask core
-#define DISPLAY_TASK_CORE 0
+#define DISPLAY_TASK_CORE 1
 
 // Face coordinates
 #define rectX1 0
@@ -53,7 +53,7 @@ void roboFace::exec(int action, String text, int intValue) {
       xTaskNotify( faceTaskHandle, 1, eSetValueWithOverwrite );
       this->actionRunning = false;
     }
-    vTaskDelay(500 / portTICK_PERIOD_MS);
+    vTaskDelay(200 / portTICK_PERIOD_MS);
     this->actionRunning = false;
   }
 
@@ -62,27 +62,39 @@ void roboFace::exec(int action, String text, int intValue) {
   _intValue = intValue;
 
   xTaskCreatePinnedToCore(this->displayTask, "displayTask", 8192, (void*)this, 20, &faceTaskHandle, DISPLAY_TASK_CORE);
-  vTaskDelay(500 / portTICK_PERIOD_MS);
+  vTaskDelay(200 / portTICK_PERIOD_MS);
+  
 };
 
 void roboFace::displayTask(void* roboFaceInstance) {
 
   roboFace* roboFaceRef = (roboFace*)roboFaceInstance;
   roboFaceRef->actionRunning = true;
-  Serial.print("Display action : ");
-  Serial.println(roboFaceRef->_action);
+  // Serial.printf("Display Action : %i \n", roboFaceRef->_action);
 
   switch (roboFaceRef->_action) {
     case faceAction::DISPLAYTEXTSMALL:
       roboFaceRef->displayText(roboFaceRef->_text, 1);
+      if (roboFaceRef->_intValue > 0 ) {
+        vTaskDelay(roboFaceRef->_intValue / portTICK_PERIOD_MS);
+        roboFaceRef->neutral();
+      }
       break;
 
     case faceAction::DISPLAYTEXTLARGE:
       roboFaceRef->displayText(roboFaceRef->_text, 2);
+      if (roboFaceRef->_intValue > 0 ) {
+        vTaskDelay(roboFaceRef->_intValue / portTICK_PERIOD_MS);
+        roboFaceRef->neutral();
+      }
       break;
 
     case faceAction::SCROLLTEXT:
       roboFaceRef->scrollText(roboFaceRef->_text, 1);
+      if (roboFaceRef->_intValue > 0 ) {
+        vTaskDelay(roboFaceRef->_intValue / portTICK_PERIOD_MS);
+        roboFaceRef->neutral();
+      }
       break;
 
     case faceAction::NEUTRAL:
@@ -512,13 +524,13 @@ void roboFace::mouth_large_circle() {
 
 void roboFace::mouth_small_rrect() {
   neutral();
-  ledMatrix.fillRoundRect(leftEyeX + 16, leftEyeY + 18, 24, 6, 2, 0);
+  ledMatrix.fillRoundRect(leftEyeX + 16, leftEyeY + 18, 24, 6, 4, 0);
   ledMatrix.display();
 };
 
 void roboFace::mouth_large_rrect() {
   neutral();
-  ledMatrix.fillRoundRect(leftEyeX + 14, leftEyeY + 16, 28, 10, 2, 0);
+  ledMatrix.fillRoundRect(leftEyeX + 14, leftEyeY + 16, 28, 10, 4, 0);
   ledMatrix.display();
 };
 

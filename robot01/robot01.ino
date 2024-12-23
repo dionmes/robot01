@@ -15,9 +15,11 @@
 /*
 * Define CPU cores for vtasks
 */
-#define HTTPD_TASK_CORE 0
+#define HTTPD_TASK_CORE 1
 #define BODY_TEST_TASK_CORE 1
 #define bno08x_TASK_CORE 1
+
+static const char* TAG = "robot01.ino";
 
 /*
 * Master server or 'brain'
@@ -53,7 +55,7 @@ String ROBOT_NAME = "Sappie";
 AsyncUDP udp;
 #define AUDIO_UDP_PORT 9000       // UDP audio over I2S
 
-#define I2S_BUFFER_SIZE 8832 // x packets of 1472 bytes
+#define I2S_BUFFER_SIZE 35328 // x packets of 1472 bytes
 uint8_t *i2sbuffer = new uint8_t [I2S_BUFFER_SIZE + 1472]; 
 uint16_t i2sbuffer_pointer = 0;
 
@@ -64,9 +66,9 @@ uint16_t i2sbuffer_pointer = 0;
 bool audioStreamRunning = false;  // If Audio is listening on udp
 I2SClass I2S;
 
-#define MAX_VOLUME 6
+#define MAX_VOLUME 100
 // Set divider for I2S output multiplier
-int i2sGainMultiplier = 2;
+int i2sGain = 30;
 
 /*
 * Sensors assignments
@@ -107,7 +109,7 @@ void saveConfigCallback() {
 * Initialization/setup
 */
 void setup() {
-
+  
   // Serial
   Serial.begin(115200);
   Serial.println("Booting robot01\n");
@@ -179,7 +181,7 @@ void setup() {
   httpd_config.max_uri_handlers = 16;
   httpd_config.core_id =  HTTPD_TASK_CORE;
   httpd_config.task_priority = configMAX_PRIORITIES - 10;
-  
+
   // Add request handlers to webserver
   httpd_uri_t VL53L1X_url = { .uri = "//VL53L1X_Info", .method = HTTP_GET, .handler = webhandler_VL53L1X_Info, .user_ctx = NULL };
   httpd_uri_t BNO08X_url = { .uri = "/BNO08X_Info", .method = HTTP_GET, .handler = webhandler_wrapper_bno08xInfo, .user_ctx = NULL };
@@ -223,10 +225,11 @@ void setup() {
   // Register with remote master
   roboFace.exec(faceAction::DISPLAYTEXTSMALL, "Check in\n with \n" + WiFi.localIP().toString());
   WiFiClient httpWifiInstance;
-  HttpClient http(httpWifiInstance, config_master_ip, 5000);
+
+  HttpClient http_client(httpWifiInstance, config_master_ip, 5000);
 
   String httpPath = "/api/setting?item=robot01_ip&value=" + WiFi.localIP().toString();
-  int http_err = http.get(httpPath);
+  int http_err = http_client.get(httpPath);
   if (http_err != 0) { Serial.println("Error registering at master"); };
 
   // Audio / I2S init.
@@ -265,6 +268,10 @@ void setup() {
   Serial.println("wrapper_bno08x update task starting");
   xTaskCreatePinnedToCore(bno08xUpdateTask, "wrapper_bno08x", 4096, NULL, 10, &wrapper_bno08xUpdateTaskHandle, bno08x_TASK_CORE);
   
+  // Starting tasks
+  Serial.println("Start audio");
+  startAudio(true);
+
   // Boot complete
   Serial.println("Boot complete...");
   delay(100);
@@ -378,7 +385,7 @@ esp_err_t audiostream_handler(httpd_req_t *request) {
   
   if (param_value != "invalid") {
 
-    roboFace.exec(faceAction::DISPLAYTEXTSMALL, "Audio : " + param_value);
+    roboFace.exec(faceAction::DISPLAYTEXTSMALL, "Audio : " + param_value, 2000);
 
     int value = param_value.toInt();
     
@@ -391,9 +398,6 @@ esp_err_t audiostream_handler(httpd_req_t *request) {
       Serial.println("Audio streaming stopping\n");
       startAudio(false);
     }
-
-    roboFace.exec(faceAction::NEUTRAL);
-
   }
   
   JsonDocument json_obj;
@@ -423,25 +427,23 @@ esp_err_t volume_handler(httpd_req_t *request) {
   String param_value = get_url_param(request,param_name, 4);
 
   if (param_value != "invalid") {
-    roboFace.exec(faceAction::DISPLAYTEXTSMALL, "Volume : " + param_value);
+    roboFace.exec(faceAction::DISPLAYTEXTSMALL, "Volume : " + param_value, 2000);
 
     int value = param_value.toInt();
     if (value >= 0 && value <= MAX_VOLUME) {
-      i2sGainMultiplier = value;
+      i2sGain = value;
     } 
   }
   
   JsonDocument json_obj;
   
-  json_obj["volume"] = i2sGainMultiplier;
+  json_obj["volume"] = i2sGain;
 
   size_t jsonSize = measureJson(json_obj);
   char json_response[jsonSize];
   serializeJson(json_obj, json_response, jsonSize );
   
   httpd_resp_send(request, json_response , jsonSize );
-
-  roboFace.exec(faceAction::NEUTRAL);
 
   return ESP_OK;
 }
@@ -473,20 +475,16 @@ esp_err_t body_action_handler(httpd_req_t *request) {
     
     if (steps < 3000) {
       json_obj["command"] = "success";
+      size_t jsonSize = measureJson(json_obj);
+      char json_response[jsonSize];
+      serializeJson(json_obj, json_response, jsonSize );
+
+      httpd_resp_send(request, json_response , jsonSize );
+
       bodyControl.exec(action, direction, steps);
-    }
-
-  } else {
-    json_obj["command"] = "success";
-    xTaskCreatePinnedToCore(bodyTestRoutine, "BodyTestRoutine", 4096, NULL, 5, &robotRoutineTask, BODY_TEST_TASK_CORE);
+    } 
   }
-
-  size_t jsonSize = measureJson(json_obj);
-  char json_response[jsonSize];
-  serializeJson(json_obj, json_response, jsonSize );
-
-  httpd_resp_send(request, json_response , jsonSize );
-
+  
   return ESP_OK;
 }
 
@@ -504,25 +502,25 @@ esp_err_t display_action_handler(httpd_req_t *request) {
   const char* param_name1 = "action";
   String param_value_action = get_url_param(request, param_name1, 10);
   const char* param_name2 = "index";
-  String param_value_direction = get_url_param(request, param_name2, 10);
+  String param_value_index = get_url_param(request, param_name2, 10);
   const char* param_name3 = "text";
-  String param_value_steps = get_url_param(request, param_name3, 300);
+  String param_value_text = get_url_param(request, param_name3, 300);
 
   if (param_value_action != "invalid") {
+    
+    json_obj["command"] = "succes";
+    size_t jsonSize = measureJson(json_obj);
+    char json_response[jsonSize];
+    serializeJson(json_obj, json_response, jsonSize );
 
-    int index = param_value_direction != "invalid" ? param_value_direction.toInt() : 0;
-    String text = param_value_steps != "invalid" ? param_value_steps : "";
+    httpd_resp_send(request, json_response , jsonSize );
+
+    int index = param_value_index != "invalid" ? param_value_index.toInt() : 0;
+    String text = param_value_text != "invalid" ? urlDecode(param_value_text) : "";
 
     roboFace.exec(param_value_action.toInt(), text, index);
 
-    json_obj["command"] = "succes";
   }
-
-  size_t jsonSize = measureJson(json_obj);
-  char json_response[jsonSize];
-  serializeJson(json_obj, json_response, jsonSize );
-
-  httpd_resp_send(request, json_response , jsonSize );
 
   return ESP_OK;
 }
@@ -535,7 +533,7 @@ esp_err_t wakeupsense_handler(httpd_req_t *request) {
   httpd_resp_set_hdr(request, "Access-Control-Allow-Origin", "*");
   httpd_resp_set_type(request, HTTPD_TYPE_JSON);
 
-  roboFace.exec(faceAction::DISPLAYTEXTSMALL, "Wake up Sense");
+  roboFace.exec(faceAction::DISPLAYTEXTSMALL, "Wake up Sense", 2000);
 
   JsonDocument json_obj;
   json_obj["command"] = "succes";
@@ -548,8 +546,6 @@ esp_err_t wakeupsense_handler(httpd_req_t *request) {
   digitalWrite(25, LOW);
 
   httpd_resp_send(request, json_response , jsonSize );  
-
-  roboFace.exec(faceAction::NEUTRAL);
 
   return ESP_OK;
 }
@@ -682,6 +678,34 @@ static String get_url_param(httpd_req_t *req, const char *param, int value_size)
     return value;
 }
 
+/////////////////////////////// helper function to decode a URL-encoded string //////////////////////////////////////
+
+String urlDecode(String input) {
+  String decoded = "";
+  char temp[] = "0x00"; // Temporary storage for hex values
+  unsigned int hexValue;
+
+  for (unsigned int i = 0; i < input.length(); i++) {
+    if (input[i] == '%') {
+      // Decode the next two characters as a hex value
+      if (i + 2 < input.length()) {
+        temp[2] = input[i + 1];
+        temp[3] = input[i + 2];
+        hexValue = strtoul(temp, NULL, 16);
+        decoded += char(hexValue);
+        i += 2; // Skip the next two characters
+      }
+    } else if (input[i] == '+') {
+      // Convert '+' to space
+      decoded += ' ';
+    } else {
+      // Copy regular character
+      decoded += input[i];
+    }
+  }
+  return decoded;
+}
+
 ////////////////////////////////  Services  //////////////////////////////////////////////////////////////////////
 
 /*
@@ -702,6 +726,7 @@ IRAM_ATTR void udpRXCallBack(AsyncUDPPacket &packet) {
   float sample;
   uint8_t *f_ptr = (uint8_t *)&sample;
   uint32_t i2sValue;
+  float adjusted_gain = i2sGain * 0.02;
 
   for (size_t i = 0; i <= packet_length; i = i + 4) {
 
@@ -710,7 +735,7 @@ IRAM_ATTR void udpRXCallBack(AsyncUDPPacket &packet) {
     f_ptr[2] = packet_data[i + 2];
     f_ptr[3] = packet_data[i + 3];
     
-    i2sValue = static_cast<int32_t>((sample * 32767.0f) * i2sGainMultiplier);
+    i2sValue = static_cast<int32_t>(sample * (32767.0f * adjusted_gain) ) ;
 
     i2sbuffer[i2sbuffer_pointer + i] = static_cast<uint8_t>(i2sValue & 0xFF);
     i2sbuffer[i2sbuffer_pointer + i + 1] = static_cast<uint8_t>((i2sValue >> 8) & 0xFF);
@@ -864,3 +889,5 @@ void bodyTestRoutine(void *pVParameters) {
 
   vTaskDelete(NULL);
 };
+
+
