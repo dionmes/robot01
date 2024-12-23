@@ -2,14 +2,20 @@ import threading
 import requests
 import time
 import queue
+from tts_speecht5 import TTS
+import socket
 
 body_action_url = "/bodyaction?action=" 
 debug = False
 
-# Queue size
+# Body actions Queue size
 BODY_Q_SIZE = 4
 # Minimal sleep between actions 
 MINIMAL_SLEEP = 3
+# Audio UDP PORT
+AUDIO_UDP_PORT = 9000
+# Audio Queue size
+AUDIO_Q_SIZE = 8
 
 # Class robot for managing the robot motors, audio and sensors
 # Uses threading for http call to make it non-blocking
@@ -20,15 +26,27 @@ class ROBOT:
 		self.timeout = timeout
 		self.health_ok = False
 
+		# Audio queue
+		self.audio_q = queue.Queue(maxsize=AUDIO_Q_SIZE)
+
 		# Health update
 		threading.Thread(target=self.safe_http_call, args=[('http://' + self.ip + '/health')]).start()
 
 		#Queue
 		self.body_q = queue.Queue(maxsize=BODY_Q_SIZE)
 		
-		# Start Queue worker
+		# Start actions Queue worker
 		self.robot_actions = True
 		threading.Thread(target=self.handle_actions, daemon=True).start()
+
+		# tts engine
+		self.audio_q = queue.Queue(maxsize=BODY_Q_SIZE)
+		self.tts_engine = TTS(self.ip, self.audio_q)
+
+		# Start Audio send worker
+		self.audio_running = False
+		self.audio_output(1)
+		
 
 	# Generate Display worker : Actions from queue : display_q
 	def handle_actions(self):
@@ -80,6 +98,7 @@ class ROBOT:
 			print("Robot body actions stopped")				
 	
 	def bodyaction(self, action, direction, steps):
+
 		task = { "action" : action, "direction" : direction, "steps" : steps } 
 		try:
 			# Add state to queue
@@ -93,37 +112,77 @@ class ROBOT:
 				response = requests.get('http://' + self.ip + '/volume')
 				json_obj = response.json()
 				print(json_obj)
-				print("Got audio volume")
 				return json_obj['volume']
 				
 			except Exception as e:
 				print("Request - volume error : ",e)
 		else:
 			threading.Thread(target=self.safe_http_call, args=[('http://' + self.ip + '/volume?power=' + str(set_volume) )]).start()
-			print("Set audio volume " + str(set_volume))
 
 	def audio_output(self, state = -1)->bool:
-	
 		if state == -1:			
 			try:
 				response = requests.get('http://' + self.ip + '/audiostream')
 				self.health_ok = True
 				json_obj = response.json()
-				
 				return json_obj['audiostream']
 				
 			except Exception as e:
 				print("Request - audiostatus error : ",e)
 				self.health_ok = False
+				
 				return False
 			
-		else:
-			threading.Thread(target=self.safe_http_call, args=[('http://' + self.ip + '/audiostream?on=' + str(state) )]).start()
+		elif state == 1:
+			threading.Thread(target=self.safe_http_call, args=[('http://' + self.ip + '/audiostream?on=1')]).start()
 
-		if state == 1:
+			if not self.tts_engine.running:
+				self.tts_engine.start()
+
+			if not self.audio_running :
+				threading.Thread(target=self.sendaudio, daemon=True).start()
+				self.audio_q = queue.Queue(maxsize=BODY_Q_SIZE)
+				self.audio_running = True
+				print("Robot audio engine started")			
+				
 			return True
-		else:
-			return False
+		
+		elif state == 0:
+			threading.Thread(target=self.safe_http_call, args=[('http://' + self.ip + '/audiostream?on=0' )]).start()
+
+			if not self.tts_engine.running:
+				self.tts_engine.stop()
+
+			if self.audio_running:
+				self.audio_running = False
+				time.sleep(1)		
+				print("Robot audio engine stopped")			
+
+		return False
+
+	# Send Audio worker : Gets audio wave from queue : audio_q
+	# sends audio (16khz mono f32le) over UDP to robot01 ip port 9000
+	#
+	def sendaudio(self):
+		sock = socket.socket(socket.AF_INET,socket.SOCK_DGRAM)
+
+		print("TTS Audio over UDP worker started.")
+		
+		while self.audio_running:
+			audio = self.audio_q.get()
+			# Send packets of max. 1472 / 4 byte sample size (2 channels)
+			for x in range(0, audio.shape[0],368):
+				start = x
+				end = x + 368
+				sock.sendto(audio[start:end].tobytes(), (self.ip, AUDIO_UDP_PORT))
+				time.sleep(0.021)
+				if not self.audio_running:
+					break
+
+			# Send packets of 1 byte to flush buffer on robot side
+			sock.sendto(bytes(1), (self.ip, AUDIO_UDP_PORT))
+
+			self.audio_q.task_done()
 			
 	def wakeupsense(self):
 		threading.Thread(target=self.safe_http_call, args=[('http://' + self.ip + '/wakeupsense')]).start()

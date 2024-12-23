@@ -45,8 +45,27 @@ function bodyaction(action, direction) {
 	});
 }
 
-window.onload = function() {
+function play_audio_file() {
+	$("#loader").attr("aria-busy", "true");
 
+	file = $("#audiofile").val();
+	
+	var url = "api/play_audio_file?file=" + file; 	
+	$.ajax({
+		url: url,
+		type: 'GET',
+    	dataType: 'text',
+    	async: true
+    })
+    .fail(function (xhr, status, errorThrown) {
+		alert(errorThrown);
+	})
+	.always(function() {
+		$("#loader").attr("aria-busy", "false");
+	});
+}
+
+window.onload = function() {
 	// Get volume
 	$.ajax({
 		url: "/api/get_setting?item=volume",
@@ -59,7 +78,6 @@ window.onload = function() {
     	 $("#volume").val(result.value);
     	 console.log(result.value);
 	})
-	
 };
 
 </script>
@@ -81,8 +99,18 @@ window.onload = function() {
 	<div class="container">
 		<label>
 		<h4>Audio output Volume</h4>
-		<input id="volume" type="range" onchange="volume();" min="0" max="6" value="0" step="1" disabled/>
+		<input id="volume" type="range" onchange="volume();" min="0" max="100" value="0" step="5" disabled/>
 		</label>
+		<h4>Sounds</h4>
+		<div class="grid" style="margin: var(--pico-spacing");>
+		    <select id="audiofile">
+        	<option value="" disabled selected>Select an audiofile</option>
+	        {% for option in context.audiolist %}
+    	        <option value="{{ option }}">{{ option }}</option>
+	        {% endfor %}
+		    </select>
+			<button class="secondary" onClick="play_audio_file();" >Play audio</button>
+		</div>
 		<div class="grid" style="margin: var(--pico-spacing");>
 			<div>
 				<label for="movesteps">Move steps between 1-40</label>
@@ -154,7 +182,7 @@ window.onload = function() {
 		<div class="grid" style="margin: var(--pico-spacing");>
 			<button onClick="bodyaction(5,0);">Left leg backward</button>
 			<button onClick="bodyaction(6,0);">Right leg backward</button>
-		</div>		
+		</div>
 	</div>
 </div>
 

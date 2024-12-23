@@ -1,3 +1,4 @@
+import os
 from flask import Flask, send_from_directory, render_template, jsonify, request, abort
 import ipaddress
 import requests
@@ -37,14 +38,21 @@ def index():
 @app.route('/<filename>')
 def serve_html(filename):
 	robot01_context = {"robot01_ip": brain.robot.ip, "robot01sense_ip" : brain.sense.ip}
-	
+
+	if filename in "controlsPage.html":
+		try:
+			return render_template(filename,context={"audiolist": brain.audiolist}) 
+		
+		except Exception as e:
+			abort(404)
+		
 	if filename.endswith('.html'):
 		try:
 			return render_template(filename,context=robot01_context) 
 		except Exception as e:
 			abort(404)
-	else:
-		return abort(403)
+			
+	return abort(403)
 		
 #
 # Serve CSS files
@@ -350,7 +358,7 @@ def BNO08X_Info():
 # Wake up sense, lets main board send a wake up signal to the sense board
 # GET: /api/wakeupsense
 #
-# Return json response
+# Return "ok"
 #
 @app.route('/api/wakeupsense', methods=['GET'])
 def wakeupsense():
@@ -363,6 +371,21 @@ def wakeupsense():
 	return "ok"
 
 #
+# Play raw audio file
+# GET api/play_audio_file/{{name}}
+#
+# Return "ok"
+#
+@app.route('/api/play_audio_file', methods=['GET'])
+def play_audio_file():
+	try:
+		brain.play_audio_file(request.args.get('file'))
+	except Exception as e:
+		print(e)
+		abort(404)
+
+	return "ok"
+
 # Robot/Sense Heath status
 # GET: /api/health
 #

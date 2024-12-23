@@ -105,7 +105,6 @@ class DISPLAY:
 	# set temporary state of display
 	def action(self, action, reset=0, img_index = 0, text=""):
 		task = {"type": "action", "action" : action, "reset" : reset, "img_index" : img_index, "text" : text}
-		
 		try:
 			# Add state to queue
 			self.display_q.put_nowait(task)

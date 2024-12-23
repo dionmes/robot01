@@ -5,13 +5,17 @@ import requests
 import json
 import base64
 import time
+import glob
+
+import numpy as np
 
 import asyncio
 import threading
 from threading import Timer
 import queue
 
-from tts_speecht5_udp import TTS
+import wave
+
 from stt_distil_whisper import STT
 from robot01 import ROBOT
 from display import DISPLAY
@@ -28,9 +32,6 @@ from langchain.agents import create_tool_calling_agent, AgentExecutor
 from langchain.tools.base import StructuredTool
 
 import ollama
-
-# max words to tts in one go
-tts_max_sentence_lenght = 20
 
 # Ollama LLM Models
 LLM_MODEL = "llama3.2"
@@ -59,6 +60,9 @@ Only respond with numbers in a written out format. Do not use digits as output. 
 ROBOT01_DEFAULT_IP = "192.168.133.75"
 SENSE_DEFAULT_IP = "192.168.133.226"
 
+# Max tokens to TTS
+TTS_MAX_SENTENCE_LENGHT = 20
+
 # Class brain for robot01
 class BRAIN:
 	def __init__(self):
@@ -75,8 +79,6 @@ class BRAIN:
 		self.llm_mode = "agent mode"
 		# mic is on/off
 		self.mic = False
-		# Audio is on/off		
-		self.audio = False
 
 		# Display engine
 		self.display = DISPLAY(ROBOT01_DEFAULT_IP)
@@ -84,8 +86,6 @@ class BRAIN:
 		
 		# Robot01
 		self.robot = ROBOT(ROBOT01_DEFAULT_IP)
-		# tts engine
-		self.tts_engine = TTS(ROBOT01_DEFAULT_IP, self)
 		
 		# Sense engine
 		self.sense = SENSE(SENSE_DEFAULT_IP)
@@ -96,6 +96,9 @@ class BRAIN:
 
 		# Original prompt. Used in some tools called by the supervisor
 		self.original_prompt = ""
+		
+		# Audiolist with availalble sounds		
+		self.audiolist = [os.path.basename(filepath) for filepath in glob.glob("audio/*.raw")]
 		
 	# Start brain	
 	def start(self):
@@ -145,7 +148,7 @@ class BRAIN:
 					# update objects with new id
 					self.robot.ip = value
 					self.display.ip = value
-					self.tts_engine.ip = value
+					self.robot.tts_engine.ip = value
 				else:
 					print("Error updating robot01_ip : ", value)
 
@@ -159,12 +162,7 @@ class BRAIN:
 				self.robot.volume(value)
 
 			if item == "audio":
-				self.audio = True if value == "1" else False
-				self.robot.audio_output(value)
-				if self.audio:
-					self.tts_engine.start()
-				else:
-					self.tts_engine.stop()
+				self.robot.audio_output(int(value))
 					
 			if item == "bodyactions":
 				running = True if value == "1" else False
@@ -226,8 +224,7 @@ class BRAIN:
 				return self.sense.micgain()
 				
 			if item == "audio":
-				self.audio  = self.robot.audio_output()
-				return self.audio
+				return self.robot.audio_output()
 	
 			if item == "micstreaming":
 				self.mic = self.sense.micstreaming()
@@ -278,11 +275,26 @@ class BRAIN:
 #			self.display.state(3)
 #
 
+	# Play wav file
+	#
+	# Convert: ffmpeg -i wawawawa.wav -f f32le -c:a pcm_f32le -ac 1 -ar 16000 wawawawa.raw
+	#
+	def play_audio_file(self,rawaudio_file):		
+		if self.robot.audio_running:
+			try:
+				with open("audio/" + rawaudio_file, 'rb') as f:
+					# Read the entire 
+					audio_data = f.read()
+					np_audio = np.frombuffer(audio_data, dtype=np.float32)
+					self.robot.audio_q.put_nowait(np_audio)
+			except Exception as e:
+				print("Audio queue error : ",type(e).__name__ )
+
 	# direct TTS
 	def speak(self,text):
 		try:
-			if self.audio:
-				self.tts_engine.text_q.put_nowait(text)
+			if self.robot.audio_running:
+				self.robot.tts_engine.text_q.put_nowait(text)
 		except Exception as e:
 			print("Text queue error : ",type(e).__name__ )
 
@@ -345,13 +357,14 @@ class BRAIN:
 			full_response = full_response + token
 			
 			# print(token)
-			if token in ".,?!...;:" or n > tts_max_sentence_lenght:
+			if token in ".,?!...;:" or n > TTS_MAX_SENTENCE_LENGHT:
 				message = message + token
 				if not message.strip() == "" and len(message) > 1:
 					print("From LLM (chat): " + message)
 					self.speak(message)
+					self.robot_expression(message)
 					# Slow down if tts queue gets larger
-					time.sleep(self.tts_engine.queue_size() * 0.700)
+					time.sleep(self.robot.tts_engine.queue_size() * 0.700)
 	
 				message = ""
 				n = 0
@@ -938,7 +951,7 @@ class BRAIN:
 		message = ""
 		n = 0
 		for token in words_and_delimiters:
-			if token in ".,?!...;:" or n > tts_max_sentence_lenght:
+			if token in ".,?!...;:" or n > TTS_MAX_SENTENCE_LENGHT:
 				message = message + token
 				if not message.strip() == "" and len(message) > 1:
 					print("From LLM (chunked response): " + message)
