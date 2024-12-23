@@ -4,5 +4,5 @@
 **/outputs
 **/.theia
 **/config.json
-*.raw
-*.wav
+robot01_master.audio/*.raw
+robot01_master/audio/*.wav
