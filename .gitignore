@@ -4,5 +4,5 @@
 **/outputs
 **/.theia
 **/config.json
-.raw
-.wav
+*.raw
+*.wav
