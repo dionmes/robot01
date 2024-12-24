@@ -25,7 +25,7 @@ brain = BRAIN()
 #
 @app.route('/')
 def index():
-	robot01_context = {"robot01_ip": brain.robot.ip, "robot01sense_ip" : brain.sense.ip}
+	robot01_context = {"robot01_ip": brain.robot.ip, "robot01sense_ip" : brain.robot.sense.ip}
 
 	try:
 		return render_template('index.html',context=robot01_context)
@@ -37,7 +37,7 @@ def index():
 #
 @app.route('/<filename>')
 def serve_html(filename):
-	robot01_context = {"robot01_ip": brain.robot.ip, "robot01sense_ip" : brain.sense.ip}
+	robot01_context = {"robot01_ip": brain.robot.ip, "robot01sense_ip" : brain.robot.sense.ip}
 
 	if filename in "controlsPage.html":
 		try:
@@ -253,7 +253,7 @@ def displayaction():
 	else:
 		img_index = 0
 	
-	brain.display.state(action, img_index, text)	
+	brain.robot.display.state(action, img_index, text)	
 
 	api_response = { 'status': 'ok' }
 	
@@ -315,7 +315,7 @@ def get_setting():
 @app.route('/api/img_capture', methods=['GET'])
 def img_capture():
 	try:
-		img = brain.sense.capture()
+		img = brain.robot.sense.capture()
 	except Exception as e:
 		print(e)
 		abort(404)
@@ -415,7 +415,7 @@ def robot01_reset():
 #
 @app.route('/api/sense_reset', methods=['GET'])
 def sense_reset():
-	api_response = brain.sense.reset()
+	api_response = brain.robot.sense.reset()
 	return jsonify(api_response)
 
 #
@@ -437,7 +437,7 @@ def robot01_eraseconfig():
 #
 @app.route('/api/sense_eraseconfig', methods=['GET'])
 def sense_eraseconfig():
-	api_response = brain.sense.erase_config()
+	api_response = brain.robot.sense.erase_config()
 	return jsonify(api_response)
 
 #
@@ -450,7 +450,7 @@ def sense_eraseconfig():
 def clear_ips():
 
 	brain.robot.ip = ""
-	brain.sense.ip = ""
+	brain.robot.sense.ip = ""
 	
 	api_response = { 'status': 'ok' }
 	return jsonify(api_response)

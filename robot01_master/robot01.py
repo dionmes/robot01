@@ -2,11 +2,16 @@ import threading
 import requests
 import time
 import queue
-from tts_speecht5 import TTS
 import socket
+
+from tts_speecht5 import TTS
+from display import DISPLAY
+from sense import SENSE
 
 body_action_url = "/bodyaction?action=" 
 debug = False
+
+LLM_EXPRESSION_MODEL = "gemma2:2b"
 
 # Body actions Queue size
 BODY_Q_SIZE = 4
@@ -14,20 +19,31 @@ BODY_Q_SIZE = 4
 MINIMAL_SLEEP = 3
 # Audio UDP PORT
 AUDIO_UDP_PORT = 9000
-# Audio Queue size
-AUDIO_Q_SIZE = 8
+# output Queue size
+OUTPUT_Q_SIZE = 8
 
 # Class robot for managing the robot motors, audio and sensors
 # Uses threading for http call to make it non-blocking
 class ROBOT:
-	def __init__(self, ip, timeout=2):
+	def __init__(self, ip, sense_ip, timeout=2):
 
 		self.ip = ip
 		self.timeout = timeout
 		self.health_ok = False
+	
+		self.emotion = True
 
-		# Audio queue
-		self.audio_q = queue.Queue(maxsize=AUDIO_Q_SIZE)
+		self.output_busy = False
+
+		# Sense engine
+		self.sense = SENSE(sense_ip)
+
+		# Display engine
+		self.display = DISPLAY(self.ip)
+		self.display.state(20) # Show hour glass animation
+				
+		# output queue
+		self.output_q = queue.Queue(maxsize=OUTPUT_Q_SIZE)
 
 		# Health update
 		threading.Thread(target=self.safe_http_call, args=[('http://' + self.ip + '/health')]).start()
@@ -37,19 +53,19 @@ class ROBOT:
 		
 		# Start actions Queue worker
 		self.robot_actions = True
-		threading.Thread(target=self.handle_actions, daemon=True).start()
+		threading.Thread(target=self.bodyactions_worker, daemon=True).start()
+
+		# Start output send worker
+		self.output_worker_running = True
+		threading.Thread(target=self.output_worker, daemon=True).start()
 
 		# tts engine
-		self.audio_q = queue.Queue(maxsize=BODY_Q_SIZE)
-		self.tts_engine = TTS(self.ip, self.audio_q)
+		self.output_q = queue.Queue(maxsize=OUTPUT_Q_SIZE)
+		self.tts_engine = TTS(self.ip, self.output_q)
 
-		# Start Audio send worker
-		self.audio_running = False
-		self.audio_output(1)
-		
 
 	# Generate Display worker : Actions from queue : display_q
-	def handle_actions(self):
+	def bodyactions_worker(self):
 		print("Robot worker started.")	
 		while self.robot_actions:	
 			task = self.body_q.get()
@@ -76,7 +92,7 @@ class ROBOT:
 		if running:
 			self.body_q = queue.Queue(maxsize=BODY_Q_SIZE)
 			self.robot_actions = True
-			threading.Thread(target=self.handle_actions, daemon=True).start()
+			threading.Thread(target=self.bodyactions_worker, daemon=True).start()
 			print("Robot body actions enabled")
 		else:
 			self.robot_actions = False		
@@ -106,20 +122,7 @@ class ROBOT:
 		except Exception as e:
 			print("Robot queue error : ", type(e).__name__ )
 
-	def volume(self, set_volume = -1):
-		if set_volume == -1 :			
-			try:
-				response = requests.get('http://' + self.ip + '/volume')
-				json_obj = response.json()
-				print(json_obj)
-				return json_obj['volume']
-				
-			except Exception as e:
-				print("Request - volume error : ",e)
-		else:
-			threading.Thread(target=self.safe_http_call, args=[('http://' + self.ip + '/volume?power=' + str(set_volume) )]).start()
-
-	def audio_output(self, state = -1)->bool:
+	def output(self, state = -1)->bool:
 		if state == -1:			
 			try:
 				response = requests.get('http://' + self.ip + '/audiostream')
@@ -139,11 +142,11 @@ class ROBOT:
 			if not self.tts_engine.running:
 				self.tts_engine.start()
 
-			if not self.audio_running :
-				threading.Thread(target=self.sendaudio, daemon=True).start()
-				self.audio_q = queue.Queue(maxsize=BODY_Q_SIZE)
-				self.audio_running = True
-				print("Robot audio engine started")			
+			if not self.output_worker_running :
+				threading.Thread(target=self.output_worker, daemon=True).start()
+				self.output_q = queue.Queue(maxsize=OUTPUT_Q_SIZE)
+				self.output_worker_running = True
+				print("Robot output engine started")			
 				
 			return True
 		
@@ -153,37 +156,167 @@ class ROBOT:
 			if not self.tts_engine.running:
 				self.tts_engine.stop()
 
-			if self.audio_running:
-				self.audio_running = False
+			if self.output_worker_running:
+				self.output_worker_running = False
 				time.sleep(1)		
-				print("Robot audio engine stopped")			
+				print("Robot output engine stopped")			
 
 		return False
 
-	# Send Audio worker : Gets audio wave from queue : audio_q
+	# Send output worker : Gets output action from queue : output_q
+	# Checks for TTS action, include emotion response
 	# sends audio (16khz mono f32le) over UDP to robot01 ip port 9000
 	#
-	def sendaudio(self):
+	def output_worker(self):
+	
 		sock = socket.socket(socket.AF_INET,socket.SOCK_DGRAM)
 
-		print("TTS Audio over UDP worker started.")
+		print("Output worker started.")
 		
-		while self.audio_running:
-			audio = self.audio_q.get()
-			# Send packets of max. 1472 / 4 byte sample size (2 channels)
-			for x in range(0, audio.shape[0],368):
-				start = x
-				end = x + 368
-				sock.sendto(audio[start:end].tobytes(), (self.ip, AUDIO_UDP_PORT))
-				time.sleep(0.021)
-				if not self.audio_running:
-					break
-
-			# Send packets of 1 byte to flush buffer on robot side
-			sock.sendto(bytes(1), (self.ip, AUDIO_UDP_PORT))
-
-			self.audio_q.task_done()
+		while self.output_worker_running:
 			
+			output_action = self.output_q.get()
+			
+			if "speech" in output_action['type'] and not self.outputbusy:
+				self.output_started()
+				
+			if "text" in output_action:
+]				self.express_emotion(output_action['text'])
+			
+			if "audio" in output_action:
+				audio = output_action['audio']
+			
+				# Send packets of max. 1472 / 4 byte sample size (2 channels)
+				for x in range(0, audio.shape[0],368):
+					start = x
+					end = x + 368
+					sock.sendto(audio[start:end].tobytes(), (self.ip, AUDIO_UDP_PORT))
+					time.sleep(0.021)
+					if not self.output_worker_running:
+						break
+	
+				# Send packets of 1 byte to flush buffer on robot side
+				sock.sendto(bytes(1), (self.ip, AUDIO_UDP_PORT))
+
+			self.output_q.task_done()
+			
+			if self.output_q.empty():
+				self.output_stopped()
+
+	# Start output state 
+	def output_started(self):
+		self.output_busy = True
+		if not self.sense.mic: 
+			self.sense.micstreaming(0)
+			
+		self.display.state(23)
+
+	# 
+	def output_stopped(self):
+		self.display.state(3)
+		self.bodyaction(16,0,30)
+		self.bodyaction(17,0,30)
+
+		if self.sense.mic: 
+			self.sense.micstreaming(1)
+
+		self.output_busy = False
+
+	def volume(self, set_volume = -1):
+		if set_volume == -1 :			
+			try:
+				response = requests.get('http://' + self.ip + '/volume')
+				json_obj = response.json()
+				print(json_obj)
+				return json_obj['volume']
+				
+			except Exception as e:
+				print("Request - volume error : ",e)
+		else:
+			threading.Thread(target=self.safe_http_call, args=[('http://' + self.ip + '/volume?power=' + str(set_volume) )]).start()
+
+
+	#
+	# Robotic expression via a LLM based on sentence
+	#
+	def express_emotion(self,text):
+
+		if not self.emotion:
+			return
+			
+		if len(sentence) < 3:
+			return
+			
+		prompt = """"Express yourself, 
+		based on the following text respond with one of these words, and only that word:
+		SAD, HAPPY, EXCITED, NEUTRAL, DIFFICULT, LOVE, DISLIKE, INTERESTED, OK or LIKE.
+		The text is : """ + text
+
+		response = ollama.chat(
+			model = LLM_EXPRESSION_MODEL,
+			keep_alive = -1,
+			messages=[{'role': 'user', 'content': prompt}],
+		)
+		
+		emotion =  response['message']['content']
+
+		print("Robot expression: " + emotion)
+
+		if "SAD" in emotion:
+			self.display.action(12,5,38)
+			self.bodyaction(16,0,30)
+			self.bodyaction(17,0,30)
+			
+			return
+		elif "HAPPY" in emotion:
+			self.display.action(12,5,44)
+			self.bodyaction(16,1,30)
+			self.bodyaction(17,1,30)
+
+			return
+		elif "EXCITED" in emotion:
+			self.display.action(12,3,13)
+			self.bodyaction(7,1,5)
+
+			return
+		elif "DIFFICULT" in emotion:
+			self.display.action(12,3,52)
+			self.bodyaction(12,1,20)
+
+			return
+		elif "LOVE" in emotion:
+			self.display.action(12,3,19)
+			self.bodyaction(17,0,30)
+
+		elif "LIKE" in emotion:
+			self.display.action(12,3,13)
+			self.bodyaction(17,0,30)
+
+			return
+		elif "DISLIKE" in emotion:
+			self.display.action(12,3,42)
+			self.bodyaction(17,0,30)
+
+			return
+		elif "INTERESTED" in emotion:
+			self.display.action(12,3,44)
+			self.bodyaction(16,1,20)
+			self.bodyaction(17,0,20)
+
+			return
+		elif "OK" in emotion:
+			self.display.action(12,3,7)
+			self.bodyaction(16,0,20)
+			self.bodyaction(17,0,20)
+
+			return
+		elif "NEUTRAL" in emotion:
+			self.display.action(8,3)
+			self.bodyaction(16,0,20)
+			self.bodyaction(17,1,20)
+
+			return
+
 	def wakeupsense(self):
 		threading.Thread(target=self.safe_http_call, args=[('http://' + self.ip + '/wakeupsense')]).start()
 		print("Sense Wake up signal send.")
@@ -209,7 +342,7 @@ class ROBOT:
 			print("Request - BNO08X response error : ",e)
 		
 		return json_obj
-	
+
 	def reset(self):
 		threading.Thread(target=self.safe_http_call, args=[('http://' + self.ip + '/reset')]).start()
 		print("Robot01 reset send")

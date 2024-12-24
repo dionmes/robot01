@@ -20,10 +20,10 @@ TEXT_Q_SIZE = 15
 class TTS:	
 	# init
 	# ip = ip of robot01
-	def __init__(self, ip, audio_q):
+	def __init__(self, ip, output_q):
 	
 		self.dest_ip = ip
-		self.audio_q = audio_q
+		self.output_q = output_q
 
 		# Engine State flags, loaded = model(s)
 		self.loaded = False
@@ -44,8 +44,8 @@ class TTS:
 		print("STT Model loaded")
 		self.loaded = True
 
-	# Generate Audio worker : Synthesises text from queue : audio_q
-	# puts audio (16khz mono f32le) into audio_q
+	# Generate Audio worker : Synthesises text from queue : output_q
+	# puts audio (16khz mono f32le) into output_q
 	#
 	def generate_speech(self):
 		print("TTS Speech synthesizer worker started.")	
@@ -53,9 +53,8 @@ class TTS:
 			
 			text = self.text_q.get()
 			synth_speech = self.synthesiser(text, forward_params={"speaker_embeddings": self.speaker_embeddings})
-			
 			try:
-				self.audio_q.put_nowait(synth_speech['audio'])
+				self.output_q.put_nowait({"type" : "speech", "text" : text, "audio" : synth_speech['audio']})
 			except Exception as e:
 				print("Audio queue error : ", type(e).__name__ )
 			
@@ -79,5 +78,3 @@ class TTS:
 		self.running = False
 		# Wait for save shutdown of threads and queues
 		time.sleep(1)
-
-

@@ -38,24 +38,26 @@ class DISPLAY:
 			action = task['action']
 			
 			if task['type'] == "state":
-				self.display_latest_state_task = task
+			
+				if not self.display_latest_state_task == task:
 
-				url = 'http://' + self.ip + display_action_url + str(action)
+					self.display_latest_state_task = task
+					url = 'http://' + self.ip + display_action_url + str(action)
 
-				# text display
-				if action == 1 or action == 2 or action == 14:
-					url = url + "&text=" + task['text']
-
-				if task['img_index'] > 0:
-					url = url + "&index=" + str(task['img_index'])
-
-				try:
-					requests.get(url, timeout=self.timeout)
-				except Exception as e:
-					if debug:
-						print("Display Request - " + url + " , error : ", e)
-					else:
-						print("Display Request error")
+					# text display
+					if action == 1 or action == 2 or action == 14:
+						url = url + "&text=" + task['text']
+	
+					if task['img_index'] > 0:
+						url = url + "&index=" + str(task['img_index'])
+	
+					try:
+						requests.get(url, timeout=self.timeout)
+					except Exception as e:
+						if debug:
+							print("Display Request - " + url + " , error : ", e)
+						else:
+							print("Display Request error")
 					
 			elif  task['type'] == "action":
 				

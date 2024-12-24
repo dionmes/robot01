@@ -67,23 +67,23 @@ function health_update() {
 		
 }
 
-function audio_control() {
+function output_control() {
 	$("#loader").attr("aria-busy", "true");
-	var checked = $('input[name="audiostream"]').is(':checked');
-	$("#audiostream").attr("disabled", true);
+	var checked = $('input[name="output"]').is(':checked');
+	$("#output").attr("disabled", true);
 	var on = checked ? 1 : 0;
 	$.ajax({
-		url: "/api/setting?item=audio&value=" + on,
+		url: "/api/setting?item=output&value=" + on,
 		type: 'GET',
 		dataType: 'json',
 		async: true
 		})
 	.fail(function (xhr, status, errorThrown) {
-		$("#audiostream").attr("checked", false);
+		$("#output").attr("checked", false);
 		alert(errorThrown);
 	})
 	.always(function() {
-		$("#audiostream").attr("disabled", false);
+		$("#output").attr("disabled", false);
 		$("#loader").attr("aria-busy", "false");
 	});
 }
@@ -171,17 +171,17 @@ window.onload = function() {
 	
 	// Get udp audiostream receive
 	$.ajax({
-		url: "/api/get_setting?item=audio",
+		url: "/api/get_setting?item=output",
 		type: 'GET',
 		dataType: 'json',
 		async: true
 	})
 	.done(function (result) {
-		 $("#audiostream").removeAttr("disabled");
+		 $("#output").removeAttr("disabled");
 		 if (result.value) {
-		  $("#audiostream").attr("checked", true);
+		  $("#output").attr("checked", true);
 		 } else {
-		  $("#audiostream").attr("checked", false);
+		  $("#output").attr("checked", false);
 		 }
 		 console.log( result);
 	})
@@ -259,8 +259,8 @@ window.onload = function() {
 					  <option>agent mode</option>
 				</select>
 				<label>
-				<input id="audiostream" onchange="audio_control();" name="audiostream" type="checkbox" role="switch" disabled/>
-				Audio / Speech
+				<input id="output" onchange="output_control();" name="output" type="checkbox" role="switch" disabled/>
+				Audio / Speech Output
 				</label>
 				<label>
 				<input id="bodyactions" onchange="body_control();" name="bodyactions" type="checkbox" role="switch" disabled/>

@@ -18,8 +18,6 @@ import wave
 
 from stt_distil_whisper import STT
 from robot01 import ROBOT
-from display import DISPLAY
-from sense import SENSE
 
 from typing import List
 import re
@@ -36,7 +34,6 @@ import ollama
 # Ollama LLM Models
 LLM_MODEL = "llama3.2"
 AGENT_MODEL = "llama3.2"
-LLM_EXPRESSION_MODEL = "gemma2:2b"
 VISION_MODEL = "minicpm-v"
 OLLAMA_KEEP_ALIVE = -1
 AGENT_TEMP = 0.1
@@ -72,24 +69,13 @@ class BRAIN:
 		# Brain status
 		self.busybrain = False
 		# Talking
-		self.talking = False
-		# Talking
 		self.listening = False
 		# mode is Chat mode / Agent mode
 		self.llm_mode = "agent mode"
-		# mic is on/off
-		self.mic = False
 
-		# Display engine
-		self.display = DISPLAY(ROBOT01_DEFAULT_IP)
-		self.display.state(20) # Show hour glass animation
-		
 		# Robot01
-		self.robot = ROBOT(ROBOT01_DEFAULT_IP)
+		self.robot = ROBOT(ROBOT01_DEFAULT_IP, SENSE_DEFAULT_IP)
 		
-		# Sense engine
-		self.sense = SENSE(SENSE_DEFAULT_IP)
-
 		# stt engine
 		self.stt_q = queue.Queue(maxsize=STT_Q_SIZE)
 		self.stt_engine = STT(self) #uses display for signalling speech detection
@@ -113,7 +99,7 @@ class BRAIN:
 
 		# Show neutral face after time to settle down
 		time.sleep(5)
-		self.display.state(3) 
+		self.robot.display.state(3) 
 
 	# Load configuration
 	def load_config(self):
@@ -134,7 +120,7 @@ class BRAIN:
 
 	# Save configuration
 	def health_status(self):
-		health = {"robot01" :  self.robot.health_ok , "sense" : self.sense.health_ok }
+		health = {"robot01" :  self.robot.health_ok , "sense" : self.robot.sense.health_ok }
 		return health
 
 	#
@@ -147,22 +133,22 @@ class BRAIN:
 				if	self.validate_ip_address(value):
 					# update objects with new id
 					self.robot.ip = value
-					self.display.ip = value
+					self.robot.display.ip = value
 					self.robot.tts_engine.ip = value
 				else:
 					print("Error updating robot01_ip : ", value)
 
 			if item == "robot01sense_ip":
 				if self.validate_ip_address(value):
-					self.sense.ip = value
+					self.robot.sense.ip = value
 				else:
 					print("Error updating robot01sense_ip : ", value)
 
 			if item == "volume":
 				self.robot.volume(value)
 
-			if item == "audio":
-				self.robot.audio_output(int(value))
+			if item == "output":
+				self.robot.output(int(value))
 					
 			if item == "bodyactions":
 				running = True if value == "1" else False
@@ -170,28 +156,27 @@ class BRAIN:
 
 			if item == "llm_mode":
 				if value == "chat mode":
-					self.display.action(12,3,47)
+					self.robot.display.action(12,3,47)
 					self.llm_mode = value
 				if value == "agent mode":
-					self.display.action(12,3,10)
+					self.robot.display.action(12,3,10)
 					self.llm_mode = value
 
 			if item == "micstreaming":
-				self.mic = value
-				self.sense.micstreaming(self.mic)
-				if self.mic == 1:
+				self.robot.sense.micstreaming(value)
+				if value == 1:
 					self.stt_engine.start()
 				else:
 					self.stt_engine.stop()
 
 			if item == "micgain":
-				self.sense.micgain(value)
+				self.robot.sense.micgain(value)
 
 			if item == "camstreaming":
-				self.sense.camstreaming(value)
+				self.robot.sense.camstreaming(value)
 
 			if item == "cam_resolution":
-				self.sense.cam_resolution(value)
+				self.robot.sense.cam_resolution(value)
 
 			print("Update " + item + " with value :", value)
 			
@@ -204,12 +189,12 @@ class BRAIN:
 	# API internal get setting handler
 	#
 	def get_setting(self,item)->str:
-		if item in "robot01_ip robot01sense_ip audio micstreaming camstreaming micgain llm_mode bodyactions volume":	
+		if item in "robot01_ip robot01sense_ip output micstreaming camstreaming micgain llm_mode bodyactions volume":	
 			if item == "robot01_ip":
 				return self.robot.ip
 	
 			if item == "robot01sense_ip":
-				return self.sense.ip
+				return self.robot.sense.ip
 	
 			if item == "llm_mode":
 				return self.llm_mode
@@ -221,58 +206,35 @@ class BRAIN:
 				return self.robot.volume()
 				
 			if item == "micgain":
-				return self.sense.micgain()
+				return self.robot.sense.micgain()
 				
-			if item == "audio":
-				return self.robot.audio_output()
+			if item == "output":
+				return self.robot.output()
 	
 			if item == "micstreaming":
-				self.mic = self.sense.micstreaming()
+				self.mic = self.robot.sense.micstreaming()
 				return self.mic
 
 			if item == "camstreaming":
-				return self.sense.camstreaming()
+				return self.robot.sense.camstreaming()
 
 		else:
 			print("Setting " + item + " not found")
 			return False
 
-	# Callback function from speech synthesiser when speech output started // Do not make blocking
-	# self.talking flag to prevent repeated calling
-	def talking_started(self):
-		self.talking = True
-		self.sense.micstreaming(0)
-
-		# Display talking animation as default
-		self.display.state(23)
-
-	# Callback function from speech synthesiser when speech output stopped // Do not make blocking
-	def talking_stopped(self):
-		self.talking = False
-		if self.mic: # If mic setting was True enable mic again
-			self.sense.micstreaming(1)
-
-		# Display face neutral
-		self.display.state(3)
-
-		# Arms Neutral
-		self.robot.bodyaction(16,0,30)
-		self.robot.bodyaction(17,0,30)
-
 # Not used at this moment. Callbacks for STT
 #	
 #		# Callback function from speech to texy when listening starts // Do not make blocking
-#		# self.talking flag to prevent repeated calling
 #		def listening(self):
 #			self.listening = True
 #			# Display talking animation
-#			self.display.state(23)
+#			self.robot.display.state(23)
 #				
 #		# Callback function from speech synthesiser when speech output stopped // Do not make blocking
 #		def listening_stopped(self):
 #			self.listening = False
 #			# Display face neutral
-#			self.display.state(3)
+#			self.robot.display.state(3)
 #
 
 	# Play wav file
@@ -280,20 +242,21 @@ class BRAIN:
 	# Convert: ffmpeg -i wawawawa.wav -f f32le -c:a pcm_f32le -ac 1 -ar 16000 wawawawa.raw
 	#
 	def play_audio_file(self,rawaudio_file):		
-		if self.robot.audio_running:
+		if self.robot.output_worker_running:
 			try:
 				with open("audio/" + rawaudio_file, 'rb') as f:
 					# Read the entire 
 					audio_data = f.read()
 					np_audio = np.frombuffer(audio_data, dtype=np.float32)
-					self.robot.audio_q.put_nowait(np_audio)
+					self.robot.output_q.put_nowait({"type" : "file", "audio" : np_audio })
+
 			except Exception as e:
 				print("Audio queue error : ",type(e).__name__ )
 
-	# direct TTS
+	# TTS
 	def speak(self,text):
 		try:
-			if self.robot.audio_running:
+			if self.robot.output_worker_running:
 				self.robot.tts_engine.text_q.put_nowait(text)
 		except Exception as e:
 			print("Text queue error : ",type(e).__name__ )
@@ -324,7 +287,7 @@ class BRAIN:
 	def prompt(self,text)->str:
 		self.busybrain = True
 		# Show gear animation in display				
-		self.display.state(18)
+		self.robot.display.state(18)
 		
 		if self.llm_mode == "chat mode":
 			self.chat_interaction(text)
@@ -362,7 +325,6 @@ class BRAIN:
 				if not message.strip() == "" and len(message) > 1:
 					print("From LLM (chat): " + message)
 					self.speak(message)
-					self.robot_expression(message)
 					# Slow down if tts queue gets larger
 					time.sleep(self.robot.tts_engine.queue_size() * 0.700)
 	
@@ -436,7 +398,7 @@ class BRAIN:
 		self.tts_output_chunked(response)
 
 		self.busybrain = False
-		self.display.state(3)
+		self.robot.display.state(3)
 
 ###############
 ############### Agentic Tools ############### 
@@ -458,11 +420,11 @@ class BRAIN:
 		"""	
 		
 		
-		self.display.state(13)
+		self.robot.display.state(13)
 		print("Tool : describe_view.")
-		image = self.sense.capture()
+		image = self.robot.sense.capture()
 		
-		self.display.state(20)
+		self.robot.display.state(20)
 
 		if image=="" : 
 			description = "You see nothing."
@@ -486,7 +448,7 @@ class BRAIN:
 		
 		print(description)
 
-		self.display.state(3)
+		self.robot.display.state(3)
 
 		return description
 
@@ -505,12 +467,12 @@ class BRAIN:
 		"""	
 		
 		
-		self.display.state(13)
+		self.robot.display.state(13)
 		print("Tool : find_in_view.")
 		
-		image = self.sense.capture()
+		image = self.robot.sense.capture()
 
-		self.display.state(20)
+		self.robot.display.state(20)
 		
 		if image=="" : 
 			description = "You see nothing."
@@ -530,7 +492,7 @@ class BRAIN:
 		
 		print("VISION MODEL : " + description)
 		
-		self.display.state(3)
+		self.robot.display.state(3)
 
 		return description
 		
@@ -610,7 +572,7 @@ class BRAIN:
 			none
 		"""	
 
-		self.display.action(12,3,26)
+		self.robot.display.action(12,3,26)
 		
 		if (type(steps) == str):
 			try:
@@ -638,7 +600,7 @@ class BRAIN:
 			none
 		"""	
 
-		self.display.action(12,3,26)
+		self.robot.display.action(12,3,26)
 
 		if (type(steps) == str):
 			try:
@@ -666,7 +628,7 @@ class BRAIN:
 			none
 		"""	
 
-		self.display.action(12,3,26)
+		self.robot.display.action(12,3,26)
 		
 		if (type(steps) == str):
 			try:
@@ -694,7 +656,7 @@ class BRAIN:
 			none
 		"""	
 
-		self.display.action(12,3,26)
+		self.robot.display.action(12,3,26)
 
 
 		if (type(steps) == str):
@@ -722,7 +684,7 @@ class BRAIN:
 			none
 		"""	
 
-		self.display.action(12,3,26)
+		self.robot.display.action(12,3,26)
 
 		if (type(times) == str):
 			try:
@@ -752,7 +714,7 @@ class BRAIN:
 			none
 		"""	
 
-		self.display.action(12,3,26)
+		self.robot.display.action(12,3,26)
 		
 		if (type(steps) == str):
 			try:
@@ -781,7 +743,7 @@ class BRAIN:
 			none
 		"""	
 		
-		self.display.action(12,3,26)
+		self.robot.display.action(12,3,26)
 
 		if (type(steps) == str):
 			try:
@@ -810,7 +772,7 @@ class BRAIN:
 			none
 		"""	
 		
-		self.display.action(12,3,26)
+		self.robot.display.action(12,3,26)
 
 		if (type(steps) == str):
 			try:
@@ -840,7 +802,7 @@ class BRAIN:
 			none
 		"""	
 
-		self.display.action(12,3,26)
+		self.robot.display.action(12,3,26)
 
 		if (type(steps) == str):
 			try:
@@ -862,84 +824,6 @@ class BRAIN:
 ############### End of Agentic Tools ############### 
 ###############
 	
-
-	#
-	# Robotic expression via a LLM based on sentence
-	#
-	def robot_expression(self,sentence):
-		
-		if len(sentence) < 3:
-			return
-		prompt = """"Express yourself, 
-		based on the following sentence respond with one of these words, and only that word:
-		SAD, HAPPY, EXCITED, NEUTRAL, DIFFICULT, LOVE, DISLIKE, INTERESTED, OK or LIKE.
-		The sentence is : """ + sentence
-
-		response = ollama.chat(
-			model = LLM_EXPRESSION_MODEL,
-			keep_alive = -1,
-			messages=[{'role': 'user', 'content': prompt}],
-		)
-		
-		emotion =  response['message']['content']
-
-		print("Robot expression: " + emotion)
-
-		if "SAD" in emotion:
-			self.display.action(12,5,38)
-			self.robot.bodyaction(16,0,30)
-			self.robot.bodyaction(17,0,30)
-			
-			return
-		elif "HAPPY" in emotion:
-			self.display.action(12,5,44)
-			self.robot.bodyaction(16,1,30)
-			self.robot.bodyaction(17,1,30)
-
-			return
-		elif "EXCITED" in emotion:
-			self.display.action(12,3,13)
-			self.robot.bodyaction(7,1,5)
-
-			return
-		elif "DIFFICULT" in emotion:
-			self.display.action(12,3,52)
-			self.robot.bodyaction(12,1,20)
-
-			return
-		elif "LOVE" in emotion:
-			self.display.action(12,3,19)
-			self.robot.bodyaction(17,0,30)
-
-		elif "LIKE" in emotion:
-			self.display.action(12,3,13)
-			self.robot.bodyaction(17,0,30)
-
-			return
-		elif "DISLIKE" in emotion:
-			self.display.action(12,3,42)
-			self.robot.bodyaction(17,0,30)
-
-			return
-		elif "INTERESTED" in emotion:
-			self.display.action(12,3,44)
-			self.robot.bodyaction(16,1,20)
-			self.robot.bodyaction(17,0,20)
-
-			return
-		elif "OK" in emotion:
-			self.display.action(12,3,7)
-			self.robot.bodyaction(16,0,20)
-			self.robot.bodyaction(17,0,20)
-
-			return
-		elif "NEUTRAL" in emotion:
-			self.display.action(8,3)
-			self.robot.bodyaction(16,0,20)
-			self.robot.bodyaction(17,1,20)
-
-			return
-
 	#
 	# Streamed/chunked text output before sending to TTS
 	#

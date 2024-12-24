@@ -9,6 +9,7 @@ class SENSE:
 		self.ip = ip
 		self.timeout = timeout
 		self.health = False
+		self.mic = False
 		
 		# Health update
 		threading.Thread(target=self.safe_http_call, args=[('http://' + self.ip + '/health')]).start()
@@ -20,22 +21,20 @@ class SENSE:
 				response = requests.get('http://' + self.ip + "/control?setting=micstreaming", timeout=self.timeout)
 				json_obj = response.json()
 				self.health_ok = True
-				return json_obj['micstreaming']
+				self.mic = json_obj['micstreaming']
 
 			except Exception as e:
 				self.health_ok = False
 				print("Request - micstatus error : ",e)
-				state = 0
-				
-				return False
+							
+				self.mic = False
 		else:
 			threading.Thread(target=self.safe_http_call, args=['http://' + self.ip + "/control?setting=micstreaming&param=" + str(state)]).start()
-		
-		if state == 1:
-			return False
-		else:
-			return True
-		
+
+			self.mic = True if state == 1 else False
+
+		return self.mic
+							
 	def camstreaming(self, state = -1)->bool:
 	
 		if state == -1:
