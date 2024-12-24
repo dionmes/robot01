@@ -127,7 +127,7 @@ class BRAIN:
 	# API brain setting handler
 	#
 	def setting(self,item,value)->bool:
-		if item in "robot01_ip robot01sense_ip audio micstreaming cam_resolution camstreaming micgain llm_mode bodyactions volume":	
+		if item in "robot01_ip robot01sense_ip output micstreaming cam_resolution camstreaming micgain llm_mode bodyactions volume":	
 
 			if item == "robot01_ip":
 				if	self.validate_ip_address(value):

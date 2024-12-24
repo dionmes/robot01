@@ -4,6 +4,8 @@ import time
 import queue
 import socket
 
+import ollama
+
 from tts_speecht5 import TTS
 from display import DISPLAY
 from sense import SENSE
@@ -62,7 +64,8 @@ class ROBOT:
 		# tts engine
 		self.output_q = queue.Queue(maxsize=OUTPUT_Q_SIZE)
 		self.tts_engine = TTS(self.ip, self.output_q)
-
+		self.tts_engine.start()
+		
 
 	# Generate Display worker : Actions from queue : display_q
 	def bodyactions_worker(self):
@@ -120,7 +123,7 @@ class ROBOT:
 			# Add state to queue
 			self.body_q.put_nowait(task)
 		except Exception as e:
-			print("Robot queue error : ", type(e).__name__ )
+			print("Robot bodyactions queue error : ", type(e).__name__ )
 
 	def output(self, state = -1)->bool:
 		if state == -1:			
@@ -176,12 +179,12 @@ class ROBOT:
 		while self.output_worker_running:
 			
 			output_action = self.output_q.get()
-			
-			if "speech" in output_action['type'] and not self.outputbusy:
+
+			if "speech" in output_action['type'] and not self.output_busy:
 				self.output_started()
 				
 			if "text" in output_action:
-]				self.express_emotion(output_action['text'])
+				self.express_emotion(output_action['text'])
 			
 			if "audio" in output_action:
 				audio = output_action['audio']
@@ -244,7 +247,7 @@ class ROBOT:
 		if not self.emotion:
 			return
 			
-		if len(sentence) < 3:
+		if len(text) < 3:
 			return
 			
 		prompt = """"Express yourself, 

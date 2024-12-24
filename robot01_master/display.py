@@ -35,60 +35,45 @@ class DISPLAY:
 		
 		while True:	
 			task = self.display_q.get()			
-			action = task['action']
-			
 			if task['type'] == "state":
 			
-				if not self.display_latest_state_task == task:
-
-					self.display_latest_state_task = task
-					url = 'http://' + self.ip + display_action_url + str(action)
-
-					# text display
-					if action == 1 or action == 2 or action == 14:
-						url = url + "&text=" + task['text']
-	
-					if task['img_index'] > 0:
-						url = url + "&index=" + str(task['img_index'])
-	
-					try:
-						requests.get(url, timeout=self.timeout)
-					except Exception as e:
-						if debug:
-							print("Display Request - " + url + " , error : ", e)
-						else:
-							print("Display Request error")
-					
-			elif  task['type'] == "action":
-				
-				url = 'http://' + self.ip + display_action_url + str(action)
+				self.display_latest_state_task = task
+				url = 'http://' + self.ip + display_action_url + str(task['action'])
 
 				# text display
-				if action == 1 or action == 2 or action == 14:
-					url = url + "&text='" + task['text']
+				if task['action'] == 1 or task['action'] == 2 or task['action'] == 14:
+					url = url + "&text=" + task['text']
 
 				if task['img_index'] > 0:
 					url = url + "&index=" + str(task['img_index'])
 
-				try:
-					requests.get(url, timeout=self.timeout)
-				except Exception as e:
-					if debug:
-						print("Display Request - " + url + " , error : ", e)
-					else:
-						print("Display Request error")
+				self.safe_http_call(url)
+										
+			elif  task['type'] == "action":
+				
+				url = 'http://' + self.ip + display_action_url + str(task['action'])
 
-				if task['reset'] < 3:
-					time.sleep(MINIMAL_SLEEP)
-			
-			# Reset to latest state
-			if self.display_q.empty():				
-				if task['type'] == "action":
-					self.display_q.put_nowait(self.display_latest_state_task)
-	
-				time.sleep(MINIMAL_SLEEP)
+				# text display
+				if task['action'] == 1 or task['action'] == 2 or task['action'] == 14:
+					url = url + "&text='" + task['text']
+
+				if task['img_index'] > 0:
+					url = url + "&index=" + str(task['img_index'])
+				
+				self.safe_http_call(url)
+				
+				reset_timer = task['reset']
+				if reset_timer >= MINIMAL_SLEEP:
+					time.sleep(reset_timer - MINIMAL_SLEEP)
 					
+			time.sleep(MINIMAL_SLEEP)
+				
 			self.display_q.task_done()
+
+			# Reset to latest state
+			if self.display_q.empty() and task['type'] == "action":
+				self.display_q.put_nowait(self.display_latest_state_task)
+
 
 	# set state of display
 	def state(self, action, img_index = 0, text = ""):
@@ -112,5 +97,15 @@ class DISPLAY:
 			self.display_q.put_nowait(task)
 		except Exception as e:
 			print("Display queue error : ", type(e).__name__ )
+
+	def safe_http_call(self, url):
+		try:
+			response = requests.get(url, timeout=self.timeout)
+		except Exception as e:
+			if debug:
+				print("Display Request - " + url + " , error : ",e)
+			else:
+				print("Display Request error")
+
 
 
