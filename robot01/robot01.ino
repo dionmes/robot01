@@ -16,10 +16,7 @@
 * Define CPU cores for vtasks
 */
 #define HTTPD_TASK_CORE 1
-#define BODY_TEST_TASK_CORE 1
 #define bno08x_TASK_CORE 1
-
-static const char* TAG = "robot01.ino";
 
 /*
 * Master server or 'brain'
@@ -67,8 +64,8 @@ bool audioStreamRunning = false;  // If Audio is listening on udp
 I2SClass I2S;
 
 #define MAX_VOLUME 100
-// Set divider for I2S output multiplier
-int i2sGain = 30;
+// default volume
+int audio_volume = 50;
 
 /*
 * Sensors assignments
@@ -278,12 +275,9 @@ void setup() {
 
   String register_string =  "Hello, I am " + ROBOT_NAME + " @ " + WiFi.localIP().toString();
   roboFace.exec(faceAction::SCROLLTEXT,register_string, 100);
-  delay(500);
-  
-  while (roboFace.actionRunning) { delay(100); }
-  roboFace.exec(faceAction::DISPLAYIMG, "", 39);
-  delay(1000);
+  delay(8000);  
   roboFace.exec(faceAction::NEUTRAL);
+  
   vTaskDelete(NULL);
 
 }
@@ -431,13 +425,13 @@ esp_err_t volume_handler(httpd_req_t *request) {
 
     int value = param_value.toInt();
     if (value >= 0 && value <= MAX_VOLUME) {
-      i2sGain = value;
+      audio_volume = value;
     } 
   }
   
   JsonDocument json_obj;
   
-  json_obj["volume"] = i2sGain;
+  json_obj["volume"] = audio_volume;
 
   size_t jsonSize = measureJson(json_obj);
   char json_response[jsonSize];
@@ -726,7 +720,7 @@ IRAM_ATTR void udpRXCallBack(AsyncUDPPacket &packet) {
   float sample;
   uint8_t *f_ptr = (uint8_t *)&sample;
   uint32_t i2sValue;
-  float adjusted_gain = i2sGain * 0.02;
+  float adjusted_gain = audio_volume * 0.05;
 
   for (size_t i = 0; i <= packet_length; i = i + 4) {
 

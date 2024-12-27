@@ -42,75 +42,65 @@ enum faceAction {
 
 /*
 * roboFace class
-* methods for display actions on LED display
+* Class for queuing and worker
 */
 class roboFace {
+
   public:
     roboFace();
     void begin();
-    // Action - enum faceAction, String - (optional text if Action requires it), Int - index of image or optional delay dependent on action.
+
+    // exec - enum faceAction, String - (optional text if Action requires it), Int - index of image or optional delay dependend on action.
     void exec( int action, String text = "", int intValue = 0);
-    // Boolean to see if task is running.
-    bool actionRunning;
-
-  private:
-    // Task handler for actions
-    TaskHandle_t faceTaskHandle;
-    // Values for tasks
-    int _action;
-    String _text;
-    int _intValue;
-
-    // Task function to call. Pass struct faceActionParams for action parameters.
-    void static displayTask(void * parameters);
 
     // display Text with size 2 - medium, or 3 - Large. (to be called from displayTask inside a vtask)
-    void displayText(String text, int size);
+    static void text(String text, int size);
     //  Display text for amount of seconds
-    void displayTextTimed(String text, int seconds );
-    //  Scrolling text. 
-    void scrollText(String text, int size);
+    static void scrollText(String text, int size);
     // Set Face neutral. 
-    void neutral();
+    static void neutral();
     // Smile.
-    void smile();
+    static void smile();
     // drawbitmap. 
-    void drawbitmap(int index);
+    static void drawbitmap(int index);
     // IMG Loop
-    void imgloop();
+    static void imgloop();
     // Look Left Animation.
-    void lookLeftAni(int wait);
+    static void lookLeftAni(int wait);
     // Look Right animation. 
-    void lookRightAni(int wait);
+    static void lookRightAni(int wait);
     // Blink with both eyes
-    void blink(int wait);
+    static void blink(int wait);
     // Wink left eye.
-    void wink(int wait);
+    static void wink(int wait);
     // Shake eyes left to right and right to left. 
-    void shake(int wait);
+    static void shake(int wait);
     // Cylon function, moving leds from left to righ and vice versa. To be implemented.
-    void cylon(int wait);
+    static void cylon(int wait);
     // Fill rectangle patter for test purposes. 
-    void testfillrect(int wait);
+    static void testfillrect(int wait);
     // Scroll screen left
-    void scrollScreenLeft();
+    static void scrollScreenLeft();
     // Scroll screen right
-    void scrollScreenRight();
+    static void scrollScreenRight();
     // Stop scrolling
-    void stopScrolling();
+    static void stopScrolling();
     // Animation
-    void animation(const byte frames[][512], int loop);
+    static void animation(const byte frames[][512], int loop);
     // Chat animation
-    void chat();
+    static void chat();
     // Small circle on face, part ofChat animation
-    void mouth_small_circle();
+    static void mouth_small_circle();
     // large circle on face, part ofChat animation
-    void mouth_large_circle();
+    static void mouth_large_circle();
     // Small rounded rectangle on face, part ofChat animation
-    void mouth_small_rrect();
+    static void mouth_small_rrect();
     // Large rounded rectangle on face, part ofChat animation
-    void mouth_large_rrect();
+    static void mouth_large_rrect();
 
+    private:
+    // Queue worker for handling display actions
+    static void worker(void *pvParameters);
 };
 
 #endif

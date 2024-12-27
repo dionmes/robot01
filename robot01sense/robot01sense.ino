@@ -253,6 +253,7 @@ static esp_err_t capture_handler(httpd_req_t *req) {
   httpd_resp_set_hdr(req, "X-Timestamp", (const char *)ts);
   res = httpd_resp_send(req, (const char *)fb->buf, fb->len);
   esp_camera_fb_return(fb);
+  
   camIsStreaming = camWasStreaming;
 
   return res;
@@ -333,8 +334,7 @@ static esp_err_t cmd_handler(httpd_req_t *req) {
   uint8_t res = 0;
 
   if (!strcmp(req_setting, "framesize")) {
-    res = (req_value != -1) ? camera_config.frame_size = (framesize_t)req_value : camera_config.frame_size;
-    camera_init();
+    res = (req_value != -1) ? s->set_framesize(s, (framesize_t)req_value) : s->status.framesize;
   } else if (!strcmp(req_setting, "quality"))
     res = (req_value != -1) ? s->set_quality(s, req_value) : s->status.quality;
   else if (!strcmp(req_setting, "contrast"))
@@ -667,7 +667,6 @@ void setup() {
   http_err == 0 ? Serial.println(http.responseBody()) : Serial.printf("Got status code: %u \n", http_err);
 
   // camera init
-
   camera_config.ledc_channel = LEDC_CHANNEL_0;
   camera_config.ledc_timer = LEDC_TIMER_0;
   camera_config.pin_d0 = Y2_GPIO_NUM;
@@ -687,20 +686,44 @@ void setup() {
   camera_config.pin_pwdn = PWDN_GPIO_NUM;
   camera_config.pin_reset = RESET_GPIO_NUM;
   camera_config.xclk_freq_hz = 20000000;
-  camera_config.frame_size = FRAMESIZE_QVGA;
+  camera_config.frame_size = FRAMESIZE_VGA;
   camera_config.pixel_format = PIXFORMAT_JPEG;
   camera_config.grab_mode = CAMERA_GRAB_LATEST;
-  camera_config.jpeg_quality = 10;
-  camera_config.fb_count = 2;
+  camera_config.jpeg_quality = 12;
 
   if (psramFound()) {
     Serial.printf("PSRAM Found for camera\n");
     camera_config.fb_location = CAMERA_FB_IN_PSRAM;
+    camera_config.fb_count = 2;
   } else {
     camera_config.fb_location = CAMERA_FB_IN_DRAM;
+    camera_config.fb_count = 1;
   }
 
   esp_err_t err = esp_camera_init(&camera_config);
+
+  // Base sensor settings
+  sensor_t *s = esp_camera_sensor_get();
+
+  s->set_brightness(s, 0);
+  s->set_contrast(s, 0);
+  s->set_saturation(s, 0);
+  s->set_special_effect(s, 0);
+  s->set_wb_mode(s, 3);
+  s->set_ae_level(s, 0);
+  s->set_awb_gain(s, 1);
+  s->set_wb_mode(s, 3); // 0 - Auto, 1 - Sunny, 2 - Cloudy, 3 - Office, 4 - Home
+  s->set_aec_value(s, 400); // the brighter your scene the lower this value should be (0-1200)
+  s->set_agc_gain(s, 2);
+  s->set_gainceiling(s, GAINCEILING_4X);
+  s->set_lenc(s, 1);
+  s->set_gain_ctrl(s, 0);
+  s->set_exposure_ctrl(s, 0);
+  s->set_hmirror(s, 0);
+  s->set_vflip(s, 0);
+  s->set_aec2(s, 1);
+  s->set_bpc(s, 1);
+  s->set_wpc(s, 1);
 
   // I2S Init for mic streaming
   I2S.setPinsPdmRx(42, 41);

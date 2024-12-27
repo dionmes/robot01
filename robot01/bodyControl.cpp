@@ -10,7 +10,9 @@
 #define STEPWAIT 50
 
 // vTask core
-#define ROBOT_TASK_CORE 0
+#define ROBOT_TASK_CORE 1
+// Body actions Queue size
+#define BODYACTIONS_QUEUE_SIZE 3
 
 // define pins
 #define LEFTLOWERARM_DOWN_PIN 9 // mcp1
@@ -33,13 +35,21 @@
 MCP23017 mcp1 = MCP23017(0x20, Wire);
 MCP23017 mcp2 = MCP23017(0x21, Wire);
 
+// Queue message struct
+typedef struct {
+    int action; 
+    int direction;
+    int steps;
+} bodyactionTaskData_t;
+
+// Display queue for display actions
+QueueHandle_t bodyactionQueue = xQueueCreate(BODYACTIONS_QUEUE_SIZE, sizeof(bodyactionTaskData_t));
+
 bodyControl::bodyControl(){
   //
 };
 
 void bodyControl::begin() {
-
-  this->actionRunning = false;
 
   mcp1.init();
   mcp2.init();
@@ -53,20 +63,24 @@ void bodyControl::begin() {
   mcp2.writeRegister(MCP23017Register::GPIO_B, 0x00);  //Reset port B
   mcp2.portMode(MCP23017Port::A, 0);                   //Port A as output
   mcp2.portMode(MCP23017Port::B, 0b11111111);          //Port B as input
+  
+  // Start worker
+  xTaskCreatePinnedToCore(bodyControl::worker, "bodyactions_worker", 4096, NULL, 10, &bodyTaskHandle, ROBOT_TASK_CORE);
 
 };
 
 void bodyControl::exec(int action, bool direction, int steps) {
+  
+  bodyactionTaskData_t bodyactionTaskData;
 
-  _action = action;
-  _direction = direction;
-  _steps = steps;
+  bodyactionTaskData.action = action;
+  bodyactionTaskData.direction = direction;
+  bodyactionTaskData.steps = steps;
 
-  if ( action == bodyAction::STOP & this->actionRunning & bodyTaskHandle != NULL ) {
-    
+  if ( action == bodyAction::STOP ) {
+
+    xQueueReset(bodyactionQueue);    
     xTaskNotify( bodyTaskHandle, 1, eSetValueWithOverwrite );
-    this->actionRunning = false;
-    vTaskDelay(500 / portTICK_PERIOD_MS);
 
     mcp1.writeRegister(MCP23017Register::GPIO_A, 0x00);  //Reset port A
     mcp1.writeRegister(MCP23017Register::GPIO_B, 0x00);  //Reset port B
@@ -74,94 +88,92 @@ void bodyControl::exec(int action, bool direction, int steps) {
     mcp2.writeRegister(MCP23017Register::GPIO_A, 0x00);  //Reset port A
     mcp2.writeRegister(MCP23017Register::GPIO_B, 0x00);  //Reset port B
 
-    vTaskDelay(500 / portTICK_PERIOD_MS);
+    vTaskDelay(50 / portTICK_PERIOD_MS);
 
     return;
   }
 
-  xTaskCreatePinnedToCore(bodyActionTask, "bodyActionTask", 4096, (void*)this, 10, &bodyTaskHandle, ROBOT_TASK_CORE);
+  xQueueSend(bodyactionQueue, &bodyactionTaskData, portMAX_DELAY);
 
 }
 
-void bodyControl::bodyActionTask(void* bodyControlInstance) {
+void bodyControl::worker(void *pvParameters) {
 
-  bodyControl* bodyControlRef = (bodyControl*)bodyControlInstance;
-  bodyControlRef->actionRunning = true;
+  bodyactionTaskData_t bodyactionTaskData;
 
-  // Serial.printf("Body Action : %i \n", bodyControlRef->_action);
+  while (true) {
+      if (xQueueReceive(bodyactionQueue, &bodyactionTaskData, portMAX_DELAY) == pdPASS) {
 
-  switch (bodyControlRef->_action) {
-    case bodyAction::LEFTLOWERARM:
-      bodyControlRef->leftLowerArm(bodyControlRef->_direction, bodyControlRef->_steps);
-      break;
+        switch (bodyactionTaskData.action) {
+          case bodyAction::LEFTLOWERARM:
+            bodyControl::leftLowerArm(bodyactionTaskData.direction, bodyactionTaskData.steps);
+            break;
 
-    case bodyAction::LEFTUPPERARM:
-      bodyControlRef->leftUpperArm(bodyControlRef->_direction, bodyControlRef->_steps);
-      break;
+          case bodyAction::LEFTUPPERARM:
+            bodyControl::leftUpperArm(bodyactionTaskData.direction, bodyactionTaskData.steps);
+            break;
 
-    case bodyAction::RIGHTLOWERARM:
-      bodyControlRef->rightLowerArm(bodyControlRef->_direction, bodyControlRef->_steps);
-      break;
+          case bodyAction::RIGHTLOWERARM:
+            bodyControl::rightLowerArm(bodyactionTaskData.direction, bodyactionTaskData.steps);
+            break;
 
-    case bodyAction::RIGHTUPPERARM:
-      bodyControlRef->rightUpperArm(bodyControlRef->_direction, bodyControlRef->_steps);
-      break;
+          case bodyAction::RIGHTUPPERARM:
+            bodyControl::rightUpperArm(bodyactionTaskData.direction, bodyactionTaskData.steps);
+            break;
 
-    case bodyAction::BOTH_LOWER_ARMS:
-      bodyControlRef->bothLowerArms(bodyControlRef->_direction, bodyControlRef->_steps);
-      break;
+          case bodyAction::BOTH_LOWER_ARMS:
+            bodyControl::bothLowerArms(bodyactionTaskData.direction, bodyactionTaskData.steps);
+            break;
 
-    case bodyAction::BOTH_UPPER_ARMS:
-      bodyControlRef->bothUpperArms(bodyControlRef->_direction, bodyControlRef->_steps);
-      break;
+          case bodyAction::BOTH_UPPER_ARMS:
+            bodyControl::bothUpperArms(bodyactionTaskData.direction, bodyactionTaskData.steps);
+            break;
 
-    case bodyAction::LEFTLEG:
-      bodyControlRef->leftLeg(bodyControlRef->_direction, bodyControlRef->_steps);
-      break;
+          case bodyAction::LEFTLEG:
+            bodyControl::leftLeg(bodyactionTaskData.direction, bodyactionTaskData.steps);
+            break;
 
-    case bodyAction::RIGHTLEG:
-      bodyControlRef->rightLeg(bodyControlRef->_direction, bodyControlRef->_steps);
-      break;
+          case bodyAction::RIGHTLEG:
+            bodyControl::rightLeg(bodyactionTaskData.direction, bodyactionTaskData.steps);
+            break;
 
-    case bodyAction::HIP:
-      bodyControlRef->hip(bodyControlRef->_direction, bodyControlRef->_steps);
-      break;
+          case bodyAction::HIP:
+            bodyControl::hip(bodyactionTaskData.direction, bodyactionTaskData.steps);
+            break;
 
-    case bodyAction::LEFTHANDLIGHT:
-      bodyControlRef->leftHandLight(bodyControlRef->_direction, bodyControlRef->_steps);
-      break;
+          case bodyAction::LEFTHANDLIGHT:
+            bodyControl::leftHandLight(bodyactionTaskData.direction, bodyactionTaskData.steps);
+            break;
 
-    case bodyAction::RIGHTHANDLIGHT:
-      bodyControlRef->rightHandLight(bodyControlRef->_direction, bodyControlRef->_steps);
-      break;
+          case bodyAction::RIGHTHANDLIGHT:
+            bodyControl::rightHandLight(bodyactionTaskData.direction, bodyactionTaskData.steps);
+            break;
 
-    case bodyAction::TURN:
-      bodyControlRef->turn(bodyControlRef->_direction, bodyControlRef->_steps);
-      break;
+          case bodyAction::TURN:
+            bodyControl::turn(bodyactionTaskData.direction, bodyactionTaskData.steps);
+            break;
 
-    case bodyAction::BODYSHAKE:
-      bodyControlRef->shake(bodyControlRef->_direction, bodyControlRef->_steps);
-      break;
+          case bodyAction::BODYSHAKE:
+            bodyControl::shake(bodyactionTaskData.direction, bodyactionTaskData.steps);
+            break;
 
-    case bodyAction::BACK_AND_FORTH:
-      bodyControlRef->back_and_forth(bodyControlRef->_direction, bodyControlRef->_steps);
-      break;
+          case bodyAction::BACK_AND_FORTH:
+            bodyControl::back_and_forth(bodyactionTaskData.direction, bodyactionTaskData.steps);
+            break;
 
-    case bodyAction::WALK_FORWARD:
-      bodyControlRef->bodyControl::walk_forward(bodyControlRef->_direction, bodyControlRef->_steps);
-      break;
+          case bodyAction::WALK_FORWARD:
+            bodyControl::bodyControl::walk_forward(bodyactionTaskData.direction, bodyactionTaskData.steps);
+            break;
 
-    case bodyAction::WALK_BACKWARD:
-      bodyControlRef->bodyControl::walk_backward(bodyControlRef->_direction, bodyControlRef->_steps);
-      break;
+          case bodyAction::WALK_BACKWARD:
+            bodyControl::bodyControl::walk_backward(bodyactionTaskData.direction, bodyactionTaskData.steps);
+            break;
 
-    default:
-      break;
-  };
-
-  vTaskDelay(100);
-  bodyControlRef->actionRunning = true;
-  vTaskDelete(NULL);
+          default:
+            break;
+        };
+      }
+  }
 };
 
 void bodyControl::leftLowerArm(bool up, int steps) {
@@ -171,8 +183,7 @@ void bodyControl::leftLowerArm(bool up, int steps) {
   // steps routine with vtask notify for stopping  
   for (int x = 0; x < steps; x = ++x) {
     if (xTaskNotifyWait(0x00, 0x00, &notifyStopValue, 0) == pdTRUE) {
-      vTaskDelay(5);
-      vTaskDelete(NULL);
+        return;
     }
     vTaskDelay(STEPWAIT);
   }
@@ -187,8 +198,7 @@ void bodyControl::leftUpperArm(bool up, int steps) {
   // steps routine with vtask notify for stopping  
   for (int x = 0; x < steps; x = ++x) {
     if (xTaskNotifyWait(0x00, 0x00, &notifyStopValue, 0) == pdTRUE) {
-      vTaskDelay(5);
-      vTaskDelete(NULL);
+        return;
     }
     vTaskDelay(STEPWAIT);
   }
@@ -204,8 +214,7 @@ void bodyControl::rightLowerArm(bool up, int steps) {
   // steps routine with vtask notify for stopping  
   for (int x = 0; x < steps; x = ++x) {
     if (xTaskNotifyWait(0x00, 0x00, &notifyStopValue, 0) == pdTRUE) {
-      vTaskDelay(5);
-      vTaskDelete(NULL);
+        return;
     }
     vTaskDelay(STEPWAIT);
   }
@@ -221,8 +230,7 @@ void bodyControl::rightUpperArm(bool up, int steps) {
   // steps routine with vtask notify for stopping  
   for (int x = 0; x < steps; x = ++x) {
     if (xTaskNotifyWait(0x00, 0x00, &notifyStopValue, 0) == pdTRUE) {
-      vTaskDelay(5);
-      vTaskDelete(NULL);
+        return;
     }
     vTaskDelay(STEPWAIT);
   }
@@ -239,8 +247,7 @@ void bodyControl::bothLowerArms(bool up, int steps) {
   // steps routine with vtask notify for stopping  
   for (int x = 0; x < steps; x = ++x) {
     if (xTaskNotifyWait(0x00, 0x00, &notifyStopValue, 0) == pdTRUE) {
-      vTaskDelay(5);
-      vTaskDelete(NULL);
+        return;
     }
     vTaskDelay(STEPWAIT);
   }
@@ -258,8 +265,7 @@ void bodyControl::bothUpperArms(bool up, int steps) {
   // steps routine with vtask notify for stopping  
   for (int x = 0; x < steps; x = ++x) {
     if (xTaskNotifyWait(0x00, 0x00, &notifyStopValue, 0) == pdTRUE) {
-      vTaskDelay(5);
-      vTaskDelete(NULL);
+        return;
     }
     vTaskDelay(STEPWAIT);
   }
@@ -276,8 +282,7 @@ void bodyControl::leftLeg(bool forward, int steps) {
   // steps routine with vtask notify for stopping  
   for (int x = 0; x < steps; x = ++x) {
     if (xTaskNotifyWait(0x00, 0x00, &notifyStopValue, 0) == pdTRUE) {
-      vTaskDelay(5);
-      vTaskDelete(NULL);
+        return;
     }
     vTaskDelay(STEPWAIT);
   }
@@ -293,8 +298,7 @@ void bodyControl::rightLeg(bool forward, int steps) {
   // steps routine with vtask notify for stopping  
   for (int x = 0; x < steps; x = ++x) {
     if (xTaskNotifyWait(0x00, 0x00, &notifyStopValue, 0) == pdTRUE) {
-      vTaskDelay(5);
-      vTaskDelete(NULL);
+        return;
     }
     vTaskDelay(STEPWAIT);
   }
@@ -310,8 +314,7 @@ void bodyControl::hip(bool left, int steps) {
   // steps routine with vtask notify for stopping  
   for (int x = 0; x < steps; x = ++x) {
     if (xTaskNotifyWait(0x00, 0x00, &notifyStopValue, 0) == pdTRUE) {
-      vTaskDelay(5);
-      vTaskDelete(NULL);
+        return;
     }
     vTaskDelay(STEPWAIT);
   }
@@ -338,8 +341,7 @@ void bodyControl::shake(bool left, int steps) {
     // Duration routine with vtask notify for stopping  
     for (int y = 0; y < 3; y = ++y) {
       if (xTaskNotifyWait(0x00, 0x00, &notifyStopValue, 0) == pdTRUE) {
-        vTaskDelay(5);
-        vTaskDelete(NULL);
+        return;
       }
       vTaskDelay(STEPWAIT);
     }
@@ -350,8 +352,7 @@ void bodyControl::shake(bool left, int steps) {
     // Duration routine with vtask notify for stopping  
     for (int y = 0; y < 3; y = ++y) {
       if (xTaskNotifyWait(0x00, 0x00, &notifyStopValue, 0) == pdTRUE) {
-        vTaskDelay(5);
-        vTaskDelete(NULL);
+        return;
       }
       vTaskDelay(STEPWAIT);
     }
@@ -375,8 +376,7 @@ void bodyControl::back_and_forth(bool left, int steps) {
     // Duration routine with vtask notify for stopping  
     for (int y = 0; y < 6; y = ++y) {
       if (xTaskNotifyWait(0x00, 0x00, &notifyStopValue, 0) == pdTRUE) {
-        vTaskDelay(5);
-        vTaskDelete(NULL);
+        return;
       }
       vTaskDelay(STEPWAIT);
     }
@@ -389,8 +389,7 @@ void bodyControl::back_and_forth(bool left, int steps) {
     // Duration routine with vtask notify for stopping  
     for (int y = 0; y < 6; y = ++y) {
       if (xTaskNotifyWait(0x00, 0x00, &notifyStopValue, 0) == pdTRUE) {
-        vTaskDelay(5);
-        vTaskDelete(NULL);
+        return;
       }
       vTaskDelay(STEPWAIT);
     }
@@ -418,8 +417,7 @@ void bodyControl::walk_forward(bool left, int steps) {
     // Duration routine with vtask notify for stopping  
     for (int y = 0; y < 6; y = ++y) {
       if (xTaskNotifyWait(0x00, 0x00, &notifyStopValue, 0) == pdTRUE) {
-        vTaskDelay(5);
-        vTaskDelete(NULL);
+        return;
       }
       vTaskDelay(50);
     }
@@ -470,8 +468,7 @@ void bodyControl::walk_backward(bool left, int steps) {
     // Duration routine with vtask notify for stopping  
     for (int y = 0; y < 7; y = ++y) {
       if (xTaskNotifyWait(0x00, 0x00, &notifyStopValue, 0) == pdTRUE) {
-        vTaskDelay(5);
-        vTaskDelete(NULL);
+        return;
       }
       vTaskDelay(50);
     }
@@ -488,8 +485,7 @@ void bodyControl::walk_backward(bool left, int steps) {
     // Duration routine with vtask notify for stopping  
     for (int y = 0; y < 7; y = ++y) {
       if (xTaskNotifyWait(0x00, 0x00, &notifyStopValue, 0) == pdTRUE) {
-        vTaskDelay(5);
-        vTaskDelete(NULL);
+        return;
       }
       vTaskDelay(50);
     } 
@@ -513,21 +509,26 @@ void bodyControl::turn(bool left, int steps) {
     Serial.println("left");
     mcp1.digitalWrite(HIP_LEFT_PIN, 0);
     mcp1.digitalWrite(HIP_RIGHT_PIN, 1);
-    leftLeg(0,3);
-    rightLeg(1,2);  
+    bodyControl::leftLeg(0,3);
+    bodyControl::rightLeg(1,2);  
     vTaskDelay(200);
 
     for (int x = 0; x < steps; x = ++x) {
 
       mcp1.digitalWrite(HIP_LEFT_PIN, 0);
       mcp1.digitalWrite(HIP_RIGHT_PIN, 1);
-      leftLeg(0,3);
-      rightLeg(1,2);
+      bodyControl::leftLeg(0,3);
+      bodyControl::rightLeg(1,2);
       vTaskDelay(50);
       mcp1.digitalWrite(HIP_LEFT_PIN, 1);
       mcp1.digitalWrite(HIP_RIGHT_PIN, 0);
-      leftLeg(0,3);
-      rightLeg(1,2);
+      bodyControl::leftLeg(0,3);
+      bodyControl::rightLeg(1,2);
+
+      if (xTaskNotifyWait(0x00, 0x00, &notifyStopValue, 0) == pdTRUE) {
+        return;
+      }
+
     }
     
   } else {
@@ -536,21 +537,25 @@ void bodyControl::turn(bool left, int steps) {
 
     mcp1.digitalWrite(HIP_LEFT_PIN, 1);
     mcp1.digitalWrite(HIP_RIGHT_PIN, 0);
-    rightLeg(0,3);
-    leftLeg(1,2);
+    bodyControl::rightLeg(0,3);
+    bodyControl::leftLeg(1,2);
     vTaskDelay(100);
 
     for (int x = 0; x < steps; x = ++x) {
     
       mcp1.digitalWrite(HIP_LEFT_PIN, 1);
       mcp1.digitalWrite(HIP_RIGHT_PIN, 0);
-      rightLeg(0,3);
-      leftLeg(1,2);
+      bodyControl::rightLeg(0,3);
+      bodyControl::leftLeg(1,2);
 
       mcp1.digitalWrite(HIP_LEFT_PIN, 0);
       mcp1.digitalWrite(HIP_RIGHT_PIN, 1);
-      rightLeg(0,3);
-      leftLeg(1,2);
+      bodyControl::rightLeg(0,3);
+      bodyControl::leftLeg(1,2);
+
+      if (xTaskNotifyWait(0x00, 0x00, &notifyStopValue, 0) == pdTRUE) {
+        return;
+      }
 
     }
   }
