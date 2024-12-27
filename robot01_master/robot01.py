@@ -18,7 +18,7 @@ LLM_EXPRESSION_MODEL = "gemma2:2b"
 # Body actions Queue size
 BODY_Q_SIZE = 4
 # Minimal sleep between actions 
-MINIMAL_SLEEP = 3
+MINIMAL_SLEEP = 1
 # Audio UDP PORT
 AUDIO_UDP_PORT = 9000
 # output Queue size

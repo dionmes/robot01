@@ -16,7 +16,7 @@ MINIMAL_SLEEP = 3
 # Uses threading for http call to make it non-blocking
 # See below for Actions & Items
 class DISPLAY:
-	def __init__(self, ip, timeout=2):
+	def __init__(self, ip, timeout=30):
 		# ip of robot/display
 		self.ip = ip
 		# timeout of http request
@@ -73,7 +73,6 @@ class DISPLAY:
 			# Reset to latest state
 			if self.display_q.empty() and task['type'] == "action":
 				self.display_q.put_nowait(self.display_latest_state_task)
-
 
 	# set state of display
 	def state(self, action, img_index = 0, text = ""):

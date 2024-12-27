@@ -4,7 +4,7 @@ import time
 import base64
 
 class SENSE:
-	def __init__(self, ip, timeout=5):
+	def __init__(self, ip, timeout=30):
 
 		self.ip = ip
 		self.timeout = timeout
