@@ -53,6 +53,7 @@ class TTS:
 			
 			text = self.text_q.get()
 			synth_speech = self.synthesiser(text, forward_params={"speaker_embeddings": self.speaker_embeddings})
+			
 			try:
 				self.output_q.put_nowait({"type" : "speech", "text" : text, "audio" : synth_speech['audio']})
 			except Exception as e:

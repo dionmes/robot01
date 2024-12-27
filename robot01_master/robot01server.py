@@ -37,18 +37,29 @@ def index():
 #
 @app.route('/<filename>')
 def serve_html(filename):
-	robot01_context = {"robot01_ip": brain.robot.ip, "robot01sense_ip" : brain.robot.sense.ip}
 
 	if filename in "controlsPage.html":
 		try:
 			return render_template(filename,context={"audiolist": brain.audiolist}) 
-		
 		except Exception as e:
 			abort(404)
 		
+	if filename in "sensePage.html":
+		cam_setting_list = [ "framesize", "quality", "contrast", "brightness", "saturation", "gainceiling", "colorbar", "awb", "agc", "aec", "hmirror", "vflip",  "awb_gain", "agc_gain", "aec_value", "aec2", "dcw", "bpc", "wpc", "raw_gma", "lenc", "special_effect", "wb_mode", "ae_level" ]
+		try:
+			return render_template(filename,context={ "robot01sense_ip" : brain.robot.sense.ip, "cam_setting_list": cam_setting_list}) 
+		except Exception as e:
+			abort(404)
+		
+	if filename in "managePage.html":
+		try:
+			return render_template(filename,context={"robot01_ip": brain.robot.ip, "robot01sense_ip" : brain.robot.sense.ip}) 
+		except Exception as e:
+			abort(404)
+
 	if filename.endswith('.html'):
 		try:
-			return render_template(filename,context=robot01_context) 
+			return render_template(filename) 
 		except Exception as e:
 			abort(404)
 			
@@ -165,7 +176,7 @@ def ask_robot01():
 		except Exception as e:
 			print("Prompt error : ", e)
 	else:
-		return abort(503)
+		abort(503)
 		
 	api_response = { 'status': 'ok' }
 
@@ -190,12 +201,14 @@ def tts_api():
 		try:	
 			# Put text in the brain queue
 			brain.speak(text)
-			api_response = { 'status': 'ok' }
+
 		except Exception as e:
 			print("TTS error : " ,e)
 			abort(404)
 	else:
-		return abort(404)
+		abort(404)
+
+	api_response = { 'status': 'ok' }
 
 	return jsonify(api_response)
 

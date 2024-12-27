@@ -65,7 +65,6 @@ class SENSE:
 			try:
 				response = requests.get('http://' + self.ip + "/control?setting=micgain", timeout=self.timeout)
 				json_obj = response.json()
-				
 				return json_obj['micgain']
 				
 			except Exception as e:
@@ -81,7 +80,7 @@ class SENSE:
 		
 		try: 
 			# Set resolution
-			requests.get('http://' + self.ip + '/control?setting=framesize&param=' + str(resolution), timeout = self.timeout )
+			requests.get('http://' + self.ip + '/control?setting=framesize&param=' + str(resolution), timeout = 10 )
 			self.health_ok = True
 		except:
 			self.health_ok = False
@@ -98,9 +97,20 @@ class SENSE:
 			
 		return image_base64
 
-	def cam_resolution(self,res):
-		threading.Thread(target=self.safe_http_call, args=[('http://' + self.ip + '/control?setting=framesize&param=' + res)]).start()
-		print("Sense cam resolution send")
+	def cam_resolution(self, res=-1)->int:
+
+		if res == -1:			
+			try:
+				response = requests.get('http://' + self.ip + '/control?setting=framesize&param=-1', timeout=self.timeout)
+				json_obj = response.json()
+				return json_obj['framesize']
+				
+			except Exception as e:
+				print("Request - cam_resolution error : ",e)
+		else:		
+			threading.Thread(target=self.safe_http_call, args=[('http://' + self.ip + '/control?setting=framesize&param=' + str(res))]).start()
+
+		return res
 	
 	def reset(self):
 		threading.Thread(target=self.safe_http_call, args=[('http://' + self.ip + '/reset')]).start()

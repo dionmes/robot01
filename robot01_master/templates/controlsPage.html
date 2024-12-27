@@ -102,7 +102,7 @@ window.onload = function() {
 		<input id="volume" type="range" onchange="volume();" min="0" max="100" value="0" step="5" disabled/>
 		</label>
 		<h4>Sounds</h4>
-		<div class="grid" style="margin: var(--pico-spacing");>
+		<div class="grid" style="margin: var(--pico-spacing);">
 		    <select id="audiofile">
         	<option value="" disabled selected>Select an audiofile</option>
 	        {% for option in context.audiolist %}
@@ -111,75 +111,75 @@ window.onload = function() {
 		    </select>
 			<button class="secondary" onClick="play_audio_file();" >Play audio</button>
 		</div>
-		<div class="grid" style="margin: var(--pico-spacing");>
+		<div class="grid" style="margin: var(--pico-spacing);">
 			<div>
 				<label for="movesteps">Move steps between 1-40</label>
 				<input type="number" id="movesteps" name="quantity" min="1" max="40" value="10">
 			</div>
 		</div>
-		<div class="grid" style="margin: var(--pico-spacing");>
+		<div class="grid" style="margin: var(--pico-spacing);">
 			<button class="outline" style="border-color: red;" onClick="bodyaction(12,0);">Stop movement</button>
 		</div>
 		<h4>Routines</h4>
-		<div class="grid" style="margin: var(--pico-spacing");>
+		<div class="grid" style="margin: var(--pico-spacing);">
 			<button onClick="bodyaction(14,0);" >Walk forward</button>
 			<button onClick="bodyaction(15,0);">Walk backward</button>
 		</div>
-		<div class="grid" style="margin: var(--pico-spacing");>
+		<div class="grid" style="margin: var(--pico-spacing);">
 			<button class="outline" onClick="bodyaction(10,1);" >Turn left</button>
 			<button class="outline" onClick="bodyaction(10,0);">Turn right</button>
 		</div>
-		<div class="grid" style="margin: var(--pico-spacing");>
+		<div class="grid" style="margin: var(--pico-spacing);">
 			<button onClick="bodyaction(11,0);" >Shake</button>
 			<button onClick="bodyaction(13,0);">Back and Forth</button>
 		</div>
 		<h4>Upper Arms</h4>
-		<div class="grid" style="margin: var(--pico-spacing");>
+		<div class="grid" style="margin: var(--pico-spacing);">
 			<button onClick="bodyaction(1,1);" >Left upper arm up</button>
 			<button onClick="bodyaction(2,1);">Right upper arm up</button>
 		</div>
-		<div class="grid" style="margin: var(--pico-spacing");>
+		<div class="grid" style="margin: var(--pico-spacing);">
 			<button class="secondary" onClick="bodyaction(1,0);" >Left upper arm down</button>
 			<button class="secondary" onClick="bodyaction(2,0);">Right upper arm down</button>
 		</div>
 		<h4>Lower Arms</h4>
-		<div class="grid" style="margin: var(--pico-spacing");>
+		<div class="grid" style="margin: var(--pico-spacing);">
 			<button onClick="bodyaction(3,1);">Left lower arm up</button>
 			<button onClick="bodyaction(4,1);">Right lower arm up</button>
 		</div>
-		<div class="grid" style="margin: var(--pico-spacing");>
+		<div class="grid" style="margin: var(--pico-spacing);">
 			<button class="secondary" onClick="bodyaction(3,0);">Left lower arm down</button>
 			<button class="secondary" onClick="bodyaction(4,0);">Right lower arm down</button>
 		</div>
 		<h4>Both Arms</h4>
-		<div class="grid" style="margin: var(--pico-spacing");>
+		<div class="grid" style="margin: var(--pico-spacing);">
 			<button onClick="bodyaction(17,1);">Both lower arms up</button>
 			<button onClick="bodyaction(16,1);">Both upper arms up</button>
 		</div>
-		<div class="grid" style="margin: var(--pico-spacing");>
+		<div class="grid" style="margin: var(--pico-spacing);">
 			<button class="secondary" onClick="bodyaction(17,0);">Both lower arms down</button>
 			<button class="secondary" onClick="bodyaction(16,0);">Both upper arms down</button>
 		</div>
 		<h4>Hands</h4>
-		<div class="grid" style="margin: var(--pico-spacing");>
+		<div class="grid" style="margin: var(--pico-spacing);">
 			<button class="secondary" onClick="bodyaction(9,1);" >Left hand light on</button>
 			<button class="secondary" onClick="bodyaction(8,1);">Right hand light on</button>
 		</div>
-		<div class="grid" style="margin: var(--pico-spacing");>
+		<div class="grid" style="margin: var(--pico-spacing);">
 			<button class="secondary" onClick="bodyaction(9,0);" >Left hand light off</button>
 			<button class="secondary" onClick="bodyaction(8,0);">Right hand light off</button>
 		</div>
 		<h4>Hip</h4>
-		<div class="grid" style="margin: var(--pico-spacing");>
+		<div class="grid" style="margin: var(--pico-spacing);">
 			<button class="outline" onClick="bodyaction(7,1);">Hip left</button>
 			<button class="outline" onClick="bodyaction(7,0);">Hip right</button>
 		</div>	
 		<h4>Legs</h4>
-		<div class="grid" style="margin: var(--pico-spacing");>
+		<div class="grid" style="margin: var(--pico-spacing);">
 			<button onClick="bodyaction(5,1);">Left leg forward</button>
 			<button onClick="bodyaction(6,1);">Right leg forward</button>
 		</div>
-		<div class="grid" style="margin: var(--pico-spacing");>
+		<div class="grid" style="margin: var(--pico-spacing);">
 			<button onClick="bodyaction(5,0);">Left leg backward</button>
 			<button onClick="bodyaction(6,0);">Right leg backward</button>
 		</div>

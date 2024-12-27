@@ -12,25 +12,27 @@
 
 function tts() {
 	var text = $("#tts_textField").val();
-	var url = "/api/tts"; 	
+
 	$("#tts_result").text( "" );
 	$("#loader").attr("aria-busy", "true");
+	
 	$.ajax({
-		url: url,
+		url: "/api/tts",
 		data : JSON.stringify({"text" : text}),
-		type: 'POST',
 		contentType : 'application/json',
+		type: 'POST',
     	async: true		
 	})
 	.done(function (result) {
 		$("#tts_textField").val('');
 	})
-	.fail(function (xhr, status) {
-		alert("Error sending tts request.");
+	.fail(function (xhr, status, errorThrown) {
+		alert(errorThrown );
 	})
 	.always(function() {
 		$("#loader").attr("aria-busy", "false");
 	});
+	
 }
 
 function restart_robot01() {
@@ -39,10 +41,9 @@ function restart_robot01() {
 	$.ajax({
 		url: "/api/robot01_reset",
 		type: 'GET',
-		timeout: 5000,
 		async: true
 	})
-	.fail(function (xhr, status,errorThrown ) {
+	.fail(function (xhr, status, errorThrown ) {
 		alert(errorThrown);
 	})
 	.always(function() {
@@ -56,7 +57,6 @@ function restart_sense() {
 	$.ajax({
 		url: "/api/sense_reset",
 		type: 'GET',
-		timeout: 5000,
 		async: true		
 	})
 	.fail(function (xhr, status,errorThrown ) {
@@ -163,15 +163,11 @@ function clearips() {
 
 	<div class="container">
 		<div class="container">
-			<form onsubmit="tts();">
+			<form onsubmit="tts(); return false;">
 				<input type="text" placeholder="Text to speak" id="tts_textField" >
+				<button class="outline" >Say text</button>
 			</form>	
 		</div>
-		
-		<div class="container">
-			<button class="outline">Say text</button>
-		</div>
-		
 		<hr>
 		<br>
 		

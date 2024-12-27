@@ -98,15 +98,73 @@ function cam_stream_receive() {
 	$("#loader").attr("aria-busy", "false");
 }
 
-function cam_resolution(res) {
+function cam_resolution(set_setting) {
+	
 	$("#loader").attr("aria-busy", "true");
+	
+	res = set_setting ? $("#cam_resolution").val() : -1;	
+
+	if (set_setting) {
+		$.ajax({
+			url: "/api/setting?item=cam_resolution&value=" + res,
+			type: 'GET',
+			dataType: 'json',
+			async: true 
+		})
+		.done(function (result) {
+			$("#cam_resolution").val(res)
+		})
+		.fail(function (xhr, status, errorThrown) {
+			alert(errorThrown);
+			console.log(status);
+		})
+		.always(function() {
+			$("#loader").attr("aria-busy", "false");
+		});		
+	} else {
+		$.ajax({
+			url: "/api/get_setting?item=cam_resolution",
+			type: 'GET',
+			dataType: 'json',
+			async: true 
+		})
+		.done(function (result) {
+			$("#cam_resolution").val(result.value)
+		})
+		.fail(function (xhr, status, errorThrown) {
+			alert(errorThrown);
+			console.log(status);
+		})
+		.always(function() {
+			$("#loader").attr("aria-busy", "false");
+		});		
+	}
+}
+
+function direct_sense_command(set_setting) {
+
+	var setting = $("#sense_cam_setting").val();
+	
+	if (set_setting) {
+		setting_value = set_setting ? $("#cam_setting_value").val() : -1;	
+	} else {
+		setting_value = -1
+	}
+
+	$("#loader").attr("aria-busy", "true");
+
 	$.ajax({
-		url: "/api/setting?item=cam_resolution&value=" + res,
+		url: "http://{{context.robot01sense_ip}}/control?setting=" + setting + "&param=" + setting_value,
 		type: 'GET',
     	dataType: 'json',
-    	async: true 
+    	async: false 
 	})
 	.done(function (result) {
+		if (set_setting) {
+			$("#cam_setting_value").val(setting_value);
+		} else {
+			$("#cam_setting_value").val(result[setting]);
+		}
 	})
 	.fail(function (xhr, status, errorThrown) {
 		alert(errorThrown);
@@ -115,6 +173,7 @@ function cam_resolution(res) {
 	.always(function() {
 		$("#loader").attr("aria-busy", "false");
 	});	
+	
 }
 
 window.onload = function() {
@@ -149,6 +208,7 @@ window.onload = function() {
 		}
 	})
 
+	cam_resolution(false);
 }
 
 </script>
@@ -181,33 +241,52 @@ window.onload = function() {
 		<div class="grid">
 			<label>
 			<input id="camstream" onchange="cam_stream();" name="camstream" type="checkbox" role="switch" disabled/>
-			Camera stream
+			Cam video stream
 			</label>
 			<hr>
 		</div>
 		<hr>
 		<div class="grid">
-			<button id="capture" class="secondary" onClick="cam_capture();">Show Capture</button>
-			<button id="stream" class="secondary" onClick="cam_stream_receive();">Show Stream</button>
+			<button id="capture" class="secondary" onClick="cam_capture();">Capture image</button>
+			<button id="stream" class="secondary" onClick="cam_stream_receive();">Show cam Stream</button>
 		</div>	
 		<br>
-		<article style="display: block; margin: 0 auto; width: 50%;">
+		<article style="display: block; margin: 0 auto;">
 			<img style="display: block; margin: 0 auto;" id="capture-img" src="" crossorigin="">
 		</article>
 		<br>	
 		<h3>Resolution</h3>
-		<div role="group">
-			<button id="camres5" onClick="cam_resolution('5');">320x240</button>
-			<button id="camres8" onClick="cam_resolution('8');">640x480</button>
-		</div>
-		<div role="group">
-			<button id="camres9" onClick="cam_resolution('9');">800x600</button>
-			<button id="camres10" onClick="cam_resolution('10');">1024x768</button>
-		</div>
-		<div role="group">
-			<button id="camres11" onClick="cam_resolution('11');">1280x720</button>
+		<div class="grid" style="margin: var(--pico-spacing);" >
+			<div>
+				<select id="cam_resolution" name="cam_resolution">
+					<option value="5">320x240</button>
+					<option value="8">640x480</button>
+					<option value="9">800x600</button>
+					<option value="10">1024x768</button>
+					<option value=11">1280x720</button>
+				</select>
+			</div>
+			<div>
+				<button onClick="cam_resolution(false);">Get resolution</button>
+				<button onClick="cam_resolution(true);">Set resolution</button>
+			</div>
 		</div>
 		<hr>
+		<h3>Direct sense camera settings</h3>
+		<div class="grid">
+		    <select id="sense_cam_setting" name="sense_cam_setting">
+        	<option value="" disabled selected>Setting</option>
+	        {% for option in context.cam_setting_list %}
+    	        <option value="{{ option }}">{{ option }}</option>
+	        {% endfor %}
+		    </select>
+		    <input id="cam_setting_value" type="number" name="cam_setting_value" placeholder="0"></input>
+			<button onClick="direct_sense_command(false);">Get setting</button>
+			<button onClick="direct_sense_command(true);">Send setting</button>
+		</div>
+		<hr>
+		<br>
+		<br>
 	</div>
 </div>
 <br>

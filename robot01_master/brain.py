@@ -189,7 +189,7 @@ class BRAIN:
 	# API internal get setting handler
 	#
 	def get_setting(self,item)->str:
-		if item in "robot01_ip robot01sense_ip output micstreaming camstreaming micgain llm_mode bodyactions volume":	
+		if item in "robot01_ip robot01sense_ip output cam_resolution micstreaming camstreaming micgain llm_mode bodyactions volume":	
 			if item == "robot01_ip":
 				return self.robot.ip
 	
@@ -217,6 +217,9 @@ class BRAIN:
 
 			if item == "camstreaming":
 				return self.robot.sense.camstreaming()
+
+			if item == "cam_resolution":
+				return self.robot.sense.cam_resolution()
 
 		else:
 			print("Setting " + item + " not found")
@@ -352,7 +355,8 @@ class BRAIN:
 		("system", self.config["agent_system"] + """
 			Functions and tools are the same and can be treated as such.
 			When as a robot you are asked to determine if you see an specific object, activity, environment, item or person, use the "find_in_view" tool. 
-			When as a robot you need or want to describe what is in front of you, use the "describe_view" tool. This tool will provide you with a description and list what you can see as a robot.
+			When as a robot you need or want to describe what is in front of you, use the "describe_view" tool. This tool will provide you with a description and list what you can see as a robot. 
+			Take over the exact description of this tool, do no add or change anything to the response.
 			When as a robot you need or want information about the current date and time, use the "current_time_and_date" tool.
 			When as a robot you need or want information about the current weather or the weather forecast, use the "weather_forecast" tool. When responding with the temperatures convert digits to written out numerical.
 			When as a robot you need or want to move use the "walk_forward", "walk_backward", "turn_left" or "turn_right" tool with the number of steps you need to take.
@@ -412,13 +416,14 @@ class BRAIN:
 		It will return a description of the environment and list of what you can currently see.
 		It can also return an response of anything visible.
 		
+		Take over the exact description of this tool, do no add or change anything to the response.
+
 		Args:
-			input_prompt (str) : if anything specific needs to be described
+			prompt (str) : Use only if anything specific needs to be described
 		
 		Returns:
 			str: what you see in front of you.
 		"""	
-		
 		
 		self.robot.display.state(13)
 		print("Tool : describe_view.")
@@ -460,7 +465,7 @@ class BRAIN:
 		It will return a positive or negative response based on the question.
 
 		Args:
-			input_prompt (str) : the prompt 
+			prompt (str) : the object, item, person, entity or activity that needs to be detected.
 
 		Returns:
 			str: if the the requested object, item, person, entity or activity is visible.
@@ -504,7 +509,7 @@ class BRAIN:
 			none
 				
 		Returns:
-			str: The current date and time.
+			str: The current date and time. Convert any digits to a fully written out text.
 		"""	
 		
 		print("Tool : DateTime.")
@@ -521,13 +526,14 @@ class BRAIN:
 	# Current Weather and weather forecast tool
 	def weather_forecast(self)->str :
 		""" This tool provides the current weather and a five day weather forecast.
-		It responds with a json structure with the current weather and weather forecast in the json data.
-
+		It will provide the current weather, the weather forecast of tomorrow, and the weather forecast for the day after tomorrow. 
+		No other weather information besides these days is available.
+		
 		Args:
 			none
 				
 		Returns:
-			str: a five day weather forecast in json format.
+			str: A text with the weather forecast.
 		"""	
 		
 		print("Tool : weather_forecast.")
