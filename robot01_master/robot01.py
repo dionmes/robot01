@@ -3,14 +3,13 @@ import requests
 import time
 import queue
 import socket
-
 import ollama
+from ping3 import ping, verbose_ping
 
 from tts_speecht5 import TTS
 from display import DISPLAY
 from sense import SENSE
 
-body_action_url = "/bodyaction?action=" 
 debug = False
 
 LLM_EXPRESSION_MODEL = "gemma2:2b"
@@ -23,20 +22,24 @@ MINIMAL_SLEEP = 1
 AUDIO_UDP_PORT = 9000
 # output Queue size
 OUTPUT_Q_SIZE = 8
+# Health check interval (seconds)
+HEALTH_CHECK_INTERVAL = 5
 
 # Class robot for managing the robot motors, audio and sensors
 # Uses threading for http call to make it non-blocking
 class ROBOT:
-	def __init__(self, ip, sense_ip, timeout=2):
+	def __init__(self, ip, sense_ip):
 
 		self.ip = ip
-		self.timeout = timeout
-		self.health_ok = False
 	
 		self.emotion = True
-
 		self.output_busy = False
 
+		# health 
+		self.latency = 999
+		self.health = False
+		self.health_error = 0
+		
 		# Sense engine
 		self.sense = SENSE(sense_ip)
 
@@ -46,9 +49,6 @@ class ROBOT:
 				
 		# output queue
 		self.output_q = queue.Queue(maxsize=OUTPUT_Q_SIZE)
-
-		# Health update
-		threading.Thread(target=self.safe_http_call, args=[('http://' + self.ip + '/health')]).start()
 
 		#Queue
 		self.body_q = queue.Queue(maxsize=BODY_Q_SIZE)
@@ -61,11 +61,30 @@ class ROBOT:
 		self.output_worker_running = True
 		threading.Thread(target=self.output_worker, daemon=True).start()
 
+		# Health check worker
+		threading.Thread(target=self.health_check_worker, daemon=True).start()
+
 		# tts engine
-		self.output_q = queue.Queue(maxsize=OUTPUT_Q_SIZE)
 		self.tts_engine = TTS(self.ip, self.output_q)
 		self.tts_engine.start()
 		
+	# Health check worker (ping robot)
+	def health_check_worker(self):
+		print("Robot health check worker started.")	
+		while True:
+			try:
+				self.latency = ping(self.ip)
+				if self.latency is None or self.latency > 300:
+					self.health_error += 1
+					if self.health_error > 2:
+						self.health = False
+				else:
+					self.health_error = 0
+					self.health = True
+			except Exception as e:
+				print(f"Robot ping error : {e}")			
+	
+			time.sleep(HEALTH_CHECK_INTERVAL)		
 
 	# Generate Display worker : Actions from queue : display_q
 	def bodyactions_worker(self):
@@ -74,24 +93,13 @@ class ROBOT:
 			task = self.body_q.get()
 			print("Robot action : " + str(task['action']) )
 
-			url = 'http://' + self.ip + body_action_url + str(task['action']) + "&direction=" + str(task['direction']) + "&steps=" + str(task['steps'])
-	
-			try:
-				response = requests.get(url, timeout=self.timeout)
-				self.health_ok = True
-			except Exception as e:
-				self.health_ok = False
-
-				if debug:
-					print("Robot01 Request - " + url + " , error : ",e)
-				else:
-					print("Robot01 Request error")
+			url = "/bodyaction?action=" + str(task['action']) + "&direction=" + str(task['direction']) + "&steps=" + str(task['steps'])
+			response = self.robot_http_call(url)
 
 			time.sleep(MINIMAL_SLEEP)		
 			self.body_q.task_done()			
 
 	def bodyactions_set_state(self, running):
-		
 		if running:
 			self.body_q = queue.Queue(maxsize=BODY_Q_SIZE)
 			self.robot_actions = True
@@ -100,47 +108,34 @@ class ROBOT:
 		else:
 			self.robot_actions = False		
 			# Stop action to robot
-			url = 'http://' + self.ip + body_action_url + "13&direction=0&steps=0"
+			url = "/bodyaction?action=13&direction=0&steps=0"
 	
-			try:
-				response = requests.get(url, timeout=self.timeout)
-				self.health_ok = True
-			except Exception as e:
-				self.health_ok = False
-				if debug:
-					print("Robot01 Request - " + url + " , error : ",e)
-				else:
-					print("Robot01 Request error")
-	
-			time.sleep(1)		
+			response = self.robot_http_call(url)
 	
 			print("Robot body actions stopped")				
 	
 	def bodyaction(self, action, direction, steps):
 
-		task = { "action" : action, "direction" : direction, "steps" : steps } 
-		try:
-			# Add state to queue
-			self.body_q.put_nowait(task)
-		except Exception as e:
-			print("Robot bodyactions queue error : ", type(e).__name__ )
+		task = { "action" : action, "direction" : direction, "steps" : steps }
+		if self.robot_actions:
+			try:
+				# Add state to queue
+				self.body_q.put_nowait(task)
+			except Exception as e:
+				print("Robot bodyactions queue error : ", type(e).__name__ )
 
 	def output(self, state = -1)->bool:
 		if state == -1:			
-			try:
-				response = requests.get('http://' + self.ip + '/audiostream')
-				self.health_ok = True
+			response = self.robot_http_call('/audiostream')
+			try: 
 				json_obj = response.json()
-				return json_obj['audiostream']
-				
 			except Exception as e:
-				print("Request - audiostatus error : ",e)
-				self.health_ok = False
-				
-				return False
+				print("audiostream : ",e)
+				return ""
+			return json_obj['audiostream']
 			
 		elif state == 1:
-			threading.Thread(target=self.safe_http_call, args=[('http://' + self.ip + '/audiostream?on=1')]).start()
+			threading.Thread(target=self.robot_http_call, args=[('/audiostream?on=1')]).start()
 
 			if not self.tts_engine.running:
 				self.tts_engine.start()
@@ -154,7 +149,7 @@ class ROBOT:
 			return True
 		
 		elif state == 0:
-			threading.Thread(target=self.safe_http_call, args=[('http://' + self.ip + '/audiostream?on=0' )]).start()
+			threading.Thread(target=self.robot_http_call, args=[('/audiostream?on=0' )]).start()
 
 			if not self.tts_engine.running:
 				self.tts_engine.stop()
@@ -179,7 +174,7 @@ class ROBOT:
 		while self.output_worker_running:
 			
 			output_action = self.output_q.get()
-
+			
 			if "speech" in output_action['type'] and not self.output_busy:
 				self.output_started()
 				
@@ -188,7 +183,6 @@ class ROBOT:
 			
 			if "audio" in output_action:
 				audio = output_action['audio']
-			
 				# Send packets of max. 1472 / 4 byte sample size (2 channels)
 				for x in range(0, audio.shape[0],368):
 					start = x
@@ -227,16 +221,15 @@ class ROBOT:
 
 	def volume(self, set_volume = -1):
 		if set_volume == -1 :			
-			try:
-				response = requests.get('http://' + self.ip + '/volume')
+			response = self.robot_http_call('/volume')
+			try: 
 				json_obj = response.json()
-				print(json_obj)
-				return json_obj['volume']
-				
 			except Exception as e:
-				print("Request - volume error : ",e)
+				print("Volune : ",e)
+				return ""
+			return json_obj['volume']
 		else:
-			threading.Thread(target=self.safe_http_call, args=[('http://' + self.ip + '/volume?power=' + str(set_volume) )]).start()
+			threading.Thread(target=self.robot_http_call, args=[('/volume?power=' + str(set_volume) )]).start()
 
 
 	#
@@ -252,7 +245,7 @@ class ROBOT:
 			
 		prompt = """"Express yourself, 
 		based on the following text respond with one of these words, and only that word:
-		SAD, HAPPY, EXCITED, NEUTRAL, DIFFICULT, LOVE, DISLIKE, INTERESTED, OK or LIKE.
+		SAD, HAPPY, EXCITED, NEUTRAL, DIFFICULT, LOVE, DISLIKE, INTERESTED or LIKE.
 		The text is : """ + text
 
 		response = ollama.chat(
@@ -266,106 +259,98 @@ class ROBOT:
 		print("Robot expression: " + emotion)
 
 		if "SAD" in emotion:
-			self.display.action(12,5,38)
+			self.display.action(12,1,8)
 			self.bodyaction(16,0,30)
 			self.bodyaction(17,0,30)
 			
 			return
 		elif "HAPPY" in emotion:
-			self.display.action(12,5,44)
+			self.display.action(12,1,5)
 			self.bodyaction(16,1,30)
 			self.bodyaction(17,1,30)
 
 			return
 		elif "EXCITED" in emotion:
-			self.display.action(12,3,13)
+			self.display.action(12,1,2)
 			self.bodyaction(7,1,5)
 
 			return
 		elif "DIFFICULT" in emotion:
-			self.display.action(12,3,52)
+			self.display.action(12,1,9)
 			self.bodyaction(12,1,20)
 
 			return
 		elif "LOVE" in emotion:
-			self.display.action(12,3,19)
+			self.display.action(12,1,6)
 			self.bodyaction(17,0,30)
 
 		elif "LIKE" in emotion:
-			self.display.action(12,3,13)
+			self.display.action(12,1,2)
 			self.bodyaction(17,0,30)
 
 			return
 		elif "DISLIKE" in emotion:
-			self.display.action(12,3,42)
+			self.display.action(12,1,3)
 			self.bodyaction(17,0,30)
 
 			return
 		elif "INTERESTED" in emotion:
-			self.display.action(12,3,44)
+			self.display.action(12,1,9)
 			self.bodyaction(16,1,20)
 			self.bodyaction(17,0,20)
 
 			return
-		elif "OK" in emotion:
-			self.display.action(12,3,7)
-			self.bodyaction(16,0,20)
-			self.bodyaction(17,0,20)
 
-			return
 		elif "NEUTRAL" in emotion:
-			self.display.action(8,3)
 			self.bodyaction(16,0,20)
 			self.bodyaction(17,1,20)
 
 			return
 
 	def wakeupsense(self):
-		threading.Thread(target=self.safe_http_call, args=[('http://' + self.ip + '/wakeupsense')]).start()
+		threading.Thread(target=self.robot_http_call, args=[('/wakeupsense')]).start()
 		print("Sense Wake up signal send.")
 		
 	def VL53L1X_info(self)->dict:
-		json_obj = {}
-		try:
-			response = requests.get('http://' + self.ip + '/VL53L1X_Info')
+		response = self.robot_http_call('/VL53L1X_Info')
+		try: 
 			json_obj = response.json()
-
 		except Exception as e:
-			print("Request -  VL53L1X response error : ",e)
+			print("audiostream : ",e)
+			return ""
 		
 		return json_obj
 	
 	def BNO08X_info(self)->dict:
-		json_obj = {}
-		try:
-			response = requests.get('http://' + self.ip + '/BNO08X_Info')
+		response = self.robot_http_call('/BNO08X_Info')
+		try: 
 			json_obj = response.json()
-
 		except Exception as e:
-			print("Request - BNO08X response error : ",e)
-		
+			print("audiostream : ",e)
+			return ""
 		return json_obj
 
 	def reset(self):
-		threading.Thread(target=self.safe_http_call, args=[('http://' + self.ip + '/reset')]).start()
+		threading.Thread(target=self.robot_http_call, args=[('/reset')]).start()
 		print("Robot01 reset send")
 		reset = {"reset":"ok"}
 		return
 		
 	def erase_config(self):
-		threading.Thread(target=self.safe_http_call, args=[('http://' + self.ip + '/eraseconfig')]).start()
+		threading.Thread(target=self.robot_http_call, args=[('/eraseconfig')]).start()
 		print("Robot01 erase config send")
 		reset = {"erase":"ok"}
 		return
 
-	def safe_http_call(self, url):
-		try:
-			response = requests.get(url, timeout=self.timeout)
-			self.health_ok = True
-		except Exception as e:
-			self.health_ok = False
-			if debug:
-				print("Robot01 Request - " + url + " , error : ",e)
-			else:
-				print("Robot01 Request error")
+	def robot_http_call(self, url)-> any:
+		if self.health:
+			try:
+				response = requests.get("http://" + self.ip + url, timeout=2)
+				return response
+			except Exception as e:
+				if debug:
+					print("Robot01 Request - " + url + " , error : ",e)
+				else:
+					print("Robot01 Request error")
 
+		return ""

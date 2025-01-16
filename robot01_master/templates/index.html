@@ -52,14 +52,20 @@ function health_update() {
 	.done(function (result) {
 		if (result.robot01) {
 			$("#robot01status").css({backgroundColor: 'green'});
+			$("#robot01latency").html("Latency : " + result.robot01_latency.toFixed(3) + " S.")
 		} else {
 			$("#robot01status").css({backgroundColor: 'red'});
+			$("#robot01latency").html("Latency : NA")
 		}
+		
 		if (result.sense) {
 			$("#sensestatus").css({backgroundColor: 'green'});
+			$("#senselatency").html("Latency : " + result.sense_latency.toFixed(3) + " S.")
 		} else {
 			$("#sensestatus").css({backgroundColor: 'red'});
+			$("#senselatency").html("Latency :  NA")
 		}
+		
 	})
 	.fail(function (xhr, status, errorThrown) {
 		console.log( errorThrown);	
@@ -150,7 +156,7 @@ function change_llm_mode() {
 
 window.onload = function() {
 	health_update();
-	setInterval("health_update()",60000);
+	setInterval("health_update()",5000);
 	
 	// Get udp micstream status
 	$.ajax({
@@ -222,23 +228,35 @@ window.onload = function() {
 
 <div class="container-fluid">
 	<div class="container-fluid" style="position: fixed; background: var(--pico-background-color);">
-		<hgroup">
-			<br>
-			<h1 class="centered" style="color: var(--pico-secondary);">
-			Sappie - robot01
-			<div id="loader" aria-busy="false" style="display:inline-block;margin-left:2em;"></div>
-			</h1>
+		<hgroup>
+			<nav>
+				<ul>
+				<h1 class="centered" style="color: var(--pico-secondary);">
+				Robot01
+				<div id="loader" aria-busy="false" style="display:inline-block;margin-left:2em;"></div>
+				</h1>
+				</ul>
+				  <ul>
+					<div class="container-fluid" style="margin-right:2em;">
+					<li>
+					  <details class="dropdown" style="width:10em;">
+						<summary>
+						  Menu
+						</summary>
+						<ul dir="rtl">
+						<li><a href='managePage.html'>Management</a></li>
+						<li><a href='controlsPage.html'>Controls</a></li>
+						<li><a href='displayPage.html'>Display</a></li>
+						<li><a href='sensorsPage.html'>Sensors</a></li>
+						<li><a href='sensePage.html'>Sense</a></li>
+						<li><a href='configPage.html'>Config</a></li>
+						</ul>
+					  </details>
+					</li>
+					</div>
+				  </ul>
+			</nav>
 		</hgroup>
-		<nav>
-			<ul>
-				<li><a href='managePage.html'>Manage</a></li>
-				<li><a href='controlsPage.html'>Controls</a></li>
-				<li><a href='displayPage.html'>Display</a></li>
-				<li><a href='sensorsPage.html'>Sensors</a></li>
-				<li><a href='sensePage.html'>Sense</a></li>
-				<li><a href='configPage.html'>Config</a></li>
-			</ul>
-		</nav>
 		<hr>
 	</div>
 	<p style="padding-top: 10em;"></p>
@@ -274,8 +292,15 @@ window.onload = function() {
 		</div>
 		<hr>
 		<div class="grid"">
-			<div class="container"">
-				<h6>Robot01 <div id="robot01status" class="roundred"></div> Sense <div id="sensestatus" class="roundred"></div></h6>
+			<div class="container-fluid"">
+				<h6>Robot01 <div id="robot01status" class="roundred"></div></h6>
+				<h7><div id="robot01latency"></div></h7>
+				<hr>
+			</div>
+			<div class="container-fluid"">
+				<h6>Sense <div id="sensestatus" class="roundred"></div></h6>
+				<h7><div id="senselatency"></div></h7>
+				<hr>
 			</div>
 			<figure style="width:10em;">
 				<img class="img_centered" src="images/robot01v1.png" />

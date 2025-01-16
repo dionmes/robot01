@@ -216,18 +216,39 @@ window.onload = function() {
 <body>
 <div class="container-fluid">
 	<div class="container-fluid" style="position: fixed; background: var(--pico-background-color);">
-		<hgroup">
-			<br>
-			<h1 class="centered" style="color: var(--pico-secondary);">
-			Sense control
-			<div id="loader" aria-busy="false" style="display:inline-block;margin-left:2em;"></div>
-			</h1>
-			<a href='index.html'>Back</a>
+		<hgroup>
+			<nav>
+				<ul>
+				<h1 class="centered" style="color: var(--pico-secondary);">
+				<a href='index.html' style="text-decoration:none;">Robot01<br>Sense</a>
+				<div id="loader" aria-busy="false" style="display:inline-block;margin-left:2em;"></div>
+				</h1>
+				</ul>
+				  <ul>
+					<div class="container-fluid" style="margin-right:2em;">
+					<li>
+					  <details class="dropdown" style="width:10em;">
+						<summary>
+						  Menu
+						</summary>
+						<ul dir="rtl">
+						<li><a href='index.html'>Main</a></li>
+						<li><a href='managePage.html'>Management</a></li>
+						<li><a href='controlsPage.html'>Controls</a></li>
+						<li><a href='displayPage.html'>Display</a></li>
+						<li><a href='sensorsPage.html'>Sensors</a></li>
+						<li><a href='configPage.html'>Config</a></li>
+						</ul>
+					  </details>
+					</li>
+					</div>
+				  </ul>
+			</nav>
 		</hgroup>
 		<hr>
 	</div>
 	<p style="padding-top: 10em;"></p>
-
+	
 	<div class="container">
 		<h3>Controls</h3>
 		<button class="secondary" onClick="wakeUpSense();">Wake up Sense/Camera</button>
@@ -251,9 +272,9 @@ window.onload = function() {
 			<button id="stream" class="secondary" onClick="cam_stream_receive();">Show cam Stream</button>
 		</div>	
 		<br>
-		<article style="display: block; margin: 0 auto;">
-			<img style="display: block; margin: 0 auto;" id="capture-img" src="" crossorigin="">
-		</article>
+        <figure>
+			<img style="display: block; margin: 0 auto;" id="capture-img" src="" crossorigin="" alt="Camera result">
+        </figure>
 		<br>	
 		<h3>Resolution</h3>
 		<div class="grid" style="margin: var(--pico-spacing);" >

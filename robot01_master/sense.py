@@ -2,35 +2,56 @@ import threading
 import requests
 import time
 import base64
+from ping3 import ping, verbose_ping
+
+# Health check interval (seconds)
+HEALTH_CHECK_INTERVAL = 5
 
 class SENSE:
-	def __init__(self, ip, timeout=30):
+	def __init__(self, ip):
 
 		self.ip = ip
-		self.timeout = timeout
-		self.health = False
 		self.mic = False
 		
-		# Health update
-		threading.Thread(target=self.safe_http_call, args=[('http://' + self.ip + '/health')]).start()
+		# health
+		self.health = False
+		self.latency = 999
+		self.health_error = 0
+
+		# Health worker
+		threading.Thread(target=self.health_check_worker).start()
+
+	# Health check worker (ping robot)
+	def health_check_worker(self):
+		print("Sense health check worker started.")
+		while True:
+			try:
+				self.latency = ping(self.ip)
+				if self.latency is None or self.latency > 300:
+					self.health_error += 1
+					if self.health_error > 2:
+						self.health = False
+				else:
+					self.health_error = 0
+					self.health = True
+			except Exception as e:
+				print(f"Sense ping error : {e}")			
+	
+			time.sleep(HEALTH_CHECK_INTERVAL)		
 		
 	def micstreaming(self, state = -1)->bool:
 	
 		if state == -1:
+			response = self.sense_http_call("/control?setting=micstreaming")
 			try:
-				response = requests.get('http://' + self.ip + "/control?setting=micstreaming", timeout=self.timeout)
 				json_obj = response.json()
-				self.health_ok = True
 				self.mic = json_obj['micstreaming']
 
 			except Exception as e:
-				self.health_ok = False
 				print("Request - micstatus error : ",e)
-							
 				self.mic = False
 		else:
-			threading.Thread(target=self.safe_http_call, args=['http://' + self.ip + "/control?setting=micstreaming&param=" + str(state)]).start()
-
+			threading.Thread(target=self.sense_http_call, args=["/control?setting=micstreaming&param=" + str(state)]).start()
 			self.mic = True if state == 1 else False
 
 		return self.mic
@@ -38,21 +59,17 @@ class SENSE:
 	def camstreaming(self, state = -1)->bool:
 	
 		if state == -1:
+			response = self.sense_http_call("/control?setting=camstreaming")
 			try:
-				response = requests.get('http://' + self.ip + "/control?setting=camstreaming", timeout=self.timeout)
 				json_obj = response.json()
-				self.health_ok = True
-				
 				return json_obj['camstreaming']
 				
 			except Exception as e:
-				self.health_ok = False
 				print("Request - camstreaming error : ",e)
-
 				return False
 			
 		else:
-			threading.Thread(target=self.safe_http_call, args=['http://' + self.ip + "/control?setting=camstreaming&param=" + str(state)]).start()
+			threading.Thread(target=self.sense_http_call, args=["/control?setting=camstreaming&param=" + str(state)]).start()
 		
 		if state == 1:
 			return True
@@ -62,70 +79,64 @@ class SENSE:
 	def micgain(self, set_micgain = -1)->int:
 	
 		if set_micgain == -1 :			
+			response = self.sense_http_call("/control?setting=micgain")
 			try:
-				response = requests.get('http://' + self.ip + "/control?setting=micgain", timeout=self.timeout)
 				json_obj = response.json()
 				return json_obj['micgain']
 				
 			except Exception as e:
 				print("Request - micgain error : ",e)
 		else:
-			threading.Thread(target=self.safe_http_call, args=[('http://' + self.ip + '/control?setting=micgain&param=' + str(set_micgain) )]).start()
+			threading.Thread(target=self.sense_http_call, args=[('/control?setting=micgain&param=' + str(set_micgain) )]).start()
 
 		return set_micgain
 
 	def capture(self, resolution=8)->str:
 	
 		image_base64 = ""
-		
 		try: 
 			# Set resolution
-			requests.get('http://' + self.ip + '/control?setting=framesize&param=' + str(resolution), timeout = 10 )
-			self.health_ok = True
+			self.sense_http_call('/control?setting=framesize&param=' + str(resolution))
 		except:
-			self.health_ok = False
-			Print("Setting request resolution failed")
+			print("Setting request resolution failed")
 			
 		# Get image
+		response  = self.sense_http_call('/capture')
 		try:
-			response  = requests.get("http://" + self.ip + '/capture', timeout = self.timeout )
 			image_base64 = base64.b64encode(response.content)
-			self.health_ok = True
 		except Exception as e:
-			self.health_ok = False
 			print("Capture request failed", e)
-			
+				
 		return image_base64
 
 	def cam_resolution(self, res=-1)->int:
 
 		if res == -1:			
+			response = self.sense_http_call('/control?setting=framesize&param=-1')
 			try:
-				response = requests.get('http://' + self.ip + '/control?setting=framesize&param=-1', timeout=self.timeout)
 				json_obj = response.json()
-				return json_obj['framesize']
-				
+				return json_obj['framesize']					
 			except Exception as e:
 				print("Request - cam_resolution error : ",e)
 		else:		
-			threading.Thread(target=self.safe_http_call, args=[('http://' + self.ip + '/control?setting=framesize&param=' + str(res))]).start()
+			threading.Thread(target=self.sense_http_call, args=[('/control?setting=framesize&param=' + str(res))]).start()
 
 		return res
 	
 	def reset(self):
-		threading.Thread(target=self.safe_http_call, args=[('http://' + self.ip + '/reset')]).start()
+		threading.Thread(target=self.sense_http_call, args=[('/reset')]).start()
 		print("Sense reset send")
 	
 	def erase_config(self):
-		threading.Thread(target=self.safe_http_call, args=[('http://' + self.ip + '/eraseconfig')]).start()
+		threading.Thread(target=self.sense_http_call, args=[('/eraseconfig')]).start()
 		print("Sense erase config send")
 
-	def safe_http_call(self,url):
-		try:
-			requests.get(url, timeout=self.timeout)
-			self.health_ok = True
-		except Exception as e:
-			self.health_ok = False
-			print("Request - " + url + " , error : ",e)
-
+	def sense_http_call(self,url) -> any:
+		if self.health:
+			try:
+				response = requests.get('http://' + self.ip + url, timeout=10)
+				return response
+			except Exception as e:
+				print("Request - " + url + " , error : ",e)
+		return ""
 

@@ -54,7 +54,7 @@ Only respond with numbers in a written out format. Do not use digits as output. 
 "weather_api_key": "",
 }
 
-ROBOT01_DEFAULT_IP = "192.168.133.75"
+ROBOT01_DEFAULT_IP = "192.168.133.182"
 SENSE_DEFAULT_IP = "192.168.133.226"
 
 # Max tokens to TTS
@@ -120,8 +120,14 @@ class BRAIN:
 
 	# Save configuration
 	def health_status(self):
-		health = {"robot01" :  self.robot.health_ok , "sense" : self.robot.sense.health_ok }
-		return health
+		
+		status = {}
+		status["robot01"] = self.robot.health
+		status["robot01_latency"] = self.robot.latency
+		status["sense"] = self.robot.sense.health
+		status["sense_latency"] = self.robot.sense.latency
+		
+		return status
 
 	#
 	# API brain setting handler
@@ -133,8 +139,6 @@ class BRAIN:
 				if	self.validate_ip_address(value):
 					# update objects with new id
 					self.robot.ip = value
-					self.robot.display.ip = value
-					self.robot.tts_engine.ip = value
 				else:
 					print("Error updating robot01_ip : ", value)
 
@@ -156,10 +160,10 @@ class BRAIN:
 
 			if item == "llm_mode":
 				if value == "chat mode":
-					self.robot.display.action(12,3,47)
+					self.robot.display.action(12,3,1)
 					self.llm_mode = value
 				if value == "agent mode":
-					self.robot.display.action(12,3,10)
+					self.robot.display.action(12,3,0)
 					self.llm_mode = value
 
 			if item == "micstreaming":
@@ -578,8 +582,6 @@ class BRAIN:
 			none
 		"""	
 
-		self.robot.display.action(12,3,26)
-		
 		if (type(steps) == str):
 			try:
 				steps = int(steps)
@@ -606,8 +608,6 @@ class BRAIN:
 			none
 		"""	
 
-		self.robot.display.action(12,3,26)
-
 		if (type(steps) == str):
 			try:
 				steps = int(steps)
@@ -633,8 +633,6 @@ class BRAIN:
 		Returns:
 			none
 		"""	
-
-		self.robot.display.action(12,3,26)
 		
 		if (type(steps) == str):
 			try:
@@ -662,9 +660,6 @@ class BRAIN:
 			none
 		"""	
 
-		self.robot.display.action(12,3,26)
-
-
 		if (type(steps) == str):
 			try:
 				steps = int(steps)
@@ -689,8 +684,6 @@ class BRAIN:
 		Returns:
 			none
 		"""	
-
-		self.robot.display.action(12,3,26)
 
 		if (type(times) == str):
 			try:
@@ -719,8 +712,6 @@ class BRAIN:
 		Returns:
 			none
 		"""	
-
-		self.robot.display.action(12,3,26)
 		
 		if (type(steps) == str):
 			try:
@@ -749,8 +740,6 @@ class BRAIN:
 			none
 		"""	
 		
-		self.robot.display.action(12,3,26)
-
 		if (type(steps) == str):
 			try:
 				steps = int(steps)
@@ -778,8 +767,6 @@ class BRAIN:
 			none
 		"""	
 		
-		self.robot.display.action(12,3,26)
-
 		if (type(steps) == str):
 			try:
 				steps = int(steps)
@@ -795,7 +782,6 @@ class BRAIN:
 		
 		return
 
-
 	# Move left upper arm tool
 	def move_left_upper_arm(self, steps, direction=0):
 		""" This tool allows the robot to move its upper left arm up or down.
@@ -807,9 +793,7 @@ class BRAIN:
 		Returns:
 			none
 		"""	
-
-		self.robot.display.action(12,3,26)
-
+		
 		if (type(steps) == str):
 			try:
 				steps = int(steps)
@@ -854,13 +838,5 @@ class BRAIN:
 				n = n + 1
 
 		return
-
-	def safe_http_call(self, url, timeout):
-		try:
-			response = requests.get(url, timeout=timeout)
-		except Exception as e:
-			if debug:
-				print("Request - " + url + " , error : ",e)
-			else:
-				print("Request error : " + url)
-
+		
+		

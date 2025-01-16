@@ -30,7 +30,7 @@ def index():
 	try:
 		return render_template('index.html',context=robot01_context)
 	except Exception as e:
-		abort(404)
+		abort(500, description=str(e))
 
 #
 # Serve any file as template
@@ -42,26 +42,26 @@ def serve_html(filename):
 		try:
 			return render_template(filename,context={"audiolist": brain.audiolist}) 
 		except Exception as e:
-			abort(404)
+			abort(500, description=str(e))
 		
 	if filename in "sensePage.html":
 		cam_setting_list = [ "framesize", "quality", "contrast", "brightness", "saturation", "gainceiling", "colorbar", "awb", "agc", "aec", "hmirror", "vflip",  "awb_gain", "agc_gain", "aec_value", "aec2", "dcw", "bpc", "wpc", "raw_gma", "lenc", "special_effect", "wb_mode", "ae_level" ]
 		try:
 			return render_template(filename,context={ "robot01sense_ip" : brain.robot.sense.ip, "cam_setting_list": cam_setting_list}) 
 		except Exception as e:
-			abort(404)
+			abort(500, description=str(e))
 		
 	if filename in "managePage.html":
 		try:
 			return render_template(filename,context={"robot01_ip": brain.robot.ip, "robot01sense_ip" : brain.robot.sense.ip}) 
 		except Exception as e:
-			abort(404)
+			abort(500, description=str(e))
 
 	if filename.endswith('.html'):
 		try:
 			return render_template(filename) 
 		except Exception as e:
-			abort(404)
+			abort(500, description=str(e))
 			
 	return abort(403)
 		
@@ -73,7 +73,7 @@ def serve_css(filename):
 	try:
 		return send_from_directory('static/css', filename)
 	except Exception as e:
-		abort(404)
+		abort(500, description=str(e))
 
 #
 # Serve JavaScript files
@@ -83,7 +83,7 @@ def serve_js(filename):
 	try:
 		return send_from_directory('static/js', filename)
 	except Exception as e:
-		abort(404)
+		abort(500, description=str(e))
 
 #
 # Serve images
@@ -93,7 +93,7 @@ def serve_images(filename):
 	try:
 		return send_from_directory('static/images', filename)
 	except Exception as e:
-		abort(404)
+		abort(500, description=str(e))
 
 ###############	 API Endpoints ############### 
 #
@@ -108,7 +108,7 @@ def load_config():
 		api_response = brain.config
 	except Exception as e:
 		print(e)
-		abort(404)
+		abort(500, description=str(e))
 	
 	return jsonify(api_response)
 
@@ -126,7 +126,7 @@ def save_config():
 		brain.save_config()
 	except Exception as e:
 		print(e)
-		abort(404)
+		abort(500, description=str(e))
 	
 	api_response = { 'save': 'ok' }
 
@@ -146,7 +146,7 @@ def restart_master():
 
 	except Exception as e:
 		print(e)
-		abort(404)
+		abort(500, description=str(e))
 	
 	api_response = { 'restart': 'ok' }
 
@@ -165,7 +165,7 @@ def ask_robot01():
 		prompt = data["text"]
 	except Exception as e:
 		print(e)
-		abort(404)
+		abort(500, description=str(e))
 	
 	if not brain.busybrain:
 		print("start processing")
@@ -176,7 +176,7 @@ def ask_robot01():
 		except Exception as e:
 			print("Prompt error : ", e)
 	else:
-		abort(503)
+		abort(500, description=str(e))
 		
 	api_response = { 'status': 'ok' }
 
@@ -195,7 +195,7 @@ def tts_api():
 		text = data["text"]
 	except Exception as e:
 		print(e)
-		abort(404)
+		abort(500, description=str(e))
 
 	if brain.robot.ip != "":
 		try:	
@@ -204,7 +204,7 @@ def tts_api():
 
 		except Exception as e:
 			print("TTS error : " ,e)
-			abort(404)
+			abort(500, description=str(e))
 	else:
 		abort(404)
 
@@ -273,6 +273,31 @@ def displayaction():
 	return jsonify(api_response)
 
 #
+# Image test
+# POST: /api/tts {"image" : string }
+#
+# Return json response
+#
+@app.route('/api/image_test', methods=['POST'])
+def image_test():
+	try:
+		data = request.get_json()
+		image_data = data["image"]
+	except Exception as e:
+		print(e)
+		abort(500, description=str(e))
+
+	try:	
+		# Put text in the brain queue
+		brain.robot.display.imagetest(image_data)
+	except Exception as e:
+		print("Image test error : ",e)
+		abort(500, description=str(e))
+
+	api_response = { 'status': 'ok' }
+
+	return jsonify(api_response)
+#
 # Update brain settings
 # GET: /api/setting?item={item}&value={value}
 #
@@ -285,7 +310,7 @@ def setting():
 		value = request.args.get('value')
 	except Exception as e:
 		print(e)
-		abort(404)
+		abort(500, description=str(e))
 
 	try:	
 		result = brain.setting(item, value)
@@ -293,7 +318,7 @@ def setting():
 		return jsonify(api_response)
 	except Exception as e:
 		print(e)
-		abort(404)
+		abort(500, description=str(e))
 
 #
 # Get brain settings
@@ -307,7 +332,7 @@ def get_setting():
 		item = request.args.get('item')
 	except Exception as e:
 		print(e)
-		abort(404)
+		abort(500, description=str(e))
 
 	try:	
 		result = brain.get_setting(item)
@@ -316,7 +341,7 @@ def get_setting():
 
 	except Exception as e:
 		print(e)
-		abort(404)
+		abort(500, description=str(e))
 
 #
 # Capture an image with the camera
@@ -331,7 +356,7 @@ def img_capture():
 		img = brain.robot.sense.capture()
 	except Exception as e:
 		print(e)
-		abort(404)
+		abort(500, description=str(e))
 
 	return img
 
@@ -347,7 +372,7 @@ def VL53L1X_Info():
 		info = brain.robot.VL53L1X_info()
 	except Exception as e:
 		print(e)
-		abort(404)
+		abort(500, description=str(e))
 
 	return jsonify(info)
 
@@ -363,7 +388,7 @@ def BNO08X_Info():
 		info = brain.robot.BNO08X_info()
 	except Exception as e:
 		print(e)
-		abort(404)
+		abort(500, description=str(e))
 
 	return jsonify(info)
 
@@ -379,7 +404,7 @@ def wakeupsense():
 		brain.robot.wakeupsense()
 	except Exception as e:
 		print(e)
-		abort(404)
+		abort(500, description=str(e))
 
 	return "ok"
 
@@ -395,7 +420,7 @@ def play_audio_file():
 		brain.play_audio_file(request.args.get('file'))
 	except Exception as e:
 		print(e)
-		abort(404)
+		abort(500, description=str(e))
 
 	return "ok"
 

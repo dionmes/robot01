@@ -84,18 +84,39 @@ window.onload = function() {
 
 <div class="container-fluid">
 	<div class="container-fluid" style="position: fixed; background: var(--pico-background-color);">
-		<hgroup">
-			<br>
-			<h1 class="centered" style="color: var(--pico-secondary);">
-			Robot01 controls
-			<div id="loader" aria-busy="false" style="display:inline-block;margin-left:2em;"></div>
-			</h1>
-			<a href='index.html'>Back</a>
+		<hgroup>
+			<nav>
+				<ul>
+				<h1 class="centered" style="color: var(--pico-secondary);">
+				<a href='index.html' style="text-decoration:none;">Robot01<br>Controls</a>
+				<div id="loader" aria-busy="false" style="display:inline-block;margin-left:2em;"></div>
+				</h1>
+				</ul>
+				  <ul>
+					<div class="container-fluid" style="margin-right:2em;">
+					<li>
+					  <details class="dropdown" style="width:10em;">
+						<summary>
+						  Menu
+						</summary>
+						<ul dir="rtl">
+						<li><a href='index.html'>Main</a></li>
+						<li><a href='managePage.html'>Management</a></li>
+						<li><a href='displayPage.html'>Display</a></li>
+						<li><a href='sensorsPage.html'>Sensors</a></li>
+						<li><a href='sensePage.html'>Sense</a></li>
+						<li><a href='configPage.html'>Config</a></li>
+						</ul>
+					  </details>
+					</li>
+					</div>
+				  </ul>
+			</nav>
 		</hgroup>
 		<hr>
 	</div>
 	<p style="padding-top: 10em;"></p>
-
+	
 	<div class="container">
 		<label>
 		<h4>Audio output Volume</h4>

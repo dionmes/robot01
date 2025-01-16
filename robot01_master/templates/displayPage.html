@@ -29,25 +29,66 @@ function displayAction(action) {
 	})
 	.done(function (result) {
 	})
-	.fail(function (xhr, status,errorThrown) {
+	.fail(function (xhr, status, errorThrown) {
 		alert(errorThrown);
 	})
 	.always(function() {
 		$("#loader").attr("aria-busy", "false");
 	});
 }
-  
+
+function imagetest() {
+	$("#loader").attr("aria-busy", "true");
+
+	var imagedata = $("#imagedata").val();
+
+	$.ajax({
+		url: "/api/image_test",
+		data : JSON.stringify({"image" : imagedata}),
+		type: 'POST',
+		contentType : 'application/json',
+		async: true
+	})
+	.fail(function (xhr, status, errorThrown) {
+		alert(xhr.responseText);
+	})
+	.always(function() {
+		$("#loader").attr("aria-busy", "false");
+	});
+}
+
 </script>
 <div class="container-fluid">
 
 	<div class="container-fluid" style="position: fixed; background: var(--pico-background-color);">
-		<hgroup">
-			<br>
-			<h1 class="centered" style="color: var(--pico-secondary);">
-			Display
-			<div id="loader" aria-busy="false" style="display:inline-block;margin-left:2em;"></div>
-			</h1>
-			<a href='index.html'>Back</a>
+		<hgroup>
+			<nav>
+				<ul>
+				<h1 class="centered" style="color: var(--pico-secondary);">
+				<a href='index.html' style="text-decoration:none;">Robot01<br>Display</a>
+				<div id="loader" aria-busy="false" style="display:inline-block;margin-left:2em;"></div>
+				</h1>
+				</ul>
+				  <ul>
+					<div class="container-fluid" style="margin-right:2em;">
+					<li>
+					  <details class="dropdown" style="width:10em;">
+						<summary>
+						  Menu
+						</summary>
+						<ul dir="rtl">
+						<li><a href='index.html'>Main</a></li>
+						<li><a href='managePage.html'>Management</a></li>
+						<li><a href='controlsPage.html'>Controls</a></li>
+						<li><a href='sensorsPage.html'>Sensors</a></li>
+						<li><a href='sensePage.html'>Sense</a></li>
+						<li><a href='configPage.html'>Config</a></li>
+						</ul>
+					  </details>
+					</li>
+					</div>
+				  </ul>
+			</nav>
 		</hgroup>
 		<hr>
 	</div>
@@ -60,11 +101,23 @@ function displayAction(action) {
 				<input type="text" placeholder="Hello" id="textField">
 			</form>
 		</div>
+
 		<div class="grid" style="margin: var(--pico-spacing);">
-			<button onClick="displayAction(14);">Scroll text</button>
+			<button class="secondary" onClick="displayAction(14);">Scroll text</button>
 			<button class="secondary" onClick="displayAction(1);">Text small</button>
 			<button class="secondary" onClick="displayAction(2);">Text large</button>
+		</div>		
+		
+		<h4>Image test</H3>
+		<A href="https://javl.github.io/image2cpp/" target="_blank">
+		Use for image convert </A> - Plain bytes in hex, remove '0x' and commas from output)
+		<div class="grid">
+			<form onsubmit="imagetest();return false;">
+				<input type="text" placeholder="" id="imagedata">
+				<button>Image test</button>
+			</form>
 		</div>
+		<br>
 		<h4>Animations</h4>
 		<div class="grid" style="margin: var(--pico-spacing);">
 			<button class="secondary" onClick="displayAction(18);">Gear animation</button>
@@ -83,67 +136,17 @@ function displayAction(action) {
 		<div class="grid" style="margin: var(--pico-spacing);">
 			<div>
 				<select id="img_index" aria-label="Image to display">
-					<option value="0">bmp_angry</option>
-					<option value="1">bmp_apple</option>
-					<option value="2">bmp_bat</option>
-					<option value="3">bmp_brokenheart</option>
-					<option value="4">bmp_camera</option>
-					<option value="5">bmp_cheers</option>
-					<option value="6">bmp_chicken</option>
-					<option value="7">bmp_clapping</option>
-					<option value="8">bmp_clock</option>
-					<option value="9">bmp_cloud</option>
-					<option value="10">bmp_computer</option>
-					<option value="11">bmp_documents</option>
-					<option value="12">bmp_ear</option>
-					<option value="13">bmp_enjoy</option>
-					<option value="14">bmp_exloding</option>
-					<option value="15">bmp_flower</option>
-					<option value="16">bmp_game</option>
-					<option value="17">bmp_grapes</option>
-					<option value="18">bmp_hammer</option>
-					<option value="19">bmp_heart</option>
-					<option value="20">bmp_hearteyes</option>
-					<option value="21">bmp_home</option>
-					<option value="22">bmp_horns</option>
-					<option value="23">bmp_island</option>
-					<option value="24">bmp_mail</option>
-					<option value="25">bmp_moon</option>
-					<option value="26">bmp_muscle</option>
-					<option value="27">bmp_music</option>
-					<option value="28">bmp_mute</option>
-					<option value="29">bmp_nerd</option>
-					<option value="30">bmp_neutral</option>
-					<option value="31">bmp_panda</option>
-					<option value="32">bmp_penguin</option>
-					<option value="33">bmp_pie</option>
-					<option value="34">bmp_rabbit</option>
-					<option value="35">bmp_racecar</option>
-					<option value="36">bmp_rain</option>
-					<option value="37">bmp_rollingeyes</option>
-					<option value="38">bmp_sad</option>
-					<option value="39">bmp_sappie</option>
-					<option value="40">bmp_saturn</option>
-					<option value="41">bmp_shark</option>
-					<option value="42">bmp_sick</option>
-					<option value="43">bmp_sleepy</option>
-					<option value="44">bmp_smile</option>
-					<option value="45">bmp_speaker</option>
-					<option value="46">bmp_speakerloud</option>
-					<option value="47">bmp_speaking</option>
-					<option value="48">bmp_stars</option>
-					<option value="49">bmp_stop</option>
-					<option value="50">bmp_sun</option>
-					<option value="51">bmp_sunbehindcloud</option>
-					<option value="52">bmp_thinking</option>
-					<option value="53">bmp_thunder</option>
-					<option value="54">bmp_tongue</option>
-					<option value="55">bmp_unhappy</option>
-					<option value="56">bmp_warning</option>
-					<option value="57">bmp_waving</option>
-					<option value="58">bmp_wink</option>
-					<option value="59">bmp_yawn</option>
-					<option value="60">bmp_zzz</option>
+					<option value="0">Agentic</option>
+					<option value="1">Chat</option>
+					<option value="2">Cheer</option>
+					<option value="3">Dislike</option>
+					<option value="4">Enjoy</option>
+					<option value="5">Happy</option>
+					<option value="6">Heart</option>
+					<option value="7">Neutral</option>
+					<option value="8">Sad</option>
+					<option value="9">Thinking</option>
+					<option value="10">Eyes only</option>
 				</select>	
 			</div>
 			
