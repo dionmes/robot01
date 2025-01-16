@@ -29,8 +29,8 @@ enum bodyAction {
   BACK_AND_FORTH = 13,
   WALK_FORWARD = 14,
   WALK_BACKWARD = 15,
-  BOTH_UPPER_ARMS=16,
-  BOTH_LOWER_ARMS=17
+  BOTH_UPPER_ARMS = 16,
+  BOTH_LOWER_ARMS = 17
 };
 
 /*
@@ -50,7 +50,7 @@ public:
   // right Upper Arm movement, params: pass direction boolean (up = true), and steps of movement.
   static void rightUpperArm(bool up, int steps = 0);
   // left Lower Arm movement, params: pass direction boolean (up = true), and steps of movement.
-  static  void bothUpperArms(bool up, int steps = 0);
+  static void bothUpperArms(bool up, int steps = 0);
   // both upper Arm simultanious movement, params: pass direction boolean (up = true), and steps of movement.
   static void leftLowerArm(bool up, int steps = 0);
   // right Lower Arm movement, params: pass direction boolean (up = true), and steps of movement.
@@ -78,12 +78,11 @@ public:
   // Walk backward, params: left not used
   static void walk_backward(bool left, int steps);
 
-  private:
+private:
   // Queue worker for handling display actions
   static void worker(void *pvParameters);
   // Worker task taskhandle
-  TaskHandle_t bodyTaskHandle;   
-
+  TaskHandle_t bodyTaskHandle;
 };
 
 #endif

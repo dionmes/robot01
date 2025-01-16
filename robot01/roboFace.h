@@ -25,7 +25,7 @@ enum faceAction {
   WINK = 9,
   SHAKE = 10,
   TESTFILLRECT = 11,
-  DISPLAYIMG = 12,
+  DRAWBMP_FROM_INDEX = 12,
   CYLON = 13,
   SCROLLTEXT=14,
   SCROLLLEFT=15,
@@ -37,7 +37,12 @@ enum faceAction {
   LOADER_ANIMATION=21,
   BELL_ANIMATION=22,
   CHAT_ANIMATION=23,
-  IMG_LOOP=24
+  IMG_LOOP=24,
+  DRAWBMP=25
+};
+
+enum roboFaceConstants {
+  BUFFER_SIZE = 1024
 };
 
 /*
@@ -52,17 +57,20 @@ class roboFace {
 
     // exec - enum faceAction, String - (optional text if Action requires it), Int - index of image or optional delay dependend on action.
     void exec( int action, String text = "", int intValue = 0);
+    void imagetest(char *bmp_data);
 
     // display Text with size 2 - medium, or 3 - Large. (to be called from displayTask inside a vtask)
-    static void text(String text, int size);
+    static void text(const char *text, int size);
     //  Display text for amount of seconds
-    static void scrollText(String text, int size);
+    static void scrollText(const char *text, int size);
     // Set Face neutral. 
     static void neutral();
     // Smile.
     static void smile();
     // drawbitmap. 
-    static void drawbitmap(int index);
+    static void drawbitmap_from_index(int index);
+    // Draw bitmap from string
+    static void drawbmp(const char *text);
     // IMG Loop
     static void imgloop();
     // Look Left Animation.

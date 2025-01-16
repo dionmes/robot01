@@ -9,9 +9,13 @@
 #include <ESP_I2S.h>
 #include <FS.h>
 #include <SPIFFS.h>
+#include <WiFiManager.h>
+#include "esp_http_server.h"
+#include <ArduinoHttpClient.h>
+#include <ArduinoJson.h>
+#include "AsyncUDP.h"
 
 #define FORMAT_SPIFFS_IF_FAILED true
-
 /*
 * Define CPU cores for vtasks
 */
@@ -22,7 +26,6 @@
 * Master server or 'brain'
 */
 char config_master_ip[40];
-#include <WiFiManager.h>
 
 WiFiManager wm;
 WiFiManagerParameter custom_masterserver("server", "Master server IP", config_master_ip, 40);
@@ -32,13 +35,7 @@ bool shouldSaveConfig = false;
 /*
 * Webserver
 */
-#include "esp_http_server.h"
 httpd_handle_t server_httpd = NULL;
-
-// http client
-#include <ArduinoHttpClient.h>
-// Json library
-#include <ArduinoJson.h>
 
 /*
 * Robot name
@@ -48,7 +45,6 @@ String ROBOT_NAME = "Sappie";
 /*
 * I2S - UDP
 */
-#include "AsyncUDP.h"
 AsyncUDP udp;
 #define AUDIO_UDP_PORT 9000       // UDP audio over I2S
 
@@ -56,9 +52,9 @@ AsyncUDP udp;
 uint8_t *i2sbuffer = new uint8_t [I2S_BUFFER_SIZE + 1472]; 
 uint16_t i2sbuffer_pointer = 0;
 
-#define robot01_I2S_BCK 16
-#define robot01_I2S_WS 17
-#define robot01_I2S_OUT 21
+#define robot01_I2S_BCK 1
+#define robot01_I2S_WS 2
+#define robot01_I2S_OUT 3
 
 bool audioStreamRunning = false;  // If Audio is listening on udp
 I2SClass I2S;
@@ -94,22 +90,13 @@ TaskHandle_t wrapper_bno08xUpdateTaskHandle;
 TaskHandle_t robotRoutineTask;
 
 /*
-* saveConfigCallback for wifimanager
-*
-* Indicate with shouldSaveConfig that config needs to be saved during setup
-*/
-void saveConfigCallback() {
-  shouldSaveConfig = true;
-}
-
-/*
 * Initialization/setup
 */
 void setup() {
   
   // Serial
   Serial.begin(115200);
-  Serial.println("Booting robot01\n");
+  Serial.println("Booting robot01");
 
   // Wire init.
   Wire.begin();
@@ -132,15 +119,15 @@ void setup() {
   delay(100);
 
   // Webserver init.
-  roboFace.exec(faceAction::DISPLAYTEXTLARGE, "Server");
-  Serial.println("Webserver starting");
+  roboFace.exec(faceAction::DISPLAYTEXTLARGE, "Wifi connecting");
+  Serial.println("Wifi connecting");
 
   // load json config
   loadGlobalConfig();
   custom_masterserver.setValue(config_master_ip, 40);
 
   // Wifi Manager
-  wm.setConnectTimeout(20);
+  wm.setConnectTimeout(60);
   wm.setMinimumSignalQuality(10);
   // Custom title HTML for the WiFiManager portal
   String customTitle = "<h1>Robot01 config</h1>";
@@ -149,6 +136,11 @@ void setup() {
   wm.setSaveConfigCallback(saveConfigCallback);
   
   bool wificonnect = wm.autoConnect("ESP32_robot01", "123456789");
+  
+  // Save config if requested
+  if (shouldSaveConfig) {
+    safeConfig();
+  }
 
   if (!wificonnect) {
     Serial.println("Failed to connect");
@@ -158,20 +150,13 @@ void setup() {
     Serial.println("connected... :)");
   }
 
+  // Save config if requested
   if (shouldSaveConfig) {
-    Serial.println("saving config");
-    JsonDocument json;
-    strcpy(config_master_ip, custom_masterserver.getValue());
-    File configFile = SPIFFS.open("/config.json", "w");
-    if (!configFile) {
-      Serial.println("failed to open config file for writing");
-    }
-    json["master_ip"] = config_master_ip;
-    serializeJson(json, configFile);
-    configFile.close();
+    safeConfig();
   }
 
   // HTTP API server
+  roboFace.exec(faceAction::DISPLAYTEXTLARGE, "WebServer starting");
   Serial.println("Webserver starting");
 
   httpd_config_t httpd_config = HTTPD_DEFAULT_CONFIG();
@@ -180,11 +165,12 @@ void setup() {
   httpd_config.task_priority = configMAX_PRIORITIES - 10;
 
   // Add request handlers to webserver
-  httpd_uri_t VL53L1X_url = { .uri = "//VL53L1X_Info", .method = HTTP_GET, .handler = webhandler_VL53L1X_Info, .user_ctx = NULL };
+  httpd_uri_t VL53L1X_url = { .uri = "/VL53L1X_Info", .method = HTTP_GET, .handler = webhandler_VL53L1X_Info, .user_ctx = NULL };
   httpd_uri_t BNO08X_url = { .uri = "/BNO08X_Info", .method = HTTP_GET, .handler = webhandler_wrapper_bno08xInfo, .user_ctx = NULL };
   httpd_uri_t volume_url = { .uri = "/volume", .method = HTTP_GET, .handler = volume_handler, .user_ctx = NULL };
   httpd_uri_t bodyaction_url = { .uri = "/bodyaction", .method = HTTP_GET, .handler = body_action_handler, .user_ctx = NULL };
   httpd_uri_t displayaction_url = { .uri = "/displayaction", .method = HTTP_GET, .handler = display_action_handler, .user_ctx = NULL };
+  httpd_uri_t drawbmp_url = { .uri = "/drawbmp", .method = HTTP_POST, .handler = drawbmp_handler, .user_ctx = NULL };
   httpd_uri_t wakeupsense_url = { .uri = "/wakeupsense", .method = HTTP_GET, .handler = wakeupsense_handler, .user_ctx = NULL };
   httpd_uri_t audiostream_url = { .uri = "/audiostream", .method = HTTP_GET, .handler = audiostream_handler, .user_ctx = NULL };
   httpd_uri_t health_url = { .uri = "/health", .method = HTTP_GET, .handler = webhealth_handler, .user_ctx = NULL };
@@ -200,6 +186,7 @@ void setup() {
     httpd_register_uri_handler(server_httpd, &volume_url);
     httpd_register_uri_handler(server_httpd, &bodyaction_url);
     httpd_register_uri_handler(server_httpd, &displayaction_url);
+    httpd_register_uri_handler(server_httpd, &drawbmp_url);
     httpd_register_uri_handler(server_httpd, &wakeupsense_url);
     httpd_register_uri_handler(server_httpd, &health_url);
     httpd_register_uri_handler(server_httpd, &reset_url);
@@ -220,18 +207,14 @@ void setup() {
   Serial.printf("Remote master server IP: %s \n", config_master_ip);
 
   // Register with remote master
-  roboFace.exec(faceAction::DISPLAYTEXTSMALL, "Check in\n with \n" + WiFi.localIP().toString());
+  roboFace.exec(faceAction::DISPLAYTEXTSMALL, "Registering with master");
   WiFiClient httpWifiInstance;
 
   HttpClient http_client(httpWifiInstance, config_master_ip, 5000);
 
-  String httpPath = "/api/setting?item=robot01_ip&value=" + WiFi.localIP().toString();
+  String httpPath = "http://" + String(config_master_ip) + "/api/setting?item=robot01_ip&value=" + WiFi.localIP().toString();
   int http_err = http_client.get(httpPath);
   if (http_err != 0) { Serial.println("Error registering at master"); };
-
-  // Audio / I2S init.
-  roboFace.exec(faceAction::DISPLAYTEXTLARGE, "AUDIO/I2S");
-  I2S.setPins(robot01_I2S_BCK, robot01_I2S_WS, robot01_I2S_OUT, -1, 0); //SCK, WS, SDOUT, SDIN, MCLK
 
   // Starting VL53L1X
   roboFace.exec(faceAction::DISPLAYTEXTLARGE, "VL53L1X");
@@ -248,25 +231,38 @@ void setup() {
 
   delay(100);
 
+  roboFace.exec(faceAction::DISPLAYTEXTLARGE, "Tasks");
+  // Starting tasks
+  Serial.println("Tasks starting");
+
   // Starting wrapper_bno08x
   roboFace.exec(faceAction::DISPLAYTEXTLARGE, "BNO08x");
   Serial.println("Booting wrapper_bno08x (gyro) sensor\n");
 
   if (!wrapper_bno08x.begin()) {
     Serial.println("Failed to detect and initialize wrapper_bno08x (gyro) sensor!");
+  } else {
+    Serial.println("wrapper_bno08x update task starting");
+    xTaskCreatePinnedToCore(bno08xUpdateTask, "wrapper_bno08x", 4096, NULL, 10, &wrapper_bno08xUpdateTaskHandle, bno08x_TASK_CORE);
   }
   delay(100);
-
-  roboFace.exec(faceAction::DISPLAYTEXTLARGE, "Tasks");
-
-  // Starting tasks
-  Serial.println("Tasks starting");
-
-  Serial.println("wrapper_bno08x update task starting");
-  xTaskCreatePinnedToCore(bno08xUpdateTask, "wrapper_bno08x", 4096, NULL, 10, &wrapper_bno08xUpdateTaskHandle, bno08x_TASK_CORE);
   
-  // Starting tasks
+  // Audio / I2S init.
   Serial.println("Start audio");
+  roboFace.exec(faceAction::DISPLAYTEXTLARGE, "AUDIO/I2S");
+
+  // Pin configuration
+	gpio_config_t io_conf;
+  io_conf.intr_type = GPIO_INTR_DISABLE; //disable interrupt
+  io_conf.mode = GPIO_MODE_OUTPUT; //set as output mode
+  io_conf.pin_bit_mask = GPIO_NUM_1 | GPIO_NUM_2 | GPIO_NUM_3; //bit mask of the pins that you want to set,e.g.GPIO21/22
+  io_conf.pull_down_en = GPIO_PULLDOWN_DISABLE; //disable pull-down mode
+  io_conf.pull_up_en = GPIO_PULLUP_DISABLE; //disable pull-up mode
+  gpio_config(&io_conf); //configure GPIO with the given settings
+
+  I2S.setPins(robot01_I2S_BCK, robot01_I2S_WS, robot01_I2S_OUT, -1, -1); //SCK, WS, SDOUT, SDIN, MCLK
+  I2S.begin(I2S_MODE_STD, 16000, I2S_DATA_BIT_WIDTH_16BIT, I2S_SLOT_MODE_STEREO, I2S_STD_SLOT_LEFT);
+
   startAudio(true);
 
   // Boot complete
@@ -315,15 +311,10 @@ esp_err_t webhandler_VL53L1X_Info(httpd_req_t *request) {
 
   vl53l1x_sensor.read();
 
-  uint16_t range_mm = vl53l1x_sensor.ranging_data.range_mm;
-  uint8_t range_status = vl53l1x_sensor.ranging_data.peak_signal_count_rate_MCPS;
-  float peak_signal = vl53l1x_sensor.ranging_data.peak_signal_count_rate_MCPS;
-  float ambient_count = vl53l1x_sensor.ranging_data.ambient_count_rate_MCPS;
-
-  json_obj["range_mm"] = String(range_mm);
-  json_obj["range_status"] = String(range_status);
-  json_obj["peak_signal"] = String(peak_signal);
-  json_obj["ambient_count"] = String(ambient_count);
+  json_obj["range_mm"] = vl53l1x_sensor.ranging_data.range_mm;
+  json_obj["range_status"] = vl53l1x_sensor.ranging_data.peak_signal_count_rate_MCPS;
+  json_obj["peak_signal"] = vl53l1x_sensor.ranging_data.peak_signal_count_rate_MCPS;
+  json_obj["ambient_count"] = vl53l1x_sensor.ranging_data.ambient_count_rate_MCPS;
 
   size_t jsonSize = measureJson(json_obj);
   char json_response[jsonSize];
@@ -344,18 +335,18 @@ esp_err_t webhandler_wrapper_bno08xInfo(httpd_req_t *request) {
 
   JsonDocument json_obj;
 
-  json_obj["geoMagRotationVector_real"] = String(wrapper_bno08x.geoMagRotationVector_real);
-  json_obj["geoMagRotationVector_i"] = String(wrapper_bno08x.geoMagRotationVector_i);
-  json_obj["geoMagRotationVector_j"] = String(wrapper_bno08x.geoMagRotationVector_j);
-  json_obj["geoMagRotationVector_k"] = String(wrapper_bno08x.geoMagRotationVector_k);
-  json_obj["accelerometer_x"] = String(wrapper_bno08x.accelerometer_x);
-  json_obj["accelerometer_y"] = String(wrapper_bno08x.accelerometer_y);
-  json_obj["accelerometer_z"] = String(wrapper_bno08x.accelerometer_z);
-  json_obj["gyroscope_x"] = String(wrapper_bno08x.gyroscope_x);
-  json_obj["gyroscope_y"] = String(wrapper_bno08x.gyroscope_y);
-  json_obj["gyroscope_z"] = String(wrapper_bno08x.gyroscope_z);
-  json_obj["stability"] = String(wrapper_bno08x.stability);
-  json_obj["shake"] = String(wrapper_bno08x.shake);
+  json_obj["geoMagRotationVector_real"] = wrapper_bno08x.geoMagRotationVector_real;
+  json_obj["geoMagRotationVector_i"] = wrapper_bno08x.geoMagRotationVector_i;
+  json_obj["geoMagRotationVector_j"] = wrapper_bno08x.geoMagRotationVector_j;
+  json_obj["geoMagRotationVector_k"] = wrapper_bno08x.geoMagRotationVector_k;
+  json_obj["accelerometer_x"] = wrapper_bno08x.accelerometer_x;
+  json_obj["accelerometer_y"] = wrapper_bno08x.accelerometer_y;
+  json_obj["accelerometer_z"] = wrapper_bno08x.accelerometer_z;
+  json_obj["gyroscope_x"] = wrapper_bno08x.gyroscope_x;
+  json_obj["gyroscope_y"] = wrapper_bno08x.gyroscope_y;
+  json_obj["gyroscope_z"] = wrapper_bno08x.gyroscope_z;
+  json_obj["stability"] = wrapper_bno08x.stability;
+  json_obj["shake"] = wrapper_bno08x.shake;
 
   size_t jsonSize = measureJson(json_obj);
   char json_response[jsonSize];
@@ -494,27 +485,48 @@ esp_err_t display_action_handler(httpd_req_t *request) {
   json_obj["command"] = "";
 
   const char* param_name1 = "action";
-  String param_value_action = get_url_param(request, param_name1, 10);
+  String param_value_action = get_url_param(request, param_name1, 5);
   const char* param_name2 = "index";
-  String param_value_index = get_url_param(request, param_name2, 10);
+  String param_value_index = get_url_param(request, param_name2, 5);
   const char* param_name3 = "text";
-  String param_value_text = get_url_param(request, param_name3, 300);
+  String param_value_text = get_url_param(request, param_name3, 1024);
 
   if (param_value_action != "invalid") {
-    
+
     json_obj["command"] = "succes";
     size_t jsonSize = measureJson(json_obj);
     char json_response[jsonSize];
     serializeJson(json_obj, json_response, jsonSize );
-
     httpd_resp_send(request, json_response , jsonSize );
 
+    int action = param_value_action.toInt();
     int index = param_value_index != "invalid" ? param_value_index.toInt() : 0;
-    String text = param_value_text != "invalid" ? urlDecode(param_value_text) : "";
+    String text = "";
+    text = param_value_text != "invalid" ? urlDecode(param_value_text) : "";
 
-    roboFace.exec(param_value_action.toInt(), text, index);
-
+    roboFace.exec(action, text, index);
   }
+
+  return ESP_OK;
+}
+
+/*
+* Handler for imagetest
+*/
+esp_err_t drawbmp_handler(httpd_req_t *req) {
+
+  size_t recv_size = (req->content_len < roboFaceConstants::BUFFER_SIZE ? req->content_len : roboFaceConstants::BUFFER_SIZE);
+  char content[recv_size];  
+  int ret = httpd_req_recv(req, content, recv_size);
+  
+  roboFace.drawbmp(content);
+  
+  /* Send a simple response */
+  const char resp[] = "Imagetest received";
+  httpd_resp_set_hdr(req, "Access-Control-Allow-Origin", "*");
+  httpd_resp_set_type(req, HTTPD_TYPE_TEXT);
+  
+  httpd_resp_send(req, resp, HTTPD_RESP_USE_STRLEN);
 
   return ESP_OK;
 }
@@ -613,7 +625,14 @@ static esp_err_t wm_handler(httpd_req_t *req) {
   Serial.println(redirect_url);
 
   wm.startConfigPortal();
-  
+
+  // Save config if requested
+  if (shouldSaveConfig) {
+    safeConfig();
+  }
+
+  ESP.restart();
+
   return ESP_OK;
 }
 
@@ -700,7 +719,7 @@ String urlDecode(String input) {
   return decoded;
 }
 
-////////////////////////////////  Services  //////////////////////////////////////////////////////////////////////
+////////////////////////////////  Audio  //////////////////////////////////////////////////////////////////////
 
 /*
 * UDP Audio listening callback
@@ -710,17 +729,17 @@ IRAM_ATTR void udpRXCallBack(AsyncUDPPacket &packet) {
   const uint8_t *packet_data = (const uint8_t *)packet.data();
   const size_t packet_length = packet.length();
 
-  // Flush buffer on packet of size 1
-  if (packet_length == 1) {
-    I2S.write((uint8_t *)i2sbuffer, i2sbuffer_pointer);
-    i2sbuffer_pointer = 0;
-    return;
-  }
-
   float sample;
   uint8_t *f_ptr = (uint8_t *)&sample;
   uint32_t i2sValue;
   float adjusted_gain = audio_volume * 0.05;
+
+  // Flush buffer on packet of size 4 or smaller (happens when buffer is larger than sample)
+  if (packet_length <= 4) {
+    I2S.write((uint8_t *)i2sbuffer, i2sbuffer_pointer);
+    i2sbuffer_pointer = 0;
+    return;
+  }
 
   for (size_t i = 0; i <= packet_length; i = i + 4) {
 
@@ -756,8 +775,6 @@ void startAudio(bool start) {
 
     if (udp.listen(AUDIO_UDP_PORT)) {
       
-      I2S.begin(I2S_MODE_STD, 16000, I2S_DATA_BIT_WIDTH_16BIT, I2S_SLOT_MODE_STEREO, I2S_STD_SLOT_LEFT);
-
       Serial.print("UDP Listening on IP: ");
       Serial.println(WiFi.localIP());
 
@@ -772,11 +789,20 @@ void startAudio(bool start) {
     udp.flush();
     delay(100);
     udp.close();
-    delay(500);
-    I2S.end();
 
     audioStreamRunning = false;
   }
+}
+
+////////////////////////////////  Config helpers  //////////////////////////////////////////////////////////////////////
+
+/*
+* saveConfigCallback for wifimanager
+*
+* Indicate with shouldSaveConfig that config needs to be saved during setup
+*/
+void saveConfigCallback() {
+  shouldSaveConfig = true;
 }
 
 /*
@@ -817,71 +843,28 @@ void loadGlobalConfig() {
 };
 
 /*
+* Save json config file. from item(s) in global variables
+*/
+void safeConfig() {
+    Serial.println("saving config");
+    JsonDocument json;
+    strcpy(config_master_ip, custom_masterserver.getValue());
+    File configFile = SPIFFS.open("/config.json", "w");
+    if (!configFile) {
+      Serial.println("failed to open config file for writing");
+    }
+    json["master_ip"] = config_master_ip;
+    serializeJson(json, configFile);
+    configFile.close();
+}
+
+////////////////////////////////  Div  //////////////////////////////////////////////////////////////////////
+
+/*
 * Body test Routine
 */
 void bodyTestRoutine(void *pVParameters) {
-
-  roboFace.exec(faceAction::DISPLAYTEXTSMALL, "LEFT UPPER ARM");
-  bodyControl.exec(bodyAction::LEFTUPPERARM, true, 1000);
-  delay(1000);
-  bodyControl.exec(bodyAction::LEFTUPPERARM, false, 1000);
-  delay(1000);
-  roboFace.exec(faceAction::DISPLAYTEXTSMALL, "LEFT LOWER ARM");
-  bodyControl.exec(bodyAction::LEFTLOWERARM, true, 1000);
-  delay(1000);
-  bodyControl.exec(bodyAction::LEFTLOWERARM, false, 1000);
-  delay(1000);
-
-  roboFace.exec(faceAction::DISPLAYTEXTSMALL, "RIGHT UPPER ARM");
-  bodyControl.exec(bodyAction::RIGHTUPPERARM, true, 1000);
-  delay(1000);
-  bodyControl.exec(bodyAction::RIGHTUPPERARM, false, 1000);
-  delay(1000);
-
-  roboFace.exec(faceAction::DISPLAYTEXTSMALL, "RIGHT LOWER ARM");
-  bodyControl.exec(bodyAction::RIGHTLOWERARM, true, 1000);
-  delay(1000);
-  bodyControl.exec(bodyAction::RIGHTLOWERARM, false, 1000);
-  delay(1000);
-
-  roboFace.exec(faceAction::DISPLAYTEXTSMALL, "LEFT LEG");
-  bodyControl.exec(bodyAction::LEFTLEG, true, 1000);
-  delay(1000);
-  bodyControl.exec(bodyAction::LEFTLEG, false, 1000);
-  delay(1000);
-
-  roboFace.exec(faceAction::DISPLAYTEXTSMALL, "RIGHT LEG");
-  bodyControl.exec(bodyAction::RIGHTLEG, true, 1000);
-  delay(1000);
-  bodyControl.exec(bodyAction::RIGHTLEG, false, 1000);
-  delay(1000);
-
-  roboFace.exec(faceAction::DISPLAYTEXTSMALL, "HIP LEFT");
-  bodyControl.exec(bodyAction::HIP, true, 1000);
-  delay(1000);
-  roboFace.exec(faceAction::DISPLAYTEXTSMALL, "HIP RIGHT");
-  bodyControl.exec(bodyAction::HIP, false, 1000);
-  delay(1000);
-
-  roboFace.exec(faceAction::DISPLAYTEXTSMALL, "LEFT HAND LIGHT");
-  for (int8_t x = 0; x <= 6; x++) {
-    bodyControl.exec(bodyAction::LEFTHANDLIGHT, true, 150);
-    delay(200);
-    bodyControl.exec(bodyAction::LEFTHANDLIGHT, false, 150);
-    delay(200);
-  }
-
-  roboFace.exec(faceAction::DISPLAYTEXTSMALL, "RIGHT HAND LIGHT");
-  for (int8_t x = 0; x <= 6; x++) {
-    bodyControl.exec(bodyAction::RIGHTHANDLIGHT, true, 150);
-    delay(200);
-    bodyControl.exec(bodyAction::RIGHTHANDLIGHT, false, 150);
-    delay(200);
-  }
-
   roboFace.exec(faceAction::NEUTRAL);
-
   vTaskDelete(NULL);
 };
-
 
