@@ -12,8 +12,6 @@
 #include "animations.h"
 #include "facetalking.h"
 
-// vTask core
-#define DISPLAY_TASK_CORE 1
 // Display Queue size
 #define DISPLAY_QUEUE_SIZE 3
 
@@ -29,7 +27,6 @@
 #define rightEyeY 32
 #define eyeRadius 15
 
-
 // Queue message struct
 typedef struct {
     int action; 
@@ -42,10 +39,9 @@ QueueHandle_t displayQueue = xQueueCreate(DISPLAY_QUEUE_SIZE, sizeof(displayTask
 
 roboFace::roboFace(){};
 
-void roboFace::begin() {
+void roboFace::begin(int task_core, int task_priority) {
   // Start worker
-  xTaskCreatePinnedToCore(roboFace::worker, "display_worker", 4096, NULL, 10, NULL, DISPLAY_TASK_CORE);
-
+  xTaskCreatePinnedToCore(roboFace::worker, "display_worker", 4096, NULL, task_priority, NULL, task_core);
 };
 
 void roboFace::exec(int action, String text, int intValue) {
@@ -77,7 +73,6 @@ void roboFace::worker(void *pvParameters) {
 
   ledMatrix.setTextColor(SSD1306_WHITE);
   ledMatrix.setTextWrap(false);
-
   displayTaskData_t displayTaskData;
 
   while (true) {
@@ -88,11 +83,11 @@ void roboFace::worker(void *pvParameters) {
 
         switch (displayTaskData.action) {
           case faceAction::DISPLAYTEXTSMALL:
-            roboFace::text(_text, 1);
+            roboFace::text(_text, 1, _intValue);
             break;
 
           case faceAction::DISPLAYTEXTLARGE:
-            roboFace::text(_text, 2);
+            roboFace::text(_text, 2, _intValue);
             break;
 
           case faceAction::SCROLLTEXT:
@@ -187,9 +182,8 @@ void roboFace::worker(void *pvParameters) {
             roboFace::neutral();
             break;
         };          
-        
-        vTaskDelay(50 / portTICK_PERIOD_MS);
-      }
+      }        
+    vTaskDelay(150);
   }
 }
 
@@ -205,7 +199,7 @@ void roboFace::imgloop() {
   }
 }
 
-void roboFace::text(const char *text, int size) {
+void roboFace::text(const char *text, int size, int duration) {
   ledMatrix.stopscroll();
   ledMatrix.clearDisplay();
   ledMatrix.setTextSize(1);
@@ -222,6 +216,16 @@ void roboFace::text(const char *text, int size) {
   ledMatrix.print(text);
   ledMatrix.display();
 
+  // Wait before neutral
+  if (duration != 0) {
+    for (int i = 0; i < duration; i++) {
+      if (uxQueueMessagesWaiting(displayQueue) > 0 ) {
+        return;
+      }
+      vTaskDelay(50);
+    }
+    roboFace::neutral();
+  }
 };
 
 void roboFace::scrollText(const char *text, int wait) {  
@@ -452,47 +456,16 @@ void roboFace::chat() {
   
   roboFace::drawbitmap_from_index(10);
   
-  int arr [] = { 0, 1, 1, 0, 1, 0, 0, 1, 0, 1, 1, 0, 1, 0, 0, 1, 0 };
-  int arr_len = sizeof arr/sizeof arr[0];
-  int speed = 15;
+  int randomNumber = random(chat_ani_LEN);
+  int speed = 150; // Higher is slower
+
   while(true) {
-      
-    for (int i=0; i< arr_len; i++) {
-
-      if (arr[i] == 1) {
-      
-        for (int n=0; n<4; n++) {
-          if (uxQueueMessagesWaiting(displayQueue) > 0 ) { return; }
-          ledMatrix.drawBitmap(0, 0, chat_ani_1[n], 128, 63, 1, 0);
-          ledMatrix.display();
-          vTaskDelay(speed);
-        }
-
-        for (int n=3; n>=0; n--) {
-          if (uxQueueMessagesWaiting(displayQueue) > 0 ) { return; }
-          ledMatrix.drawBitmap(0, 0, chat_ani_1[n], 128, 63, 1, 0);
-          ledMatrix.display();
-          vTaskDelay(speed);
-        }
-
-      } else {
-
-        for (int n=0; n<4; n++) {
-          if (uxQueueMessagesWaiting(displayQueue) > 0 ) { return; }
-          ledMatrix.drawBitmap(0, 0, chat_ani_2[n], 128, 63, 1, 0);
-          ledMatrix.display();
-          vTaskDelay(speed);
-        }
-
-        for (int n=3; n>=0; n--) {
-          if (uxQueueMessagesWaiting(displayQueue) > 0 ) { return; }
-          ledMatrix.drawBitmap(0, 0, chat_ani_2[n], 128, 63, 1, 0);
-          ledMatrix.display();
-          vTaskDelay(speed);
-        }
-
-      }
-    }
+    if (uxQueueMessagesWaiting(displayQueue) > 0 ) { return; }
+    randomNumber = random(chat_ani_LEN);
+    ledMatrix.drawBitmap(23, 31, chat_ani[randomNumber], 80, 32, 1, 0);
+    ledMatrix.display();
+    vTaskDelay(speed);
   }
+
 }
 
