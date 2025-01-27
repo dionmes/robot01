@@ -45,6 +45,8 @@ CONFIG_FILE = "config.json"
 
 # Default configuration
 default_config = {
+"robot01_ip" : "",
+"sense_ip" : "",
 "llm_system":  """
 """,
 "agent_system": """ You are the brain of a robot. As a robot you have different tools available.
@@ -53,9 +55,6 @@ Only respond with numbers in a written out format. Do not use digits as output. 
 """,
 "weather_api_key": "",
 }
-
-ROBOT01_DEFAULT_IP = "192.168.133.182"
-SENSE_DEFAULT_IP = "192.168.133.226"
 
 # Max tokens to TTS
 TTS_MAX_SENTENCE_LENGHT = 20
@@ -71,10 +70,10 @@ class BRAIN:
 		# Talking
 		self.listening = False
 		# mode is Chat mode / Agent mode
-		self.llm_mode = "agent mode"
+		self.llm_mode = "chat mode"
 
 		# Robot01
-		self.robot = ROBOT(ROBOT01_DEFAULT_IP, SENSE_DEFAULT_IP)
+		self.robot = ROBOT(self.config["robot01_ip"], self.config["sense_ip"])
 		
 		# stt engine
 		self.stt_q = queue.Queue(maxsize=STT_Q_SIZE)
@@ -90,9 +89,6 @@ class BRAIN:
 	def start(self):
 		self.robot.bodyaction(16,0,30)
 		self.robot.bodyaction(17,0,30)
-		
-		# enable audio
-		self.setting('audio',"1")
 		
 		# STT Worker
 		threading.Thread(target=self.stt_worker, daemon=True).start()
@@ -116,7 +112,7 @@ class BRAIN:
 	def save_config(self):
 		with open(CONFIG_FILE, 'w') as file:
 			json.dump(self.config, file, indent=4)
-		print("Configuration saved")
+			print("Configuration saved")
 
 	# Save configuration
 	def health_status(self):
@@ -129,6 +125,16 @@ class BRAIN:
 		
 		return status
 
+	# Receive notification
+	def notification(self, notification):
+		
+		if notification["type"] == "blocked":
+			self.robot.bodyactions_set_state(False);
+			time.sleep(1);
+			self.robot.bodyactions_set_state(True);
+		
+		return "ok"
+
 	#
 	# API brain setting handler
 	#
@@ -137,14 +143,22 @@ class BRAIN:
 
 			if item == "robot01_ip":
 				if	self.validate_ip_address(value):
-					# update objects with new id
+					# update running ip
 					self.robot.ip = value
+					self.robot.display.ip = value
+					# update config ip					
+					self.config["robot01_ip"] = value
+					self.save_config()
 				else:
 					print("Error updating robot01_ip : ", value)
 
 			if item == "robot01sense_ip":
 				if self.validate_ip_address(value):
+					# update running ip
 					self.robot.sense.ip = value
+					# update config ip					
+					self.config["sense_ip"] = value
+					self.save_config()
 				else:
 					print("Error updating robot01sense_ip : ", value)
 
@@ -153,7 +167,7 @@ class BRAIN:
 
 			if item == "output":
 				self.robot.output(int(value))
-					
+
 			if item == "bodyactions":
 				running = True if value == "1" else False
 				self.robot.bodyactions_set_state(running)
@@ -363,7 +377,7 @@ class BRAIN:
 			Take over the exact description of this tool, do no add or change anything to the response.
 			When as a robot you need or want information about the current date and time, use the "current_time_and_date" tool.
 			When as a robot you need or want information about the current weather or the weather forecast, use the "weather_forecast" tool. When responding with the temperatures convert digits to written out numerical.
-			When as a robot you need or want to move use the "walk_forward", "walk_backward", "turn_left" or "turn_right" tool with the number of steps you need to take.
+			When as a robot you need or want to move use the "walk_forward", "walk_backward", "turn_left" or "turn_right" tool with the value of the number of steps you need to take.
 			When as a robot you need or want to shake use the "shake" tool with the number of times you need to shake.
 			When as a robot you need or want to move your arms use the "move_right_lower_arm", "walk_backward", "move_left_lower_arm", "move_right_upper_arm" or "move_left_upper_arm" tools, with the number of movements you need to do.
 		"""),
@@ -397,7 +411,7 @@ class BRAIN:
 		
 		# Langchain agent executor
 		supervisor_agent = create_tool_calling_agent(supervisor_llm, llm_tools, supervisor_prompt_template)
-		supervisor_agent_executor = AgentExecutor(agent=supervisor_agent, tools=llm_tools, max_iterations=999,max_execution_time=300.0, return_intermediate_steps=True, verbose=True, )
+		supervisor_agent_executor = AgentExecutor(agent=supervisor_agent, tools=llm_tools, max_iterations=999,max_execution_time=300.0, return_intermediate_value=True, verbose=True, )
 		
 		output = supervisor_agent_executor.invoke({"input": input_prompt})
 
@@ -571,106 +585,106 @@ class BRAIN:
 		return output
 
 	# Walk forward tool
-	def walk_forward(self, steps):
-		""" This tool allows the robot to take steps in a forward direction / motions.
+	def walk_forward(self, value):
+		""" This tool allows the robot to take the number of steps in value in a forward direction / motions.
 			Call this tool with an integer as input
 
 		Args:
-			steps (int) : the number of steps to take 
+			value (int) : the number of value to take 
 				
 		Returns:
 			none
 		"""	
 
-		if (type(steps) == str):
+		if (type(value) == str):
 			try:
-				steps = int(steps)
+				value = int(value)
 			except:
 				print("Tool :Error - cannot use input")
 				return
 					
-		print("Tool : walk forward " + str(steps) + " steps.")
-		self.robot.bodyaction(14,0,steps)
+		print("Tool : walk forward " + str(value) + " value.")
+		self.robot.bodyaction(14,0,value)
 
-		time.sleep(steps)
+		time.sleep(value)
 
 		return
 
 	# Walk backwards tool
-	def walk_backward(self, steps):
-		""" This tool allows the robot to take steps in a backward direction / motions.
+	def walk_backward(self, value):
+		""" This tool allows the robot to take the number of steps in value in a backward direction / motions.
 			Call this tool with an integer as input
 
 		Args:
-			steps (int) : the number of steps to take 
+			value (int) : the number of value to take 
 				
 		Returns:
 			none
 		"""	
 
-		if (type(steps) == str):
+		if (type(value) == str):
 			try:
-				steps = int(steps)
+				value = int(value)
 			except:
 				print("Tool :Error - cannot use input")
 				return
 			
-		print("Tool : walk backwards " + str(steps) + " steps.")
-		self.robot.bodyaction(15,0,steps)
+		print("Tool : walk backwards " + str(value) + " value.")
+		self.robot.bodyaction(15,0,value)
 
-		time.sleep(steps)
+		time.sleep(value)
 
 		return
 
 	# Turn right tool
-	def turn_right(self, steps):
-		""" This tool allows the robot to take steps to turn right.
+	def turn_right(self, value):
+		""" This tool allows the robot to take the number of steps in value to turn right.
 			Call this tool with an integer as input
 
 		Args:
-			steps (int) : the number of steps to take 
+			value (int) : the number of value to take 
 				
 		Returns:
 			none
 		"""	
 		
-		if (type(steps) == str):
+		if (type(value) == str):
 			try:
-				steps = int(steps)
+				value = int(value)
 			except:
 				print("Tool :Error - cannot use input")
 				return
 			
-		print("Tool : Turn right " + str(steps) + " steps.")
-		self.robot.bodyaction(10,0,steps)
+		print("Tool : Turn right " + str(value) + " value.")
+		self.robot.bodyaction(10,0,value)
 
-		time.sleep(steps)
+		time.sleep(value)
 
 		return
 
 	# Turn left tool
-	def turn_left(self, steps):
-		""" This tool allows the robot to take steps to turn left.
+	def turn_left(self, value):
+		""" This tool allows the robot to take the number of steps in value to turn left.
 			Call this tool with an integer as input
 
 		Args:
-			steps (int) : the number of steps to take 
+			value (int) : the number of value to take 
 				
 		Returns:
 			none
 		"""	
 
-		if (type(steps) == str):
+		if (type(value) == str):
 			try:
-				steps = int(steps)
+				value = int(value)
 			except:
 				print("Tool :Error - cannot use input")
 				return
 			
-		print("Tool : Turn left " + str(steps) + " steps.")
-		self.robot.bodyaction(10,1,steps)
+		print("Tool : Turn left " + str(value) + " value.")
+		self.robot.bodyaction(10,1,value)
 
-		time.sleep(steps)
+		time.sleep(value)
 
 		return
 
@@ -702,110 +716,110 @@ class BRAIN:
 		return
 
 	# Move right lower arm tool
-	def move_right_lower_arm(self, steps, direction=0):
+	def move_right_lower_arm(self, value, direction=0):
 		""" This tool allows the robot to move its lower right arm up or down.
 			Use direction 1 to move the arm up, Use direction 0 to move the arm down.
 			Call this tool with an integers as input
 		Args:
-			steps (int) : the number of steps/movements to do
+			value (int) : the number of movements to do
 			direction (int) : the direction, 1 for up, 0 for down.
 		Returns:
 			none
 		"""	
 		
-		if (type(steps) == str):
+		if (type(value) == str):
 			try:
-				steps = int(steps)
+				value = int(value)
 			except:
 				print("Tool :Error - cannot use input")
 				return
 	
-		if steps < 5:
-			steps = 40
+		if value < 5:
+			value = 40
 
-		print("Tool : Move right lower arm  " + str(steps) + " steps.")
-		self.robot.bodyaction(4,direction,steps)
+		print("Tool : Move right lower arm  " + str(value) + " value.")
+		self.robot.bodyaction(4,direction,value)
 				
 		return
 
 	# Move left lower arm tool
-	def move_left_lower_arm(self, steps, direction=0):
+	def move_left_lower_arm(self, value, direction=0):
 		""" This tool allows the robot to move its lower left arm up or down.
 			Use direction 1 to move the arm up, Use direction 0 to move the arm down.
 			Call this tool with an integers as input
 		Args:
-			steps (int) : the number of steps/movements to do
+			value (int) : the number of movements to do
 			direction (int) : the direction, 1 for up, 0 for down.
 		Returns:
 			none
 		"""	
 		
-		if (type(steps) == str):
+		if (type(value) == str):
 			try:
-				steps = int(steps)
+				value = int(value)
 			except:
 				print("Tool :Error - cannot use input")
 				return
 			
-		if steps < 5:
-			steps = 40
+		if value < 5:
+			value = 40
 
-		print("Tool : Move left lower arm " + str(steps) + " steps.")
-		self.robot.bodyaction(3,direction,steps)
+		print("Tool : Move left lower arm " + str(value) + " value.")
+		self.robot.bodyaction(3,direction,value)
 				
 		return
 
 	# Move right upper arm tool
-	def move_right_upper_arm(self, steps, direction=0):
+	def move_right_upper_arm(self, value, direction=0):
 		""" This tool allows the robot to move its upper right arm up or down.
 			Use direction 1 to move the arm up, Use direction 0 to move the arm down.
 			Call this tool with an integers as input
 		Args:
-			steps (int) : the number of steps/movements to do
+			value (int) : the number of movements to do
 			direction (int) : the direction, 1 for up, 0 for down.
 		Returns:
 			none
 		"""	
 		
-		if (type(steps) == str):
+		if (type(value) == str):
 			try:
-				steps = int(steps)
+				value = int(value)
 			except:
 				print("Tool :Error - cannot use input")
 				return
 
-		if steps < 5:
-			steps = 40
+		if value < 5:
+			value = 40
 			
-		print("Tool : Move right upper " + str(steps) + " steps.")
-		self.robot.bodyaction(2,direction,steps)
+		print("Tool : Move right upper " + str(value) + " value.")
+		self.robot.bodyaction(2,direction,value)
 		
 		return
 
 	# Move left upper arm tool
-	def move_left_upper_arm(self, steps, direction=0):
+	def move_left_upper_arm(self, value, direction=0):
 		""" This tool allows the robot to move its upper left arm up or down.
 			Use direction 1 to move the arm up, Use direction 0 to move the arm down.
 			Call this tool with an integers as input
 		Args:
-			steps (int) : the number of steps/movements to do
+			value (int) : the number of movements to do
 			direction (int) : the direction, 1 for up, 0 for down.
 		Returns:
 			none
 		"""	
 		
-		if (type(steps) == str):
+		if (type(value) == str):
 			try:
-				steps = int(steps)
+				value = int(value)
 			except:
 				print("Tool :Error - cannot use input")
 				return
 
-		if steps < 5:
-			steps = 40
+		if value < 5:
+			value = 40
 			
-		print("Tool : Move left upper arm " + str(steps) + " steps.")
-		self.robot.bodyaction(1,direction,steps)
+		print("Tool : Move left upper arm " + str(value) + " value.")
+		self.robot.bodyaction(1,direction,value)
 				
 		return
 

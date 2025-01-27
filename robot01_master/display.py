@@ -43,7 +43,7 @@ class DISPLAY:
 	# Generate Display worker : Actions from queue : display_q
 	def handle_actions(self):
 		print("DISPLAY worker started.")	
-		
+
 		while True: 
 			task = self.display_q.get()		
 						

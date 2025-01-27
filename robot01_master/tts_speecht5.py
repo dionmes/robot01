@@ -69,7 +69,6 @@ class TTS:
 		if not self.running:
 			if not self.loaded:
 				self.loadmodel()		
-			self.text_q = queue.Queue(maxsize=TEXT_Q_SIZE)
 			self.running = True
 			threading.Thread(target=self.generate_speech, daemon=True).start()
 	

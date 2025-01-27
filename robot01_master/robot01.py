@@ -3,6 +3,7 @@ import requests
 import time
 import queue
 import socket
+import random
 import ollama
 from ping3 import ping, verbose_ping
 
@@ -19,9 +20,9 @@ BODY_Q_SIZE = 4
 # Minimal sleep between actions 
 MINIMAL_SLEEP = 1
 # Audio UDP PORT
-AUDIO_UDP_PORT = 9000
+AUDIO_TCP_PORT = 9000
 # output Queue size
-OUTPUT_Q_SIZE = 8
+OUTPUT_Q_SIZE = 6
 # Health check interval (seconds)
 HEALTH_CHECK_INTERVAL = 5
 
@@ -31,7 +32,10 @@ class ROBOT:
 	def __init__(self, ip, sense_ip):
 
 		self.ip = ip
-	
+		# Prepare socket
+		self.audio_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+		self.audio_socket.settimeout(5)
+
 		self.emotion = True
 		self.output_busy = False
 
@@ -47,6 +51,11 @@ class ROBOT:
 		self.display = DISPLAY(self.ip)
 		self.display.state(20) # Show hour glass animation
 				
+		# Motion sensor
+		self.motionsensor = {};
+		# Forward distance clearance sensor
+		self.fw_distance = {};
+		
 		# output queue
 		self.output_q = queue.Queue(maxsize=OUTPUT_Q_SIZE)
 
@@ -93,7 +102,7 @@ class ROBOT:
 			task = self.body_q.get()
 			print("Robot action : " + str(task['action']) )
 
-			url = "/bodyaction?action=" + str(task['action']) + "&direction=" + str(task['direction']) + "&steps=" + str(task['steps'])
+			url = "/bodyaction?action=" + str(task['action']) + "&direction=" + str(task['direction']) + "&value=" + str(task['value'])
 			response = self.robot_http_call(url)
 
 			time.sleep(MINIMAL_SLEEP)		
@@ -108,15 +117,15 @@ class ROBOT:
 		else:
 			self.robot_actions = False		
 			# Stop action to robot
-			url = "/bodyaction?action=13&direction=0&steps=0"
+			url = "/bodyaction?action=13&direction=0&value=0"
 	
 			response = self.robot_http_call(url)
 	
 			print("Robot body actions stopped")				
 	
-	def bodyaction(self, action, direction, steps):
+	def bodyaction(self, action, direction, value):
 
-		task = { "action" : action, "direction" : direction, "steps" : steps }
+		task = { "action" : action, "direction" : direction, "value" : value }
 		if self.robot_actions:
 			try:
 				# Add state to queue
@@ -125,6 +134,7 @@ class ROBOT:
 				print("Robot bodyactions queue error : ", type(e).__name__ )
 
 	def output(self, state = -1)->bool:
+		# Get output status
 		if state == -1:			
 			response = self.robot_http_call('/audiostream')
 			try: 
@@ -132,8 +142,12 @@ class ROBOT:
 			except Exception as e:
 				print("audiostream : ",e)
 				return ""
-			return json_obj['audiostream']
-			
+			if json_obj['audiostream'] and self.output_worker_running:
+				return True
+			else:
+				return False
+
+		# Start output
 		elif state == 1:
 			threading.Thread(target=self.robot_http_call, args=[('/audiostream?on=1')]).start()
 
@@ -141,23 +155,25 @@ class ROBOT:
 				self.tts_engine.start()
 
 			if not self.output_worker_running :
+				self.output_worker_running = True
 				threading.Thread(target=self.output_worker, daemon=True).start()
 				self.output_q = queue.Queue(maxsize=OUTPUT_Q_SIZE)
-				self.output_worker_running = True
+				self.tts_engine.output_q = self.output_q # Reestablish reference
 				print("Robot output engine started")			
 				
 			return True
 		
+		# Stio output
 		elif state == 0:
+			self.output_worker_running = False
 			threading.Thread(target=self.robot_http_call, args=[('/audiostream?on=0' )]).start()
+			self.output_q = queue.Queue(maxsize=OUTPUT_Q_SIZE)
+			self.tts_engine.output_q = self.output_q # Reestablish reference
+			self.tts_engine.stop()
+			self.audio_socket.close()
 
-			if not self.tts_engine.running:
-				self.tts_engine.stop()
-
-			if self.output_worker_running:
-				self.output_worker_running = False
-				time.sleep(1)		
-				print("Robot output engine stopped")			
+			print("Robot output engine stopped")			
+			time.sleep(1)		
 
 		return False
 
@@ -166,41 +182,71 @@ class ROBOT:
 	# sends audio (16khz mono f32le) over UDP to robot01 ip port 9000
 	#
 	def output_worker(self):
-	
-		sock = socket.socket(socket.AF_INET,socket.SOCK_DGRAM)
-
 		print("Output worker started.")
-		
 		while self.output_worker_running:
 			
+			# Try to connect
+			if not self.connect_tcp_audio():
+				return
+						
 			output_action = self.output_q.get()
-			
+
 			if "speech" in output_action['type'] and not self.output_busy:
 				self.output_started()
 				
-			if "text" in output_action:
-				self.express_emotion(output_action['text'])
 			
 			if "audio" in output_action:
 				audio = output_action['audio']
-				# Send packets of max. 1472 / 4 byte sample size (2 channels)
-				for x in range(0, audio.shape[0],368):
+				# Send packets of max. 1024 / 4 byte sample size (2 channels)
+				for x in range(0, audio.shape[0],256):
 					start = x
-					end = x + 368
-					sock.sendto(audio[start:end].tobytes(), (self.ip, AUDIO_UDP_PORT))
-					time.sleep(0.021)
+					end = x + 256
+
+					try :
+						self.audio_socket.sendall(audio[start:end].tobytes())
+					except Exception as e:
+						print("Sending TCP audio error : " + self.ip + ":" + str(AUDIO_TCP_PORT) + " " + str(e))
+						self.audio_socket.close()
+						break
+
+					time.sleep(0.015)
 					if not self.output_worker_running:
 						break
 	
-				# Send packets of 1 byte to flush buffer on robot side
-				sock.sendto(bytes(1), (self.ip, AUDIO_UDP_PORT))
-
+			if "text" in output_action:
+				threading.Thread(target=self.express_emotion,args=[output_action['text']],daemon=True).start()
+			
 			self.output_q.task_done()
 			
 			if self.output_q.empty():
 				self.output_stopped()
 
-	# Start output state 
+	# Connect to TCP audio
+	def connect_tcp_audio(self)->bool:
+		# Check if connection is open,
+		try:
+			self.audio_socket.getpeername()
+			return True
+		except OSError:
+			print("TCP Audio: No connection.")
+		
+		self.audio_socket.close()			
+		# Prepare TCP socket
+		self.audio_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+		self.audio_socket.settimeout(5)
+		self.audio_socket.setsockopt(socket.IPPROTO_TCP, socket.TCP_KEEPCNT, 5) # Keep alive
+		
+		try :
+			self.audio_socket.connect((self.ip, AUDIO_TCP_PORT))
+			print("TCP Audio: Connection established.")
+			return True
+		except Exception as e:
+			print("TCP Audio: Connection error : " + self.ip + ":" + str(AUDIO_TCP_PORT) + " " + str(e))
+			self.audio_socket.close()
+			return False
+
+
+	# Callback : Started output state 
 	def output_started(self):
 		self.output_busy = True
 		if not self.sense.mic: 
@@ -208,7 +254,7 @@ class ROBOT:
 			
 		self.display.state(23)
 
-	# 
+	# Callback : Stopped output
 	def output_stopped(self):
 		self.display.state(3)
 		self.bodyaction(16,0,30)
@@ -231,16 +277,15 @@ class ROBOT:
 		else:
 			threading.Thread(target=self.robot_http_call, args=[('/volume?power=' + str(set_volume) )]).start()
 
-
 	#
 	# Robotic expression via a LLM based on sentence
 	#
 	def express_emotion(self,text):
 
-		if not self.emotion:
+		if not self.emotion or not text:
 			return
 			
-		if len(text) < 3:
+		if len(text) < 30:
 			return
 			
 		prompt = """"Express yourself, 
@@ -260,19 +305,26 @@ class ROBOT:
 
 		if "SAD" in emotion:
 			self.display.action(12,1,8)
-			self.bodyaction(16,0,30)
-			self.bodyaction(17,0,30)
+
+			d1 = random.randint(0, 1)
+			d2 = random.randint(0, 1)
+
+			self.bodyaction(16,d1,30)
+			self.bodyaction(17,d2,30)
 			
 			return
 		elif "HAPPY" in emotion:
 			self.display.action(12,1,5)
-			self.bodyaction(16,1,30)
-			self.bodyaction(17,1,30)
+			d1 = random.randint(0, 1)
+			d2 = random.randint(0, 1)
+
+			self.bodyaction(16,d1,30)
+			self.bodyaction(17,d2,30)
 
 			return
 		elif "EXCITED" in emotion:
 			self.display.action(12,1,2)
-			self.bodyaction(7,1,5)
+			self.bodyaction(11,0,5)
 
 			return
 		elif "DIFFICULT" in emotion:
@@ -282,28 +334,35 @@ class ROBOT:
 			return
 		elif "LOVE" in emotion:
 			self.display.action(12,1,6)
-			self.bodyaction(17,0,30)
+			d1 = random.randint(0, 1)
+			self.bodyaction(17,d1,30)
 
 		elif "LIKE" in emotion:
 			self.display.action(12,1,2)
-			self.bodyaction(17,0,30)
+			d1 = random.randint(0, 1)
+			self.bodyaction(17,d1,30)
 
 			return
 		elif "DISLIKE" in emotion:
 			self.display.action(12,1,3)
-			self.bodyaction(17,0,30)
+			d1 = random.randint(0, 1)
+			self.bodyaction(17,d1,30)
 
 			return
 		elif "INTERESTED" in emotion:
 			self.display.action(12,1,9)
-			self.bodyaction(16,1,20)
-			self.bodyaction(17,0,20)
+			d1 = random.randint(0, 1)
+			d2 = random.randint(0, 1)
+
+			self.bodyaction(16,d1,30)
+			self.bodyaction(17,d2,30)
 
 			return
 
 		elif "NEUTRAL" in emotion:
-			self.bodyaction(16,0,20)
-			self.bodyaction(17,1,20)
+		
+			self.bodyaction(16,0,30)
+			self.bodyaction(17,0,30)
 
 			return
 
@@ -314,21 +373,21 @@ class ROBOT:
 	def VL53L1X_info(self)->dict:
 		response = self.robot_http_call('/VL53L1X_Info')
 		try: 
-			json_obj = response.json()
+			self.fw_distance = response.json()
 		except Exception as e:
-			print("audiostream : ",e)
+			print("VL53L1X_Info : ",e)
 			return ""
 		
-		return json_obj
+		return self.fw_distance
 	
 	def BNO08X_info(self)->dict:
 		response = self.robot_http_call('/BNO08X_Info')
 		try: 
-			json_obj = response.json()
+			self.motionsensor = response.json()
 		except Exception as e:
-			print("audiostream : ",e)
+			print("BNO08X_Info : ",e)
 			return ""
-		return json_obj
+		return self.motionsensor
 
 	def reset(self):
 		threading.Thread(target=self.robot_http_call, args=[('/reset')]).start()
@@ -353,4 +412,4 @@ class ROBOT:
 				else:
 					print("Robot01 Request error")
 
-		return ""
+		return

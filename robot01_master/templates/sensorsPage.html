@@ -10,6 +10,24 @@
 
 <script>
 
+const accuracyLevels_BNO08X = [
+	"Unreliable",
+	"low",
+	"medium",
+	"high"
+];
+
+const rangestatus_VL53L1 = [
+	"Valid",
+	"Sigma check above threshold",
+	"Signal below threshold",
+	"FAIL, Phase out of bounds",
+	"HW or VCSEL failure",
+	"Not matching phases",
+	"Algorithm underflow or overflow",
+	"Reported range is invalid"
+];
+
 function update_VL53L1X() {
 	$.ajax({
 		url: "api/VL53L1X_Info",
@@ -18,10 +36,10 @@ function update_VL53L1X() {
     	async: true
     })
     .done(function (result) {
-		$( "#ph_distance" ).html( "Distance : " + result.range_mm + " mm.");
-		$( "#ph_ambient" ).html( "Ambient : " + result.ambient_count );
-		$( "#ph_peak" ).html("Peak : " + result.peak_signal );
-		$( "#ph_status" ).html("Status : " + result.range_status );
+		$( "#ph_distance" ).html(result.range_mm + " mm.");
+		$( "#ph_ambient" ).html(result.ambient_count );
+		$( "#ph_peak" ).html(result.peak_signal );
+		$( "#ph_status" ).html(rangestatus_VL53L1[result.range_status]);
 	})
     .fail(function (xhr, status, errorThrown) {
 		console.log(status);
@@ -29,6 +47,7 @@ function update_VL53L1X() {
 }
 
 function update_BNO08X() {
+        
 	$.ajax({
 		url: "api/BNO08X_Info",
 		type: 'GET',
@@ -36,18 +55,17 @@ function update_BNO08X() {
     	async: true
 	    })	
 		.done(function (result) {
-			$( "#geoMagRotationVector_real" ).html("GEO Mag. Rot. real : " + result.geoMagRotationVector_real );
-			$( "#geoMagRotationVector_i" ).html("GEO Mag. Rot. i : " + result.geoMagRotationVector_i );
-			$( "#geoMagRotationVector_j" ).html("GEO Mag. Rot. j : " + result.geoMagRotationVector_j );
-			$( "#geoMagRotationVector_k" ).html("GEO Mag. Rot. k : " + result.geoMagRotationVector_k );
-			$( "#accelerometer_x" ).html("Accelerometer x : " + result.accelerometer_x );
-			$( "#accelerometer_y" ).html("Accelerometer y : " + result.accelerometer_y );
-			$( "#accelerometer_z" ).html("Accelerometer z : " + result.accelerometer_z );
-			$( "#gyroscope_x" ).html("Gyroscope x : " + result.gyroscope_x );
-			$( "#gyroscope_y" ).html("Gyroscope y : " +  result.gyroscope_y );
-			$( "#gyroscope_z" ).html("Gyroscope z : " +  result.gyroscope_z );
-			$( "#stability" ).html("Stability : " + result.stability );
-			$( "#shake" ).html("Shake : " + result.shake );
+			$( "#accuracy" ).html(accuracyLevels_BNO08X[result.accuracy]);
+			$( "#shake" ).html(result.shake );
+
+			$( "#yaw" ).html(result.yaw.toFixed(2));
+			$( "#pitch" ).html(result.pitch.toFixed(2));
+			$( "#roll" ).html(result.roll.toFixed(2));
+
+			$( "#linearAcceleration_x" ).html( result.linearAcceleration_x.toFixed(2) + " m/s^2");
+			$( "#linearAcceleration_y" ).html( result.linearAcceleration_y.toFixed(2)  + " m/s^2");
+			$( "#linearAcceleration_z" ).html( result.linearAcceleration_z.toFixed(2) + " m/s^2");
+
 		})
 		.fail(function (xhr, status, errorThrown) {
 			console.log(status);
@@ -100,59 +118,47 @@ window.onload = function() {
 	<div class="container">
 		<h2> Distance sensor (VL53L1X)</h2>
 		<div class="grid">
-			<div id='ph_distance'></div>
+			<div><b>Distance : </b></div><div id='ph_distance'></div>
 		</div>
 		<div class="grid">
-			<div id='ph_ambient'></div>
+			<div><b>Ambient : </b></div><div id='ph_ambient'></div>
 		</div>
 		<div class="grid">
-			<div id='ph_peak'></div>
+			<div><b>Peak : </b></div><div id='ph_peak'></div>
 		</div>
 		<div class="grid">
-			<div id='ph_status'></div>
+			<div><b>Status : </b></div><div id='ph_status'></div>
 		</div>
 		<br>
 		<hr>
 		<h2> Gyro sensor (BNO08X)</h2>
 		<div class="grid">
-			<div id='shake'></div>
+			<div><b>Accuracy : </b></div><div id='accuracy'></div>
 		</div>
 		<div class="grid">
-			<div id='stability'></div>
+			<div><b>Shake : </b></div><div id='shake'></div>
 		</div>
 		<br>
 		<div class="grid">
-			<div id='geoMagRotationVector_real'></div>
+			<div><b>Yaw : </b></div><div id='yaw'></div>
 		</div>
 		<div class="grid">
-			<div id='geoMagRotationVector_i'></div>
+			<div><b>Pitch : </b></div><div id='pitch'></div>
 		</div>
 		<div class="grid">
-			<div id='geoMagRotationVector_j'></div>
-		</div>
-		<div class="grid">
-			<div id='geoMagRotationVector_k'></div>
+			<div><b>Roll : </b></div><div id='roll'></div>
 		</div>
 		<br>
 		<div class="grid">
-			<div id='accelerometer_x'></div>
+			<div><b>X Acceleration : </b></div><div id='linearAcceleration_x'></div>
 		</div>
 		<div class="grid">
-			<div id='accelerometer_y'></div>
+			<div><b>Y Acceleration : </b></div><div id='linearAcceleration_y'></div>
 		</div>
 		<div class="grid">
-			<div id='accelerometer_z'></div>
+			<div><b>Z Acceleration : </b></div><div id='linearAcceleration_z'></div>
 		</div>
 		<br>
-		<div class="grid">
-			<div id='gyroscope_x'></div>
-		</div>
-		<div class="grid">
-			<div id='gyroscope_y'></div>
-		</div>
-		<div class="grid">
-			<div id='gyroscope_z'></div>
-		</div>
 	</div>
 </div>
 <br>
