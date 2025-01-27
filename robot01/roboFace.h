@@ -13,6 +13,8 @@
 // Refer to initialized LED matrix in main
 extern Adafruit_SSD1306 ledMatrix;
 
+extern TwoWire wire;
+
 // faceAction Actions
 enum faceAction { 
   DISPLAYTEXTSMALL = 1, 
@@ -53,14 +55,14 @@ class roboFace {
 
   public:
     roboFace();
-    void begin();
+    void begin(int task_core = 1, int task_priority = 10);
 
     // exec - enum faceAction, String - (optional text if Action requires it), Int - index of image or optional delay dependend on action.
     void exec( int action, String text = "", int intValue = 0);
     void imagetest(char *bmp_data);
 
     // display Text with size 2 - medium, or 3 - Large. (to be called from displayTask inside a vtask)
-    static void text(const char *text, int size);
+    static void text(const char *text, int size,int Duration = 0);
     //  Display text for amount of seconds
     static void scrollText(const char *text, int size);
     // Set Face neutral. 

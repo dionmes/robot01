@@ -9,8 +9,6 @@
 
 #define STEPWAIT 50
 
-// vTask core
-#define ROBOT_TASK_CORE 1
 // Body actions Queue size
 #define BODYACTIONS_QUEUE_SIZE 3
 
@@ -39,7 +37,7 @@ MCP23017 mcp2 = MCP23017(0x21, Wire);
 typedef struct {
   int action;
   int direction;
-  int steps;
+  int value;
 } bodyactionTaskData_t;
 
 // Display queue for display actions
@@ -49,7 +47,7 @@ bodyControl::bodyControl(){
   //
 };
 
-void bodyControl::begin() {
+void bodyControl::begin(int task_core, int task_priority) {
 
   mcp1.init();
   mcp2.init();
@@ -65,16 +63,16 @@ void bodyControl::begin() {
   mcp2.portMode(MCP23017Port::B, 0b11111111);          //Port B as input
 
   // Start worker
-  xTaskCreatePinnedToCore(bodyControl::worker, "bodyactions_worker", 4096, NULL, 10, &bodyTaskHandle, ROBOT_TASK_CORE);
+  xTaskCreatePinnedToCore(bodyControl::worker, "bodyactions_worker", 4096, NULL, task_priority, &bodyTaskHandle, task_core);
 };
 
-void bodyControl::exec(int action, bool direction, int steps) {
+void bodyControl::exec(int action, bool direction, int value) {
 
   bodyactionTaskData_t bodyactionTaskData;
 
   bodyactionTaskData.action = action;
   bodyactionTaskData.direction = direction;
-  bodyactionTaskData.steps = steps;
+  bodyactionTaskData.value = value;
 
   if (action == bodyAction::STOP) {
 
@@ -104,82 +102,83 @@ void bodyControl::worker(void *pvParameters) {
 
       switch (bodyactionTaskData.action) {
         case bodyAction::LEFTLOWERARM:
-          bodyControl::leftLowerArm(bodyactionTaskData.direction, bodyactionTaskData.steps);
+          bodyControl::leftLowerArm(bodyactionTaskData.direction, bodyactionTaskData.value);
           break;
 
         case bodyAction::LEFTUPPERARM:
-          bodyControl::leftUpperArm(bodyactionTaskData.direction, bodyactionTaskData.steps);
+          bodyControl::leftUpperArm(bodyactionTaskData.direction, bodyactionTaskData.value);
           break;
 
         case bodyAction::RIGHTLOWERARM:
-          bodyControl::rightLowerArm(bodyactionTaskData.direction, bodyactionTaskData.steps);
+          bodyControl::rightLowerArm(bodyactionTaskData.direction, bodyactionTaskData.value);
           break;
 
         case bodyAction::RIGHTUPPERARM:
-          bodyControl::rightUpperArm(bodyactionTaskData.direction, bodyactionTaskData.steps);
+          bodyControl::rightUpperArm(bodyactionTaskData.direction, bodyactionTaskData.value);
           break;
 
         case bodyAction::BOTH_LOWER_ARMS:
-          bodyControl::bothLowerArms(bodyactionTaskData.direction, bodyactionTaskData.steps);
+          bodyControl::bothLowerArms(bodyactionTaskData.direction, bodyactionTaskData.value);
           break;
 
         case bodyAction::BOTH_UPPER_ARMS:
-          bodyControl::bothUpperArms(bodyactionTaskData.direction, bodyactionTaskData.steps);
+          bodyControl::bothUpperArms(bodyactionTaskData.direction, bodyactionTaskData.value);
           break;
 
         case bodyAction::LEFTLEG:
-          bodyControl::leftLeg(bodyactionTaskData.direction, bodyactionTaskData.steps);
+          bodyControl::leftLeg(bodyactionTaskData.direction, bodyactionTaskData.value);
           break;
 
         case bodyAction::RIGHTLEG:
-          bodyControl::rightLeg(bodyactionTaskData.direction, bodyactionTaskData.steps);
+          bodyControl::rightLeg(bodyactionTaskData.direction, bodyactionTaskData.value);
           break;
 
         case bodyAction::HIP:
-          bodyControl::hip(bodyactionTaskData.direction, bodyactionTaskData.steps);
+          bodyControl::hip(bodyactionTaskData.direction, bodyactionTaskData.value);
           break;
 
         case bodyAction::LEFTHANDLIGHT:
-          bodyControl::leftHandLight(bodyactionTaskData.direction, bodyactionTaskData.steps);
+          bodyControl::leftHandLight(bodyactionTaskData.direction, bodyactionTaskData.value);
           break;
 
         case bodyAction::RIGHTHANDLIGHT:
-          bodyControl::rightHandLight(bodyactionTaskData.direction, bodyactionTaskData.steps);
+          bodyControl::rightHandLight(bodyactionTaskData.direction, bodyactionTaskData.value);
           break;
 
         case bodyAction::TURN:
-          bodyControl::turn(bodyactionTaskData.direction, bodyactionTaskData.steps);
+          bodyControl::turn(bodyactionTaskData.direction, bodyactionTaskData.value);
           break;
 
         case bodyAction::BODYSHAKE:
-          bodyControl::shake(bodyactionTaskData.direction, bodyactionTaskData.steps);
+          bodyControl::shake(bodyactionTaskData.direction, bodyactionTaskData.value);
           break;
 
         case bodyAction::BACK_AND_FORTH:
-          bodyControl::back_and_forth(bodyactionTaskData.direction, bodyactionTaskData.steps);
+          bodyControl::back_and_forth(bodyactionTaskData.direction, bodyactionTaskData.value);
           break;
 
         case bodyAction::WALK_FORWARD:
-          bodyControl::bodyControl::walk_forward(bodyactionTaskData.direction, bodyactionTaskData.steps);
+          bodyControl::bodyControl::walk_forward(bodyactionTaskData.value);
           break;
 
         case bodyAction::WALK_BACKWARD:
-          bodyControl::bodyControl::walk_backward(bodyactionTaskData.direction, bodyactionTaskData.steps);
+          bodyControl::bodyControl::walk_backward(bodyactionTaskData.value);
           break;
 
         default:
           break;
       };
     }
+    vTaskDelay(250);
   }
 };
 
-void bodyControl::leftLowerArm(bool up, int steps) {
+void bodyControl::leftLowerArm(bool up, int value) {
   uint32_t notifyStopValue;  // vtask notifier to stop
   up ? mcp1.digitalWrite(LEFTLOWERARM_UP_PIN, 1) : mcp1.digitalWrite(LEFTLOWERARM_DOWN_PIN, 1);
 
-  // steps routine with vtask notify for stopping
-  for (int x = 0; x < steps; x = ++x) {
+  // value routine with vtask notify for stopping
+  for (int x = 0; x < value; x = ++x) {
     if (xTaskNotifyWait(0x00, 0x00, &notifyStopValue, 0) == pdTRUE) {
       return;
     }
@@ -189,12 +188,12 @@ void bodyControl::leftLowerArm(bool up, int steps) {
   up ? mcp1.digitalWrite(LEFTLOWERARM_UP_PIN, 0) : mcp1.digitalWrite(LEFTLOWERARM_DOWN_PIN, 0);
 };
 
-void bodyControl::leftUpperArm(bool up, int steps) {
+void bodyControl::leftUpperArm(bool up, int value) {
   uint32_t notifyStopValue;  // vtask notifier to stop
   up ? mcp1.digitalWrite(LEFTUPPERARM_UP_PIN, 1) : mcp1.digitalWrite(LEFTUPPERARM_DOWN_PIN, 1);
 
-  // steps routine with vtask notify for stopping
-  for (int x = 0; x < steps; x = ++x) {
+  // value routine with vtask notify for stopping
+  for (int x = 0; x < value; x = ++x) {
     if (xTaskNotifyWait(0x00, 0x00, &notifyStopValue, 0) == pdTRUE) {
       return;
     }
@@ -204,13 +203,13 @@ void bodyControl::leftUpperArm(bool up, int steps) {
   up ? mcp1.digitalWrite(LEFTUPPERARM_UP_PIN, 0) : mcp1.digitalWrite(LEFTUPPERARM_DOWN_PIN, 0);
 };
 
-void bodyControl::rightLowerArm(bool up, int steps) {
+void bodyControl::rightLowerArm(bool up, int value) {
   uint32_t notifyStopValue;  // vtask notifier to stop
 
   up ? mcp2.digitalWrite(RIGHTLOWERARM_UP_PIN, 1) : mcp2.digitalWrite(RIGHTLOWERARM_DOWN_PIN, 1);
 
-  // steps routine with vtask notify for stopping
-  for (int x = 0; x < steps; x = ++x) {
+  // value routine with vtask notify for stopping
+  for (int x = 0; x < value; x = ++x) {
     if (xTaskNotifyWait(0x00, 0x00, &notifyStopValue, 0) == pdTRUE) {
       return;
     }
@@ -220,13 +219,13 @@ void bodyControl::rightLowerArm(bool up, int steps) {
   up ? mcp2.digitalWrite(RIGHTLOWERARM_UP_PIN, 0) : mcp2.digitalWrite(RIGHTLOWERARM_DOWN_PIN, 0);
 };
 
-void bodyControl::rightUpperArm(bool up, int steps) {
+void bodyControl::rightUpperArm(bool up, int value) {
   uint32_t notifyStopValue;  // vtask notifier to stop
 
   up ? mcp2.digitalWrite(RIGHTUPPERARM_UP_PIN, 1) : mcp2.digitalWrite(RIGHTUPPERARM_DOWN_PIN, 1);
 
-  // steps routine with vtask notify for stopping
-  for (int x = 0; x < steps; x = ++x) {
+  // value routine with vtask notify for stopping
+  for (int x = 0; x < value; x = ++x) {
     if (xTaskNotifyWait(0x00, 0x00, &notifyStopValue, 0) == pdTRUE) {
       return;
     }
@@ -236,14 +235,14 @@ void bodyControl::rightUpperArm(bool up, int steps) {
   up ? mcp2.digitalWrite(RIGHTUPPERARM_UP_PIN, 0) : mcp2.digitalWrite(RIGHTUPPERARM_DOWN_PIN, 0);
 };
 
-void bodyControl::bothLowerArms(bool up, int steps) {
+void bodyControl::bothLowerArms(bool up, int value) {
   uint32_t notifyStopValue;  // vtask notifier to stop
 
   up ? mcp2.digitalWrite(RIGHTLOWERARM_UP_PIN, 1) : mcp2.digitalWrite(RIGHTLOWERARM_DOWN_PIN, 1);
   up ? mcp1.digitalWrite(LEFTLOWERARM_UP_PIN, 1) : mcp1.digitalWrite(LEFTLOWERARM_DOWN_PIN, 1);
 
-  // steps routine with vtask notify for stopping
-  for (int x = 0; x < steps; x = ++x) {
+  // value routine with vtask notify for stopping
+  for (int x = 0; x < value; x = ++x) {
     if (xTaskNotifyWait(0x00, 0x00, &notifyStopValue, 0) == pdTRUE) {
       return;
     }
@@ -254,14 +253,14 @@ void bodyControl::bothLowerArms(bool up, int steps) {
   up ? mcp1.digitalWrite(LEFTLOWERARM_UP_PIN, 0) : mcp1.digitalWrite(LEFTLOWERARM_DOWN_PIN, 0);
 };
 
-void bodyControl::bothUpperArms(bool up, int steps) {
+void bodyControl::bothUpperArms(bool up, int value) {
   uint32_t notifyStopValue;  // vtask notifier to stop
 
   up ? mcp2.digitalWrite(RIGHTUPPERARM_UP_PIN, 1) : mcp2.digitalWrite(RIGHTUPPERARM_DOWN_PIN, 1);
   up ? mcp1.digitalWrite(LEFTUPPERARM_UP_PIN, 1) : mcp1.digitalWrite(LEFTUPPERARM_DOWN_PIN, 1);
 
-  // steps routine with vtask notify for stopping
-  for (int x = 0; x < steps; x = ++x) {
+  // value routine with vtask notify for stopping
+  for (int x = 0; x < value; x = ++x) {
     if (xTaskNotifyWait(0x00, 0x00, &notifyStopValue, 0) == pdTRUE) {
       return;
     }
@@ -272,13 +271,13 @@ void bodyControl::bothUpperArms(bool up, int steps) {
   up ? mcp1.digitalWrite(LEFTUPPERARM_UP_PIN, 0) : mcp1.digitalWrite(LEFTUPPERARM_DOWN_PIN, 0);
 };
 
-void bodyControl::leftLeg(bool forward, int steps) {
+void bodyControl::leftLeg(bool forward, int value) {
   uint32_t notifyStopValue;  // vtask notifier to stop
 
   forward ? mcp1.digitalWrite(LEFTLEG_FORWARD_PIN, 1) : mcp1.digitalWrite(LEFTLEG_BACK_PIN, 1);
 
-  // steps routine with vtask notify for stopping
-  for (int x = 0; x < steps; x = ++x) {
+  // value routine with vtask notify for stopping
+  for (int x = 0; x < value; x = ++x) {
     if (xTaskNotifyWait(0x00, 0x00, &notifyStopValue, 0) == pdTRUE) {
       return;
     }
@@ -288,13 +287,13 @@ void bodyControl::leftLeg(bool forward, int steps) {
   forward ? mcp1.digitalWrite(LEFTLEG_FORWARD_PIN, 0) : mcp1.digitalWrite(LEFTLEG_BACK_PIN, 0);
 };
 
-void bodyControl::rightLeg(bool forward, int steps) {
+void bodyControl::rightLeg(bool forward, int value) {
   uint32_t notifyStopValue;  // vtask notifier to stop
 
   forward ? mcp2.digitalWrite(RIGHTLEG_FORWARD_PIN, 1) : mcp2.digitalWrite(RIGHTLEG_BACK_PIN, 1);
 
-  // steps routine with vtask notify for stopping
-  for (int x = 0; x < steps; x = ++x) {
+  // value routine with vtask notify for stopping
+  for (int x = 0; x < value; x = ++x) {
     if (xTaskNotifyWait(0x00, 0x00, &notifyStopValue, 0) == pdTRUE) {
       return;
     }
@@ -304,13 +303,13 @@ void bodyControl::rightLeg(bool forward, int steps) {
   forward ? mcp2.digitalWrite(RIGHTLEG_FORWARD_PIN, 0) : mcp2.digitalWrite(RIGHTLEG_BACK_PIN, 0);
 };
 
-void bodyControl::hip(bool left, int steps) {
+void bodyControl::hip(bool left, int value) {
   uint32_t notifyStopValue;  // vtask notifier to stop
 
   left ? mcp1.digitalWrite(HIP_LEFT_PIN, 1) : mcp1.digitalWrite(HIP_RIGHT_PIN, 1);
 
-  // steps routine with vtask notify for stopping
-  for (int x = 0; x < steps; x = ++x) {
+  // value routine with vtask notify for stopping
+  for (int x = 0; x < value; x = ++x) {
     if (xTaskNotifyWait(0x00, 0x00, &notifyStopValue, 0) == pdTRUE) {
       return;
     }
@@ -320,18 +319,18 @@ void bodyControl::hip(bool left, int steps) {
   left ? mcp1.digitalWrite(HIP_LEFT_PIN, 0) : mcp1.digitalWrite(HIP_RIGHT_PIN, 0);
 };
 
-void bodyControl::leftHandLight(bool on, int steps) {
+void bodyControl::leftHandLight(bool on, int value) {
   on ? mcp2.digitalWrite(LEFTHAND_LIGHT_PIN, 1) : mcp2.digitalWrite(LEFTHAND_LIGHT_PIN, 0);
 }
 
-void bodyControl::rightHandLight(bool on, int steps) {
+void bodyControl::rightHandLight(bool on, int value) {
   on ? mcp2.digitalWrite(RIGHTHAND_LIGHT_PIN, 1) : mcp2.digitalWrite(RIGHTHAND_LIGHT_PIN, 0);
 }
 
-void bodyControl::shake(bool left, int steps) {
+void bodyControl::shake(bool left, int value) {
   uint32_t notifyStopValue;  // vtask notifier to stop
 
-  for (int x = 0; x < steps; x = ++x) {
+  for (int x = 0; x < value; x = ++x) {
 
     mcp1.digitalWrite(HIP_LEFT_PIN, 1);
     mcp1.digitalWrite(HIP_RIGHT_PIN, 0);
@@ -360,10 +359,10 @@ void bodyControl::shake(bool left, int steps) {
   mcp1.digitalWrite(HIP_RIGHT_PIN, 0);
 };
 
-void bodyControl::back_and_forth(bool left, int steps) {
+void bodyControl::back_and_forth(bool left, int value) {
   uint32_t notifyStopValue;  // vtask notifier to stop
 
-  for (int x = 0; x < steps; x = ++x) {
+  for (int x = 0; x < value; x = ++x) {
 
     mcp2.digitalWrite(RIGHTLEG_FORWARD_PIN, 1);
     mcp2.digitalWrite(RIGHTLEG_BACK_PIN, 0);
@@ -396,10 +395,10 @@ void bodyControl::back_and_forth(bool left, int steps) {
   mcp2.digitalWrite(RIGHTLEG_BACK_PIN, 0);
 };
 
-void bodyControl::walk_forward(bool left, int steps) {
+void bodyControl::walk_forward(int value) {
   uint32_t notifyStopValue;  // vtask notifier to stop
 
-  for (int x = 0; x < steps; x = ++x) {
+  for (int x = 0; x < value; x = ++x) {
 
     mcp1.digitalWrite(HIP_LEFT_PIN, 1);
     mcp1.digitalWrite(HIP_RIGHT_PIN, 0);
@@ -430,8 +429,7 @@ void bodyControl::walk_forward(bool left, int steps) {
     // Duration routine with vtask notify for stopping
     for (int y = 0; y < 6; y = ++y) {
       if (xTaskNotifyWait(0x00, 0x00, &notifyStopValue, 0) == pdTRUE) {
-        vTaskDelay(5);
-        vTaskDelete(NULL);
+        return;
       }
       vTaskDelay(50);
     }
@@ -445,10 +443,10 @@ void bodyControl::walk_forward(bool left, int steps) {
   mcp1.digitalWrite(LEFTLEG_BACK_PIN, 0);
 };
 
-void bodyControl::walk_backward(bool left, int steps) {
+void bodyControl::walk_backward(int value) {
   uint32_t notifyStopValue;  // vtask notifier to stop
 
-  for (int x = 0; x < steps; x = ++x) {
+  for (int x = 0; x < value; x = ++x) {
 
     mcp1.digitalWrite(HIP_LEFT_PIN, 1);
     mcp1.digitalWrite(HIP_RIGHT_PIN, 0);
@@ -493,7 +491,7 @@ void bodyControl::walk_backward(bool left, int steps) {
   mcp1.digitalWrite(LEFTLEG_BACK_PIN, 0);
 };
 
-void bodyControl::turn(bool left, int steps) {
+void bodyControl::turn(bool left, int value) {
   uint32_t notifyStopValue;  // vtask notifier to stop
 
 
@@ -504,9 +502,10 @@ void bodyControl::turn(bool left, int steps) {
     mcp1.digitalWrite(HIP_RIGHT_PIN, 1);
     bodyControl::leftLeg(0, 3);
     bodyControl::rightLeg(1, 2);
+
     vTaskDelay(200);
 
-    for (int x = 0; x < steps; x = ++x) {
+    for (int x = 0; x < value; x = ++x) {
 
       mcp1.digitalWrite(HIP_LEFT_PIN, 0);
       mcp1.digitalWrite(HIP_RIGHT_PIN, 1);
@@ -533,7 +532,7 @@ void bodyControl::turn(bool left, int steps) {
     bodyControl::leftLeg(1, 2);
     vTaskDelay(100);
 
-    for (int x = 0; x < steps; x = ++x) {
+    for (int x = 0; x < value; x = ++x) {
 
       mcp1.digitalWrite(HIP_LEFT_PIN, 1);
       mcp1.digitalWrite(HIP_RIGHT_PIN, 0);

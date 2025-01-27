@@ -9,7 +9,6 @@ Also handles the switches and leds in the Robosapien body.
 #include <MCP23017.h>
 #include "bodyControl.h"
 
-// Refer to initialized LED matrix in main
 extern TwoWire wire;
 
 // Body Actions
@@ -40,43 +39,43 @@ enum bodyAction {
 class bodyControl {
 public:
   bodyControl();
-  void begin();
+  void begin(int task_core = 1, int task_priority = 10);
 
-  // Action - enum bodyAction, Bool direction, Int steps
-  void exec(int action, bool direction, int steps = 0);
+  // Action - enum bodyAction, Bool direction, Int value
+  void exec(int action, bool direction, int value = 0);
 
-  // left Upper Arm movement, params: pass direction boolean (up = true), and steps of movement.
-  static void leftUpperArm(bool up, int steps = 0);
-  // right Upper Arm movement, params: pass direction boolean (up = true), and steps of movement.
-  static void rightUpperArm(bool up, int steps = 0);
-  // left Lower Arm movement, params: pass direction boolean (up = true), and steps of movement.
-  static void bothUpperArms(bool up, int steps = 0);
-  // both upper Arm simultanious movement, params: pass direction boolean (up = true), and steps of movement.
-  static void leftLowerArm(bool up, int steps = 0);
-  // right Lower Arm movement, params: pass direction boolean (up = true), and steps of movement.
-  static void rightLowerArm(bool up, int steps = 0);
-  // left leg movement, params: pass direction boolean (forward = true), and steps of movement.
-  static void bothLowerArms(bool up, int steps = 0);
-  // both Lower Arm simultanious movement, params: pass direction boolean (up = true), and steps of movement.
-  static void leftLeg(bool forward, int steps = 0);
-  // right leg movement, params: pass direction boolean (forward = true), and steps of movement.
-  static void rightLeg(bool forward, int steps = 0);
-  // hip movement, params: pass direction boolean (left = true), and steps of movement.
-  static void hip(bool left, int steps = 0);
-  // left Hand ligt, params: on = true, steps not used
-  static void leftHandLight(bool on, int steps = 0);
-  // right Hand ligt, params: on = true, steps not used
-  static void rightHandLight(bool on, int steps = 0);
+  // left Upper Arm movement, params: pass direction boolean (up = true), and value of movement.
+  static void leftUpperArm(bool up, int value = 0);
+  // right Upper Arm movement, params: pass direction boolean (up = true), and value of movement.
+  static void rightUpperArm(bool up, int value = 0);
+  // left Lower Arm movement, params: pass direction boolean (up = true), and value of movement.
+  static void bothUpperArms(bool up, int value = 0);
+  // both upper Arm simultanious movement, params: pass direction boolean (up = true), and value of movement.
+  static void leftLowerArm(bool up, int value = 0);
+  // right Lower Arm movement, params: pass direction boolean (up = true), and value of movement.
+  static void rightLowerArm(bool up, int value = 0);
+  // left leg movement, params: pass direction boolean (forward = true), and value of movement.
+  static void bothLowerArms(bool up, int value = 0);
+  // both Lower Arm simultanious movement, params: pass direction boolean (up = true), and value of movement.
+  static void leftLeg(bool forward, int value = 0);
+  // right leg movement, params: pass direction boolean (forward = true), and value of movement.
+  static void rightLeg(bool forward, int value = 0);
+  // hip movement, params: pass direction boolean (left = true), and value of movement.
+  static void hip(bool left, int value = 0);
+  // left Hand ligt, params: on = true, value not used
+  static void leftHandLight(bool on, int value = 0);
+  // right Hand ligt, params: on = true, value not used
+  static void rightHandLight(bool on, int value = 0);
   // Turn body , params: left = true for turning left
-  static void turn(bool left, int steps);
-  // Shake body , params: left and steps not used
-  static void shake(bool left, int steps);
-  // Back and Forth, params: left and steps not used
-  static void back_and_forth(bool left, int steps);
+  static void turn(bool left, int value);
+  // Shake body , params: left and value not used
+  static void shake(bool left, int value);
+  // Back and Forth, params: left and value not used
+  static void back_and_forth(bool left, int value);
   // Walk forward, params: left not used
-  static void walk_forward(bool left, int steps);
+  static void walk_forward(int value);
   // Walk backward, params: left not used
-  static void walk_backward(bool left, int steps);
+  static void walk_backward(int value);
 
 private:
   // Queue worker for handling display actions
