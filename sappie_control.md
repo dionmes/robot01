@@ -1,14 +1,6 @@
 # SAPPIE Control
 
 ## robot01
-### API Calls: 
-/VL53L1X_Info
-/BNO08X_Info
-/audiostream?on=0/1
-/volume?power=0-29
-/bodyaction?action=n&direction=0/1&steps=i * see enum below
-/displayaction?action=n&index=I&text=“” * see enum below
-/wakeupsense
 
 ## bodyAction:
 LEFTUPPERARM = 1,

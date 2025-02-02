@@ -67,6 +67,23 @@ function restart_sense() {
 	});
 }
 
+function go2sleep_sense() {
+  	$("#loader").attr("aria-busy", "true");
+
+	$.ajax({
+		url: "/api/go2sleep_sense",
+		type: 'GET',
+		async: true		
+	})
+	.fail(function (xhr, status,errorThrown ) {
+		alert(errorThrown);
+	})
+	.always(function() {
+		$("#loader").attr("aria-busy", "false");
+	});
+}
+
+
 function erase_robot01_config() {
   	if (confirm("Do you want to erase the z wifi configuration ?") == true) {
   		$("#loader").attr("aria-busy", "true");
@@ -144,6 +161,22 @@ function clearips() {
 	}	
 }
 
+function override_busy() {
+	$("#loader").attr("aria-busy", "true");	
+	$.ajax({
+		url: "/api/setting?item=busybrain&value=True",
+		type: 'GET',
+		dataType: 'json',
+		async: true
+	})
+	.fail(function (xhr, status, errorThrown) {
+		alert(errorThrown);
+	})
+	.always(function() {
+		$("#loader").attr("aria-busy", "false");
+	});
+}
+
 </script>
 
 <body> 
@@ -206,6 +239,7 @@ function clearips() {
 				<button onClick="restart_robot01();">Restart robot01</button>
 			</div>
 			<div>
+				<button onClick="go2sleep_sense();">Sense to sleep</button>
 				<button onClick="restart_sense();">Restart Sense</button>
 			</div>
 		</div>
@@ -234,6 +268,12 @@ function clearips() {
 			</div>
 			<div>
 				<button class="secondary" onClick="restart_master();">Restart master</button>
+			</div>
+		</div>
+	<hr>
+		<div class="grid">
+			<div>
+				<button onClick="override_busy();">Override busybrain</button>
 			</div>
 		</div>
 	</div>

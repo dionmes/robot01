@@ -28,6 +28,9 @@ from langchain_core.prompts import ChatPromptTemplate
 from langchain_core.runnables import ConfigurableField
 from langchain.agents import create_tool_calling_agent, AgentExecutor
 from langchain.tools.base import StructuredTool
+from pydantic import BaseModel, Field
+
+from typing import TypedDict
 
 import ollama
 
@@ -72,6 +75,9 @@ class BRAIN:
 		# mode is Chat mode / Agent mode
 		self.llm_mode = "chat mode"
 
+		# Last notification received from robot
+		self.last_notification = ""
+		
 		# Robot01
 		self.robot = ROBOT(self.config["robot01_ip"], self.config["sense_ip"])
 		
@@ -127,19 +133,13 @@ class BRAIN:
 
 	# Receive notification
 	def notification(self, notification):
+		self.last_notification = notification;
 		
-		if notification["type"] == "blocked":
-			self.robot.bodyactions_set_state(False);
-			time.sleep(1);
-			self.robot.bodyactions_set_state(True);
-		
-		return "ok"
-
 	#
 	# API brain setting handler
 	#
 	def setting(self,item,value)->bool:
-		if item in "robot01_ip robot01sense_ip output micstreaming cam_resolution camstreaming micgain llm_mode bodyactions volume":	
+		if item in "robot01_ip robot01sense_ip output micstreaming cam_resolution camstreaming micgain llm_mode bodyactions volume busybrain":	
 
 			if item == "robot01_ip":
 				if	self.validate_ip_address(value):
@@ -196,6 +196,10 @@ class BRAIN:
 			if item == "cam_resolution":
 				self.robot.sense.cam_resolution(value)
 
+			# override option
+			if item == "busybrain":
+				self.busybrain = value
+
 			print("Update " + item + " with value :", value)
 			
 			return True
@@ -207,7 +211,7 @@ class BRAIN:
 	# API internal get setting handler
 	#
 	def get_setting(self,item)->str:
-		if item in "robot01_ip robot01sense_ip output cam_resolution micstreaming camstreaming micgain llm_mode bodyactions volume":	
+		if item in "robot01_ip robot01sense_ip output cam_resolution micstreaming camstreaming micgain llm_mode bodyactions volume busybrain":	
 			if item == "robot01_ip":
 				return self.robot.ip
 	
@@ -239,6 +243,9 @@ class BRAIN:
 			if item == "cam_resolution":
 				return self.robot.sense.cam_resolution()
 
+			if item == "busybrain":
+				return self.busybrain
+				
 		else:
 			print("Setting " + item + " not found")
 			return False
@@ -371,35 +378,107 @@ class BRAIN:
 		# Langchain prompt
 		supervisor_prompt_template = ChatPromptTemplate.from_messages([
 		("system", self.config["agent_system"] + """
-			Functions and tools are the same and can be treated as such.
-			When as a robot you are asked to determine if you see an specific object, activity, environment, item or person, use the "find_in_view" tool. 
-			When as a robot you need or want to describe what is in front of you, use the "describe_view" tool. This tool will provide you with a description and list what you can see as a robot. 
-			Take over the exact description of this tool, do no add or change anything to the response.
-			When as a robot you need or want information about the current date and time, use the "current_time_and_date" tool.
-			When as a robot you need or want information about the current weather or the weather forecast, use the "weather_forecast" tool. When responding with the temperatures convert digits to written out numerical.
-			When as a robot you need or want to move use the "walk_forward", "walk_backward", "turn_left" or "turn_right" tool with the value of the number of steps you need to take.
-			When as a robot you need or want to shake use the "shake" tool with the number of times you need to shake.
-			When as a robot you need or want to move your arms use the "move_right_lower_arm", "walk_backward", "move_left_lower_arm", "move_right_upper_arm" or "move_left_upper_arm" tools, with the number of movements you need to do.
-		"""),
-		("human", "{input}"), 
-		("placeholder", "{agent_scratchpad}"),
-		])
+		""" + str(self.current_heading())),
+		("human", "The question or assignment is : {input}"), 
+		("placeholder", "{agent_scratchpad}")])
 		
 		# Langchain tools
+		
+		# Input schema for int
+		class toolIntInput(BaseModel):
+			param1: int
+		# Input schema for string
+		class toolStrInput(BaseModel):
+			param1: str
+
+		toolCurrentHeading = StructuredTool.from_function(func=self.current_heading, name="currentHeading", description="""
+		This tool can provide the current heading robot Sappie is looking towards.
+		When walking forward this is the heading/direction of robot Sappie.
+		The heading is in degrees from 180 to -180. Heading 0 is North. Negative is left/west/counter clockwise. Positive is right/east/clockwise. """)
+		
+		toolDescribeView = StructuredTool.from_function(func=self.describe_view, name="DescribeView", description="""
+		Use this tool to see or look what is in front of robot Sappie.
+		It is  a description of the environment and a list of what robot Sappie can currently see.
+		Use the exact description of this tool, do no add or change anything to the response.""")
+		
+		toolFindInView = StructuredTool.from_function(func=self.find_in_view, name="FindInView",  description="""
+		Use if asked if the robot Sappie can see a certain subject, which can be an object, item, person, entity or activity, use this tool / function.
+		This function provides the ability to detect someone, something or an activity.
+		It will return a positive or negative response based on the question.
+		The function takes as input a description of what to identify.
+		""", args_schema=toolStrInput)
+
+		toolcurrentDateAndTime = StructuredTool.from_function(func=self.current_time_and_date, name="currentDateAndTime",  description="""
+		This tool provides both the current date and the current time.
+		""")
+
+		toolWeatherForecast = StructuredTool.from_function(func=self.weather_forecast, name="weatherForecast",  description="""
+		This tool provides weather information.
+		It will provide the current weather, the weather forecast of tomorrow, and the weather forecast for the day after tomorrow. 
+		No other weather information besides these days is available. """)
+		
+		toolWalkForward = StructuredTool.from_function(func=self.walk_forward, name="WalkForward", description=
+		"""
+		This tool allows the robot to take walk forward,
+		or in other words take specified the number of steps in a forward direction. 
+		The function takes as input a number (integer) of the amount steps to walk forward with a maximum of 100 steps.
+		""",args_schema=toolIntInput)
+
+		toolWalkBackward = StructuredTool.from_function(func=self.walk_backward, name="WalkBackward", description=
+		"""
+		This tool allows the robot to take walk backwards,
+		or in other words take specified the number of steps in a backward motion/direction.
+		The function takes as input a number (integer) of the amount steps to walk backwards with a maximum of 50 steps.
+		""",args_schema=toolIntInput)
+
+		toolTurn = StructuredTool.from_function(func=self.turn, name="Turn", description=
+		"""
+		This tool allows the robot to turn into a specific direction (heading).
+		The input is the direction/heading in degrees from 180 degrees to -180 degrees.
+		 A negative number of degrees is left/counter clockwise and a positive number of degrees right/clockwise.
+		Heading 0 is North. Heading 180 or -180 is South.
+		The function takes as input a number (integer) with the heading.
+		""",args_schema=toolIntInput)
+
+		toolShake = StructuredTool.from_function(func=self.shake, name="shake", description=
+		"""
+		This tool allows the robot to shake its body, uses an integer as input for the number of shakes to do.
+		The function takes as input a number (integer) of the amount of shakes to do with a maximum of 10 steps.
+		""",args_schema=toolIntInput)
+
+		toolMoveRightLowerArm = StructuredTool.from_function(func=self.move_right_lower_arm, name="MoveRightLowerArm", description=
+		"""
+		This tool allows the robot to move its lower right arm up or down.
+		Use direction 1 to move the arm up, Use direction 0 to move the arm down.
+		The function takes as input a number (integer) for the direction.
+		""",args_schema=toolIntInput)
+
+		toolMoveLeftLowerArm = StructuredTool.from_function(func=self.move_left_lower_arm, name="MoveRightLowerArm", description=
+		"""
+		This tool allows the robot to move its lower left arm up or down.
+		Use direction 1 to move the arm up, Use direction 0 to move the arm down.
+		The function takes as input a number (integer) for the direction.
+		""",args_schema=toolIntInput)
+
+		toolMoveRightUpperArm = StructuredTool.from_function(func=self.move_right_upper_arm, name="MoveRightUpperArm", description=
+		"""
+		This tool allows the robot to move its upper right arm up or down.
+		Use direction 1 to move the arm up, Use direction 0 to move the arm down.
+		The function takes as input a number (integer) for the direction.
+		""",args_schema=toolIntInput)
+		
+		toolMoveLeftUpperArm = StructuredTool.from_function(func=self.move_left_upper_arm, name="MoveLeftUpperArm", description=
+		"""
+		This tool allows the robot to move its upper left arm up or down.
+		Use direction 1 to move the arm up, Use direction 0 to move the arm down.
+		The function takes as input a number (integer) for the direction.
+		""",args_schema=toolIntInput)
+		
 		llm_tools = [
-			StructuredTool.from_function(self.find_in_view),
-			StructuredTool.from_function(self.current_time_and_date),
-			StructuredTool.from_function(self.describe_view),
-			StructuredTool.from_function(self.weather_forecast),
-			StructuredTool.from_function(self.walk_forward),
-			StructuredTool.from_function(self.walk_backward),
-			StructuredTool.from_function(self.turn_left),
-			StructuredTool.from_function(self.turn_right),
-			StructuredTool.from_function(self.shake),
-			StructuredTool.from_function(self.move_right_lower_arm),
-			StructuredTool.from_function(self.move_left_lower_arm),
-			StructuredTool.from_function(self.move_right_upper_arm),
-			StructuredTool.from_function(self.move_left_upper_arm)	
+			toolCurrentHeading,	toolDescribeView, toolFindInView, toolcurrentDateAndTime, toolWeatherForecast,
+			toolWalkForward,toolWalkBackward,toolTurn,toolShake,toolMoveRightLowerArm,toolMoveLeftLowerArm,
+			toolMoveRightUpperArm, toolMoveLeftUpperArm
+			
 		]
 		
 		# Langchain llm
@@ -411,7 +490,7 @@ class BRAIN:
 		
 		# Langchain agent executor
 		supervisor_agent = create_tool_calling_agent(supervisor_llm, llm_tools, supervisor_prompt_template)
-		supervisor_agent_executor = AgentExecutor(agent=supervisor_agent, tools=llm_tools, max_iterations=999,max_execution_time=300.0, return_intermediate_value=True, verbose=True, )
+		supervisor_agent_executor = AgentExecutor(agent=supervisor_agent, tools=llm_tools, max_iterations=999999,max_execution_time=300.0, return_intermediate_value=True, verbose=True, )
 		
 		output = supervisor_agent_executor.invoke({"input": input_prompt})
 
@@ -426,31 +505,22 @@ class BRAIN:
 ############### Agentic Tools ############### 
 ###############
 	
+	
+	# Current Heading tool
+	def current_heading(self)->str :
+		motionsensor = self.robot.motionSensor_info()
+		heading = motionsensor['yaw']
+		return "Current heading is " + str(heading) + " degrees."
+		
 	# Looking tool
-	def describe_view(self,prompt = "")->str :
-		""" 
-		This function/tool provides the ability to see or look what is in front of you.
-		The tool can refer in the response as to what you see as an image. What is in the image is actually in front of you.
-		It will return a description of the environment and list of what you can currently see.
-		It can also return an response of anything visible.
-		
-		Take over the exact description of this tool, do no add or change anything to the response.
-
-		Args:
-			prompt (str) : Use only if anything specific needs to be described
-		
-		Returns:
-			str: what you see in front of you.
-		"""	
-		
+	def describe_view(self)->str :		
 		self.robot.display.state(13)
 		print("Tool : describe_view.")
 		image = self.robot.sense.capture()
-		
 		self.robot.display.state(20)
 
 		if image=="" : 
-			description = "You see nothing."
+			description = "Robot Sappie sees nothing."
 			print("No image")
 		else:
 			description = ollama.generate(
@@ -458,107 +528,61 @@ class BRAIN:
 				keep_alive = OLLAMA_KEEP_ALIVE,
 				prompt = """
 				Limit any interpretation in your respond, be concise. 
-				Do not describe any person/human as old or worn, describe them in a flattering way. 
-				Give a always positive description of any persons that you find.
-				""" + prompt,
+				Do not describe any person/human as old or worn, describe them in a flattering and positive way. 
+				""",
 				images = [image]			 
 			)
-
 			if description['response'] == "":
-				description = "I see nothing."
+				description = "Robot Sappie sees nothing."
 			else:
 				description = description['response']
 		
 		print(description)
-
 		self.robot.display.state(3)
-
 		return description
 
 	# can you see tool
-	def find_in_view(self, prompt)->str :
-		""" 
-		If asked if you can see a certain object, item, person, entity or activity, use this tool / function.
-		This function provides the ability to detect someone, something or an activity.
-		It will return a positive or negative response based on the question.
-
-		Args:
-			prompt (str) : the object, item, person, entity or activity that needs to be detected.
-
-		Returns:
-			str: if the the requested object, item, person, entity or activity is visible.
-		"""	
-		
-		
+	def find_in_view(self, param1: str)->str :
 		self.robot.display.state(13)
 		print("Tool : find_in_view.")
-		
 		image = self.robot.sense.capture()
-
 		self.robot.display.state(20)
-		
+
 		if image=="" : 
-			description = "You see nothing."
+			description = "Robot Sappie sees nothing."
 			print("No image")
 		else:
 			description = ollama.generate(
 				model = VISION_MODEL,
 				keep_alive = -1,
-				prompt = "Do you see a " + prompt + " in the image: ",
+				prompt = "Do you see a " + param1 + " in the image. Give a short answer.",
 				images = [image]			 
 			)
 
 			if description['response'] == "":
-				description = "You see nothing."
+				description = "Robot Sappe sees nothing."
 			else:
 				description = description['response']
 		
-		print("VISION MODEL : " + description)
-		
+		print("VISION MODEL : " + description)		
 		self.robot.display.state(3)
-
 		return description
 		
 	# Current date and time tool
 	def current_time_and_date(self)->str :
-		""" This tool provides the current date and time. It provides both the date and time.
-
-		Args:
-			none
-				
-		Returns:
-			str: The current date and time. Convert any digits to a fully written out text.
-		"""	
-		
 		print("Tool : DateTime.")
-
 		now = datetime.now()	
 		# Format the current date and time as a string
-		
 		output = "The current date is " + now.strftime("%A %Y-%m-%d") + "."
 		output = output + "The current time is " +  now.strftime("%H:%M") + "."
 		print(output)
-		
 		return output
 
 	# Current Weather and weather forecast tool
-	def weather_forecast(self)->str :
-		""" This tool provides the current weather and a five day weather forecast.
-		It will provide the current weather, the weather forecast of tomorrow, and the weather forecast for the day after tomorrow. 
-		No other weather information besides these days is available.
-		
-		Args:
-			none
-				
-		Returns:
-			str: A text with the weather forecast.
-		"""	
-		
+	def weather_forecast(self)->str :		
 		print("Tool : weather_forecast.")
-
 		# Weather Vleuten		
 		url = "https://api.openweathermap.org/data/2.5/forecast?exclude=minutely,hourly,alerts&lat=52.1099315&lon=5.0019636&units=metric&appid=" + self.config["weather_api_key"]
-		
 		try:
 			response = requests.get(url, timeout=6)
 		except Exception as e:
@@ -585,241 +609,90 @@ class BRAIN:
 		return output
 
 	# Walk forward tool
-	def walk_forward(self, value):
-		""" This tool allows the robot to take the number of steps in value in a forward direction / motions.
-			Call this tool with an integer as input
+	def walk_forward(self, param1: int):
+		print("Tool : walk forward " + str(param1))
+		self.robot.bodyaction(14,0,param1)
+		result = ""
+		
+		while not "walking" in result:
+			time.sleep(1)
+			result = self.last_notification
 
-		Args:
-			value (int) : the number of value to take 
-				
-		Returns:
-			none
-		"""	
+		if "walking_stopped" in result:
+			result = "Stopped by request."
 
-		if (type(value) == str):
-			try:
-				value = int(value)
-			except:
-				print("Tool :Error - cannot use input")
-				return
-					
-		print("Tool : walk forward " + str(value) + " value.")
-		self.robot.bodyaction(14,0,value)
+		if "walking_blocked" in result:
+			self.robot.bodyaction(15,0,10)
+			result = "Walking was blocked, took 10 steps backwards to clear path, turning needed."
+			
+		if "walking_ended" in result:
+			result = "Succesfully walked " + str(param1) + " steps."
 
-		time.sleep(value)
-
-		return
+		self.last_notification = ""
+		return result + " The robots current heading is : " + str(self.current_heading())
 
 	# Walk backwards tool
-	def walk_backward(self, value):
-		""" This tool allows the robot to take the number of steps in value in a backward direction / motions.
-			Call this tool with an integer as input
-
-		Args:
-			value (int) : the number of value to take 
-				
-		Returns:
-			none
-		"""	
-
-		if (type(value) == str):
-			try:
-				value = int(value)
-			except:
-				print("Tool :Error - cannot use input")
-				return
-			
-		print("Tool : walk backwards " + str(value) + " value.")
-		self.robot.bodyaction(15,0,value)
-
-		time.sleep(value)
-
+	def walk_backward(self,  param1: int):
+		print("Tool : walk backwards " + str(param1))
+		self.robot.bodyaction(15,0,param1)
+		time.sleep(param1) # Sleep for duration of steps
 		return
 
-	# Turn right tool
-	def turn_right(self, value):
-		""" This tool allows the robot to take the number of steps in value to turn right.
-			Call this tool with an integer as input
+	# Turn  tool
+	def turn(self, param1: int)->str:
+		print("Tool : Turn " + str(param1))
+		self.robot.bodyaction(10,0,param1)
 
-		Args:
-			value (int) : the number of value to take 
-				
-		Returns:
-			none
-		"""	
-		
-		if (type(value) == str):
-			try:
-				value = int(value)
-			except:
-				print("Tool :Error - cannot use input")
-				return
+		result = ""
+		while not "turn" in result:
+			time.sleep(1)
+			result = self.last_notification
 			
-		print("Tool : Turn right " + str(value) + " value.")
-		self.robot.bodyaction(10,0,value)
+		if "turn_stopped" in result:
+			result = "Stopped by request."
 
-		time.sleep(value)
+		if "turn_error" in result:
+			result = "Error while turning."
 
-		return
+		if "turn_blocked" in result:
+			self.robot.bodyaction(15,0,10)
+			result = "Turning was blocked, took 10 steps back to clear."
 
-	# Turn left tool
-	def turn_left(self, value):
-		""" This tool allows the robot to take the number of steps in value to turn left.
-			Call this tool with an integer as input
+		if "walking_ended" in result:
+			result = "Succesfully turned."
 
-		Args:
-			value (int) : the number of value to take 
-				
-		Returns:
-			none
-		"""	
-
-		if (type(value) == str):
-			try:
-				value = int(value)
-			except:
-				print("Tool :Error - cannot use input")
-				return
-			
-		print("Tool : Turn left " + str(value) + " value.")
-		self.robot.bodyaction(10,1,value)
-
-		time.sleep(value)
-
-		return
+		self.last_notification = ""
+		return result + " The robots current heading is : " + str(self.current_heading())
 
 	# Shake tool
-	def shake(self, times):
-		""" This tool allows the robot to shake its body
-			Call this tool with an integer as input
-		Args:
-			times (int) : the number of shakes to do
-				
-		Returns:
-			none
-		"""	
-
-		if (type(times) == str):
-			try:
-				times = int(times)
-			except:
-				times = 0
-			
-		if times < 3:
-			times = 3
-
-		print("Tool : Shake " + str(times) + " shakes.")
-		self.robot.bodyaction(11,0,times)
-		
-		time.sleep(times)
-		
+	def shake(self, param1: int):
+		print("Tool : Shake " + str(param1))
+		self.robot.bodyaction(11,0, param1)
+		time.sleep(param1)
 		return
 
 	# Move right lower arm tool
-	def move_right_lower_arm(self, value, direction=0):
-		""" This tool allows the robot to move its lower right arm up or down.
-			Use direction 1 to move the arm up, Use direction 0 to move the arm down.
-			Call this tool with an integers as input
-		Args:
-			value (int) : the number of movements to do
-			direction (int) : the direction, 1 for up, 0 for down.
-		Returns:
-			none
-		"""	
-		
-		if (type(value) == str):
-			try:
-				value = int(value)
-			except:
-				print("Tool :Error - cannot use input")
-				return
-	
-		if value < 5:
-			value = 40
-
-		print("Tool : Move right lower arm  " + str(value) + " value.")
-		self.robot.bodyaction(4,direction,value)
-				
+	def move_right_lower_arm(self, param1: int):
+		print("Tool : Move right lower arm  " + str(param1))
+		self.robot.bodyaction(4, param1, 15)
 		return
 
 	# Move left lower arm tool
-	def move_left_lower_arm(self, value, direction=0):
-		""" This tool allows the robot to move its lower left arm up or down.
-			Use direction 1 to move the arm up, Use direction 0 to move the arm down.
-			Call this tool with an integers as input
-		Args:
-			value (int) : the number of movements to do
-			direction (int) : the direction, 1 for up, 0 for down.
-		Returns:
-			none
-		"""	
-		
-		if (type(value) == str):
-			try:
-				value = int(value)
-			except:
-				print("Tool :Error - cannot use input")
-				return
-			
-		if value < 5:
-			value = 40
-
-		print("Tool : Move left lower arm " + str(value) + " value.")
-		self.robot.bodyaction(3,direction,value)
-				
+	def move_left_lower_arm(self, param1: int):
+		print("Tool : Move left lower arm " + str(param1))
+		self.robot.bodyaction(3, param1, 15)		
 		return
 
 	# Move right upper arm tool
-	def move_right_upper_arm(self, value, direction=0):
-		""" This tool allows the robot to move its upper right arm up or down.
-			Use direction 1 to move the arm up, Use direction 0 to move the arm down.
-			Call this tool with an integers as input
-		Args:
-			value (int) : the number of movements to do
-			direction (int) : the direction, 1 for up, 0 for down.
-		Returns:
-			none
-		"""	
-		
-		if (type(value) == str):
-			try:
-				value = int(value)
-			except:
-				print("Tool :Error - cannot use input")
-				return
-
-		if value < 5:
-			value = 40
-			
-		print("Tool : Move right upper " + str(value) + " value.")
-		self.robot.bodyaction(2,direction,value)
-		
+	def move_right_upper_arm(self, param1: int):
+		print("Tool : Move right upper " + str(param1))
+		self.robot.bodyaction(2, param1, 25)
 		return
 
 	# Move left upper arm tool
-	def move_left_upper_arm(self, value, direction=0):
-		""" This tool allows the robot to move its upper left arm up or down.
-			Use direction 1 to move the arm up, Use direction 0 to move the arm down.
-			Call this tool with an integers as input
-		Args:
-			value (int) : the number of movements to do
-			direction (int) : the direction, 1 for up, 0 for down.
-		Returns:
-			none
-		"""	
-		
-		if (type(value) == str):
-			try:
-				value = int(value)
-			except:
-				print("Tool :Error - cannot use input")
-				return
-
-		if value < 5:
-			value = 40
-			
-		print("Tool : Move left upper arm " + str(value) + " value.")
-		self.robot.bodyaction(1,direction,value)
+	def move_left_upper_arm(self, param1: int):
+		print("Tool : Move left upper arm " + str(param1))
+		self.robot.bodyaction(1, param1, 25)
 				
 		return
 

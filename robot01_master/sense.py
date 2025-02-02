@@ -110,7 +110,6 @@ class SENSE:
 		return image_base64
 
 	def cam_resolution(self, res=-1)->int:
-
 		if res == -1:			
 			response = self.sense_http_call('/control?setting=framesize&param=-1')
 			try:
@@ -122,6 +121,10 @@ class SENSE:
 			threading.Thread(target=self.sense_http_call, args=[('/control?setting=framesize&param=' + str(res))]).start()
 
 		return res
+	
+	def go2sleep(self):
+		threading.Thread(target=self.sense_http_call, args=[('/go2sleep')]).start()
+		print("Sense go2sleep send")
 	
 	def reset(self):
 		threading.Thread(target=self.sense_http_call, args=[('/reset')]).start()

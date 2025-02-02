@@ -65,6 +65,7 @@ function play_audio_file() {
 	});
 }
 
+
 window.onload = function() {
 	// Get volume
 	$.ajax({
@@ -120,7 +121,7 @@ window.onload = function() {
 	<div class="container">
 		<label>
 		<h4>Audio output Volume</h4>
-		<input id="volume" type="range" onchange="volume();" min="0" max="100" value="0" step="5" disabled/>
+		<input id="volume" type="range" onchange="volume();" min="0" max="50" value="0" step="1" disabled/>
 		</label>
 		<h4>Sounds</h4>
 		<div class="grid" style="margin: var(--pico-spacing);">
@@ -134,10 +135,11 @@ window.onload = function() {
 		</div>
 		<div class="grid" style="margin: var(--pico-spacing);">
 			<div>
-				<label for="movesteps">Move steps between 1-40</label>
-				<input type="number" id="movesteps" name="quantity" min="1" max="40" value="10">
+				<label for="movesteps">Move intensity or degrees</label>
+				<input type="number" id="movesteps" name="quantity" min="-180" max="180" value="10">
 			</div>
 		</div>
+		
 		<div class="grid" style="margin: var(--pico-spacing);">
 			<button class="outline" style="border-color: red;" onClick="bodyaction(12,0);">Stop movement</button>
 		</div>
@@ -147,8 +149,7 @@ window.onload = function() {
 			<button onClick="bodyaction(15,0);">Walk backward</button>
 		</div>
 		<div class="grid" style="margin: var(--pico-spacing);">
-			<button class="outline" onClick="bodyaction(10,1);" >Turn left</button>
-			<button class="outline" onClick="bodyaction(10,0);">Turn right</button>
+			<button class="outline" onClick="bodyaction(10);" >Turn</button>
 		</div>
 		<div class="grid" style="margin: var(--pico-spacing);">
 			<button onClick="bodyaction(11,0);" >Shake</button>

@@ -10,6 +10,7 @@
 
 <script>
 
+// Motion sensor specific 
 const accuracyLevels_BNO08X = [
 	"Unreliable",
 	"low",
@@ -17,20 +18,22 @@ const accuracyLevels_BNO08X = [
 	"high"
 ];
 
+// Distance sensor(ToF) specific
 const rangestatus_VL53L1 = [
 	"Valid",
 	"Sigma check above threshold",
 	"Signal below threshold",
 	"FAIL, Phase out of bounds",
 	"HW or VCSEL failure",
+	"No Wrap Check Fail",
 	"Not matching phases",
 	"Algorithm underflow or overflow",
 	"Reported range is invalid"
 ];
 
-function update_VL53L1X() {
+function update_distanceSensor() {
 	$.ajax({
-		url: "api/VL53L1X_Info",
+		url: "api/distanceSensor_info",
 		type: 'GET',
     	dataType: 'json',
     	async: true
@@ -46,10 +49,10 @@ function update_VL53L1X() {
 	});	
 }
 
-function update_BNO08X() {
+function update_motionSensor() {
         
 	$.ajax({
-		url: "api/BNO08X_Info",
+		url: "api/motionSensor_info",
 		type: 'GET',
     	dataType: 'json',
     	async: true
@@ -61,6 +64,8 @@ function update_BNO08X() {
 			$( "#yaw" ).html(result.yaw.toFixed(2));
 			$( "#pitch" ).html(result.pitch.toFixed(2));
 			$( "#roll" ).html(result.roll.toFixed(2));
+			$( "#ypr_accuracy" ).html(result.ypr_accuracy);
+			$( "#ypr_cycle_age" ).html(result.ypr_cycle_age);
 
 			$( "#linearAcceleration_x" ).html( result.linearAcceleration_x.toFixed(2) + " m/s^2");
 			$( "#linearAcceleration_y" ).html( result.linearAcceleration_y.toFixed(2)  + " m/s^2");
@@ -73,8 +78,8 @@ function update_BNO08X() {
 }
 
 window.onload = function() {
-	setInterval("update_VL53L1X()",1000);
-	setInterval("update_BNO08X()",1000);
+	setInterval("update_distanceSensor()",1000);
+	setInterval("update_motionSensor()",1000);
 }
 
 </script>
@@ -131,7 +136,7 @@ window.onload = function() {
 		</div>
 		<br>
 		<hr>
-		<h2> Gyro sensor (BNO08X)</h2>
+		<h2> Motion sensor (BNO08X)</h2>
 		<div class="grid">
 			<div><b>Accuracy : </b></div><div id='accuracy'></div>
 		</div>
@@ -147,6 +152,9 @@ window.onload = function() {
 		</div>
 		<div class="grid">
 			<div><b>Roll : </b></div><div id='roll'></div>
+		</div>
+		<div class="grid">
+			<div><b>Accuracy : </b></div><div id='ypr_accuracy'></div>
 		</div>
 		<br>
 		<div class="grid">

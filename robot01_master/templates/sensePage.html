@@ -74,9 +74,10 @@ function wakeUpSense() {
 
 function cam_capture() {
 	d = new Date();
-
+	res = $("#cam_resolution").val();
+	
 	$.ajax({
-		url: "/api/img_capture?"+d.getTime(),
+		url: "/api/img_capture?"+d.getTime()+"&res=" + res,
 		type: 'GET',
     	dataType: 'text',
     	async: true 
@@ -101,14 +102,12 @@ function cam_stream_receive() {
 function cam_resolution(set_setting) {
 	
 	$("#loader").attr("aria-busy", "true");
-	
-	res = set_setting ? $("#cam_resolution").val() : -1;	
+	res = $("#cam_resolution").val();
 
 	if (set_setting) {
 		$.ajax({
 			url: "/api/setting?item=cam_resolution&value=" + res,
 			type: 'GET',
-			dataType: 'json',
 			async: true 
 		})
 		.done(function (result) {
@@ -120,8 +119,10 @@ function cam_resolution(set_setting) {
 		})
 		.always(function() {
 			$("#loader").attr("aria-busy", "false");
-		});		
+		});
+		
 	} else {
+		
 		$.ajax({
 			url: "/api/get_setting?item=cam_resolution",
 			type: 'GET',

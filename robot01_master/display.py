@@ -34,7 +34,10 @@ class DISPLAY:
 		self.timeout = timeout
 		# Latest state (default Neutral)
 		self.latest_state = {"type": "state", "action" : 3, "reset" : 0, "img_index" : 0, "text" : ""}
-
+		
+		# health
+		self.health = False
+		
 		#Queue
 		self.display_q = queue.Queue(maxsize=DISPLAY_Q_SIZE)
 		# Start Queue worker
@@ -132,13 +135,14 @@ class DISPLAY:
 		return
 		
 	def safe_http_call(self, url):
-		try:
-			response = requests.get(url, timeout=self.timeout)
-		except Exception as e:
-			if debug:
-				print("Display Request - " + url + " , error : ",e)
-			else:
-				print("Display Request error")
+		if self.health:
+			try:
+				response = requests.get(url, timeout=self.timeout)
+			except Exception as e:
+				if debug:
+					print("Display Request - " + url + " , error : ",e)
+				else:
+					print("Display Request error")
 
 
 

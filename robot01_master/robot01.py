@@ -5,6 +5,8 @@ import queue
 import socket
 import random
 import ollama
+import numpy as np
+
 from ping3 import ping, verbose_ping
 
 from tts_speecht5 import TTS
@@ -16,7 +18,7 @@ debug = False
 LLM_EXPRESSION_MODEL = "gemma2:2b"
 
 # Body actions Queue size
-BODY_Q_SIZE = 4
+BODY_Q_SIZE = 6
 # Minimal sleep between actions 
 MINIMAL_SLEEP = 1
 # Audio UDP PORT
@@ -54,7 +56,7 @@ class ROBOT:
 		# Motion sensor
 		self.motionsensor = {};
 		# Forward distance clearance sensor
-		self.fw_distance = {};
+		self.distance_sensor = {};
 		
 		# output queue
 		self.output_q = queue.Queue(maxsize=OUTPUT_Q_SIZE)
@@ -87,9 +89,12 @@ class ROBOT:
 					self.health_error += 1
 					if self.health_error > 2:
 						self.health = False
+						self.display.health = False
 				else:
 					self.health_error = 0
 					self.health = True
+					self.display.health = True
+
 			except Exception as e:
 				print(f"Robot ping error : {e}")			
 	
@@ -105,8 +110,9 @@ class ROBOT:
 			url = "/bodyaction?action=" + str(task['action']) + "&direction=" + str(task['direction']) + "&value=" + str(task['value'])
 			response = self.robot_http_call(url)
 
-			time.sleep(MINIMAL_SLEEP)		
-			self.body_q.task_done()			
+			time.sleep(MINIMAL_SLEEP)	
+			if not self.body_q.empty():
+				self.body_q.task_done()			
 
 	def bodyactions_set_state(self, running):
 		if running:
@@ -125,10 +131,21 @@ class ROBOT:
 	
 	def bodyaction(self, action, direction, value):
 
-		task = { "action" : action, "direction" : direction, "value" : value }
+		# stop immediately
+		if action == 12:
+			print("Robot bodyactions immediate stop.")
+			# empty queue
+			self.bodyactions_set_state(False)
+			url = "/bodyaction?action=12&direction=0&value=0"
+			response = self.robot_http_call(url)
+			time.sleep(3)
+			self.bodyactions_set_state(True)
+						
+			return
+			
 		if self.robot_actions:
 			try:
-				# Add state to queue
+				task = { "action" : action, "direction" : direction, "value" : value }
 				self.body_q.put_nowait(task)
 			except Exception as e:
 				print("Robot bodyactions queue error : ", type(e).__name__ )
@@ -197,10 +214,14 @@ class ROBOT:
 			
 			if "audio" in output_action:
 				audio = output_action['audio']
-				# Send packets of max. 1024 / 4 byte sample size (2 channels)
-				for x in range(0, audio.shape[0],256):
+				
+				# Convert to PCM16le
+				audio = np.asarray(audio * 32767, dtype="<i2")
+
+				for x in range(0, audio.shape[0],1024):
+				
 					start = x
-					end = x + 256
+					end = x + 1024
 
 					try :
 						self.audio_socket.sendall(audio[start:end].tobytes())
@@ -209,7 +230,7 @@ class ROBOT:
 						self.audio_socket.close()
 						break
 
-					time.sleep(0.015)
+					time.sleep(0.015) # Rate limiter
 					if not self.output_worker_running:
 						break
 	
@@ -288,9 +309,8 @@ class ROBOT:
 		if len(text) < 30:
 			return
 			
-		prompt = """"Express yourself, 
-		based on the following text respond with one of these words, and only that word:
-		SAD, HAPPY, EXCITED, NEUTRAL, DIFFICULT, LOVE, DISLIKE, INTERESTED or LIKE.
+		prompt = """Categorize the following text with one of these words, and only that word:
+		sad, happy, excited, difficult, love, like, dislike, interesting or neutral.
 		The text is : """ + text
 
 		response = ollama.chat(
@@ -299,67 +319,61 @@ class ROBOT:
 			messages=[{'role': 'user', 'content': prompt}],
 		)
 		
-		emotion =  response['message']['content']
+		emotion =  response['message']['content'].lower()
 
 		print("Robot expression: " + emotion)
+		
+		# Random motion directions
+		d1 = random.randint(0, 1)
+		d2 = random.randint(0, 1)
 
-		if "SAD" in emotion:
+		if "sad" in emotion:
 			self.display.action(12,1,8)
-
-			d1 = random.randint(0, 1)
-			d2 = random.randint(0, 1)
 
 			self.bodyaction(16,d1,30)
 			self.bodyaction(17,d2,30)
 			
 			return
-		elif "HAPPY" in emotion:
+		elif "happy" in emotion:
 			self.display.action(12,1,5)
-			d1 = random.randint(0, 1)
-			d2 = random.randint(0, 1)
 
 			self.bodyaction(16,d1,30)
 			self.bodyaction(17,d2,30)
 
 			return
-		elif "EXCITED" in emotion:
+		elif "excited" in emotion:
 			self.display.action(12,1,2)
 			self.bodyaction(11,0,5)
 
 			return
-		elif "DIFFICULT" in emotion:
+		elif "difficult" in emotion:
 			self.display.action(12,1,9)
 			self.bodyaction(12,1,20)
 
 			return
-		elif "LOVE" in emotion:
+		elif "love" in emotion:
 			self.display.action(12,1,6)
-			d1 = random.randint(0, 1)
 			self.bodyaction(17,d1,30)
 
-		elif "LIKE" in emotion:
+		elif "like" in emotion:
 			self.display.action(12,1,2)
-			d1 = random.randint(0, 1)
 			self.bodyaction(17,d1,30)
 
 			return
-		elif "DISLIKE" in emotion:
+		elif "dislike" in emotion:
 			self.display.action(12,1,3)
-			d1 = random.randint(0, 1)
 			self.bodyaction(17,d1,30)
 
 			return
-		elif "INTERESTED" in emotion:
+		elif "interesting" in emotion:
 			self.display.action(12,1,9)
-			d1 = random.randint(0, 1)
-			d2 = random.randint(0, 1)
 
 			self.bodyaction(16,d1,30)
 			self.bodyaction(17,d2,30)
 
 			return
 
-		elif "NEUTRAL" in emotion:
+		elif "neutral" in emotion:
 		
 			self.bodyaction(16,0,30)
 			self.bodyaction(17,0,30)
@@ -370,24 +384,26 @@ class ROBOT:
 		threading.Thread(target=self.robot_http_call, args=[('/wakeupsense')]).start()
 		print("Sense Wake up signal send.")
 		
-	def VL53L1X_info(self)->dict:
-		response = self.robot_http_call('/VL53L1X_Info')
-		try: 
-			self.fw_distance = response.json()
-		except Exception as e:
-			print("VL53L1X_Info : ",e)
-			return ""
+	def distanceSensor_info(self)->dict:
+		response = self.robot_http_call('/distanceSensor_info')
+		if self.health:	
+			try: 
+				self.distance_sensor = response.json()
+			except Exception as e:
+				print("distanceSensor_info : ",e)
+				return ""
 		
-		return self.fw_distance
+		return self.distance_sensor
 	
-	def BNO08X_info(self)->dict:
-		response = self.robot_http_call('/BNO08X_Info')
-		try: 
-			self.motionsensor = response.json()
-		except Exception as e:
-			print("BNO08X_Info : ",e)
-			return ""
-		return self.motionsensor
+	def motionSensor_info(self)->dict:
+		response = self.robot_http_call('/motionSensor_info')
+		if self.health:	
+			try: 
+				self.motionsensor = response.json()
+			except Exception as e:
+				print("motionSensor_info : ",e)
+				return ""
+			return self.motionsensor
 
 	def reset(self):
 		threading.Thread(target=self.robot_http_call, args=[('/reset')]).start()

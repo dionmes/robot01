@@ -176,7 +176,7 @@ def ask_robot01():
 		except Exception as e:
 			print("Prompt error : ", e)
 	else:
-		abort(500, description=str(e))
+		abort(500,"Busy brain")
 		
 	api_response = { 'status': 'ok' }
 
@@ -353,7 +353,8 @@ def get_setting():
 @app.route('/api/img_capture', methods=['GET'])
 def img_capture():
 	try:
-		img = brain.robot.sense.capture()
+		res = request.args.get('res')
+		img = brain.robot.sense.capture(res)
 	except Exception as e:
 		print(e)
 		abort(500, description=str(e))
@@ -361,15 +362,15 @@ def img_capture():
 	return img
 
 #
-# Get VL53L1X sensor readings
-# GET api/VL53L1X_Info
+# Get distance Sensor sensor readings
+# GET api/distanceSensor_info
 #
 # Return json response
 #
-@app.route('/api/VL53L1X_Info', methods=['GET'])
-def VL53L1X_Info():
+@app.route('/api/distanceSensor_info', methods=['GET'])
+def distanceSensor_info():
 	try:
-		info = brain.robot.VL53L1X_info()
+		info = brain.robot.distanceSensor_info()
 	except Exception as e:
 		print(e)
 		abort(500, description=str(e))
@@ -377,15 +378,15 @@ def VL53L1X_Info():
 	return jsonify(info)
 
 #
-# Get BNO08X sensor readings
-# GET api/BNO08X_Info
+# Get Motion sensor readings
+# GET api/motionSensor_info
 #
 # Return json response
 #
-@app.route('/api/BNO08X_Info', methods=['GET'])
-def BNO08X_Info():
+@app.route('/api/motionSensor_info', methods=['GET'])
+def motionSensor_info():
 	try:
-		info = brain.robot.BNO08X_info()
+		info = brain.robot.motionSensor_info()
 	except Exception as e:
 		print(e)
 		abort(500, description=str(e))
@@ -402,6 +403,22 @@ def BNO08X_Info():
 def wakeupsense():
 	try:
 		brain.robot.wakeupsense()
+	except Exception as e:
+		print(e)
+		abort(500, description=str(e))
+
+	return "ok"
+
+#
+# Send Sense to sleep
+# GET: /api/wakeupsense
+#
+# Return "ok"
+#
+@app.route('/api/go2sleep_sense', methods=['GET'])
+def go2sleep_sense():
+	try:
+		brain.robot.sense.go2sleep()
 	except Exception as e:
 		print(e)
 		abort(500, description=str(e))
@@ -457,6 +474,7 @@ def sense_reset():
 	return jsonify(api_response)
 
 #
+#
 # Robot erase config
 # GET: /api/robot01_eraseconfig
 #
@@ -466,6 +484,7 @@ def sense_reset():
 def robot01_eraseconfig():
 	api_response = brain.robot.erase_config()
 	return jsonify(api_response)
+
 
 #
 # Sense erase config
@@ -492,6 +511,23 @@ def clear_ips():
 	
 	api_response = { 'status': 'ok' }
 	return jsonify(api_response)
+
+#
+# Robot Managed notification
+# GET: /api/notification
+#
+# Return ""
+#
+@app.route('/api/notification', methods=['GET'])
+def notification():
+
+	if "message" in request.args:
+		message = request.args.get('message')
+	else:
+		message = ""
+
+	brain.notification(message)
+	return ""
 
 #
 #
