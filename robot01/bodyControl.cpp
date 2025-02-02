@@ -1,3 +1,4 @@
+#include "HardwareSerial.h"
 /**
   Body hardware Control helper class for robot01 via the two MCP23017 extenders
   Also handles the switches and leds in the Robosapien body.
@@ -6,8 +7,20 @@
 #include <Wire.h>
 #include <MCP23017.h>
 #include "bodyControl.h"
+#include "DistanceSensor.h"
+#include "motiondetect.h"
+#include <ArduinoHttpClient.h>
 
 #define STEPWAIT 50
+
+// mm before blocking forward walk
+#define FW_DISTANCE_TO_STOP 300
+// Tolerance for heading while turning
+#define TURN_TOLERANCE_DEGREES 3
+// Max turn error count
+#define MAX_TURN_ERROR 5
+// Max turn count
+#define MAX_TURN_COUNT 160
 
 // Body actions Queue size
 #define BODYACTIONS_QUEUE_SIZE 3
@@ -146,7 +159,7 @@ void bodyControl::worker(void *pvParameters) {
           break;
 
         case bodyAction::TURN:
-          bodyControl::turn(bodyactionTaskData.direction, bodyactionTaskData.value);
+          bodyControl::turn(bodyactionTaskData.value);
           break;
 
         case bodyAction::BODYSHAKE:
@@ -173,6 +186,7 @@ void bodyControl::worker(void *pvParameters) {
   }
 };
 
+// leftLowerArm
 void bodyControl::leftLowerArm(bool up, int value) {
   uint32_t notifyStopValue;  // vtask notifier to stop
   up ? mcp1.digitalWrite(LEFTLOWERARM_UP_PIN, 1) : mcp1.digitalWrite(LEFTLOWERARM_DOWN_PIN, 1);
@@ -188,6 +202,7 @@ void bodyControl::leftLowerArm(bool up, int value) {
   up ? mcp1.digitalWrite(LEFTLOWERARM_UP_PIN, 0) : mcp1.digitalWrite(LEFTLOWERARM_DOWN_PIN, 0);
 };
 
+// leftUpperArm
 void bodyControl::leftUpperArm(bool up, int value) {
   uint32_t notifyStopValue;  // vtask notifier to stop
   up ? mcp1.digitalWrite(LEFTUPPERARM_UP_PIN, 1) : mcp1.digitalWrite(LEFTUPPERARM_DOWN_PIN, 1);
@@ -203,6 +218,7 @@ void bodyControl::leftUpperArm(bool up, int value) {
   up ? mcp1.digitalWrite(LEFTUPPERARM_UP_PIN, 0) : mcp1.digitalWrite(LEFTUPPERARM_DOWN_PIN, 0);
 };
 
+// rightLowerArm
 void bodyControl::rightLowerArm(bool up, int value) {
   uint32_t notifyStopValue;  // vtask notifier to stop
 
@@ -219,6 +235,7 @@ void bodyControl::rightLowerArm(bool up, int value) {
   up ? mcp2.digitalWrite(RIGHTLOWERARM_UP_PIN, 0) : mcp2.digitalWrite(RIGHTLOWERARM_DOWN_PIN, 0);
 };
 
+// rightUpperArm
 void bodyControl::rightUpperArm(bool up, int value) {
   uint32_t notifyStopValue;  // vtask notifier to stop
 
@@ -235,6 +252,7 @@ void bodyControl::rightUpperArm(bool up, int value) {
   up ? mcp2.digitalWrite(RIGHTUPPERARM_UP_PIN, 0) : mcp2.digitalWrite(RIGHTUPPERARM_DOWN_PIN, 0);
 };
 
+// bothLowerArms
 void bodyControl::bothLowerArms(bool up, int value) {
   uint32_t notifyStopValue;  // vtask notifier to stop
 
@@ -253,6 +271,7 @@ void bodyControl::bothLowerArms(bool up, int value) {
   up ? mcp1.digitalWrite(LEFTLOWERARM_UP_PIN, 0) : mcp1.digitalWrite(LEFTLOWERARM_DOWN_PIN, 0);
 };
 
+// bothUpperArms
 void bodyControl::bothUpperArms(bool up, int value) {
   uint32_t notifyStopValue;  // vtask notifier to stop
 
@@ -271,6 +290,7 @@ void bodyControl::bothUpperArms(bool up, int value) {
   up ? mcp1.digitalWrite(LEFTUPPERARM_UP_PIN, 0) : mcp1.digitalWrite(LEFTUPPERARM_DOWN_PIN, 0);
 };
 
+// leftLeg
 void bodyControl::leftLeg(bool forward, int value) {
   uint32_t notifyStopValue;  // vtask notifier to stop
 
@@ -287,6 +307,7 @@ void bodyControl::leftLeg(bool forward, int value) {
   forward ? mcp1.digitalWrite(LEFTLEG_FORWARD_PIN, 0) : mcp1.digitalWrite(LEFTLEG_BACK_PIN, 0);
 };
 
+// rightLeg
 void bodyControl::rightLeg(bool forward, int value) {
   uint32_t notifyStopValue;  // vtask notifier to stop
 
@@ -303,6 +324,7 @@ void bodyControl::rightLeg(bool forward, int value) {
   forward ? mcp2.digitalWrite(RIGHTLEG_FORWARD_PIN, 0) : mcp2.digitalWrite(RIGHTLEG_BACK_PIN, 0);
 };
 
+// hip
 void bodyControl::hip(bool left, int value) {
   uint32_t notifyStopValue;  // vtask notifier to stop
 
@@ -319,14 +341,17 @@ void bodyControl::hip(bool left, int value) {
   left ? mcp1.digitalWrite(HIP_LEFT_PIN, 0) : mcp1.digitalWrite(HIP_RIGHT_PIN, 0);
 };
 
+// leftHandLight
 void bodyControl::leftHandLight(bool on, int value) {
   on ? mcp2.digitalWrite(LEFTHAND_LIGHT_PIN, 1) : mcp2.digitalWrite(LEFTHAND_LIGHT_PIN, 0);
 }
 
+// rightHandLight
 void bodyControl::rightHandLight(bool on, int value) {
   on ? mcp2.digitalWrite(RIGHTHAND_LIGHT_PIN, 1) : mcp2.digitalWrite(RIGHTHAND_LIGHT_PIN, 0);
 }
 
+// shake
 void bodyControl::shake(bool left, int value) {
   uint32_t notifyStopValue;  // vtask notifier to stop
 
@@ -359,9 +384,10 @@ void bodyControl::shake(bool left, int value) {
   mcp1.digitalWrite(HIP_RIGHT_PIN, 0);
 };
 
+// back_and_forth
 void bodyControl::back_and_forth(bool left, int value) {
   uint32_t notifyStopValue;  // vtask notifier to stop
-
+  
   for (int x = 0; x < value; x = ++x) {
 
     mcp2.digitalWrite(RIGHTLEG_FORWARD_PIN, 1);
@@ -395,6 +421,7 @@ void bodyControl::back_and_forth(bool left, int value) {
   mcp2.digitalWrite(RIGHTLEG_BACK_PIN, 0);
 };
 
+// walk_forward
 void bodyControl::walk_forward(int value) {
   uint32_t notifyStopValue;  // vtask notifier to stop
 
@@ -412,6 +439,7 @@ void bodyControl::walk_forward(int value) {
     // Duration routine with vtask notify for stopping
     for (int y = 0; y < 6; y = ++y) {
       if (xTaskNotifyWait(0x00, 0x00, &notifyStopValue, 0) == pdTRUE) {
+        sendMasterNotification("walking_stopped");
         return;
       }
       vTaskDelay(50);
@@ -429,20 +457,31 @@ void bodyControl::walk_forward(int value) {
     // Duration routine with vtask notify for stopping
     for (int y = 0; y < 6; y = ++y) {
       if (xTaskNotifyWait(0x00, 0x00, &notifyStopValue, 0) == pdTRUE) {
+        sendMasterNotification("walking_stopped");
         return;
       }
       vTaskDelay(50);
     }
+
+    if (distance_sensor.sensorData.range_mm < FW_DISTANCE_TO_STOP) {
+      sendMasterNotification("walking_blocked");
+      return;
+    }
+
   }
 
+  sendMasterNotification("walking_ended");
+  
   mcp1.digitalWrite(HIP_LEFT_PIN, 0);
   mcp1.digitalWrite(HIP_RIGHT_PIN, 0);
   mcp2.digitalWrite(RIGHTLEG_FORWARD_PIN, 0);
   mcp2.digitalWrite(RIGHTLEG_BACK_PIN, 0);
   mcp1.digitalWrite(LEFTLEG_FORWARD_PIN, 0);
   mcp1.digitalWrite(LEFTLEG_BACK_PIN, 0);
+
 };
 
+// walk_backward
 void bodyControl::walk_backward(int value) {
   uint32_t notifyStopValue;  // vtask notifier to stop
 
@@ -491,22 +530,146 @@ void bodyControl::walk_backward(int value) {
   mcp1.digitalWrite(LEFTLEG_BACK_PIN, 0);
 };
 
-void bodyControl::turn(bool left, int value) {
-  uint32_t notifyStopValue;  // vtask notifier to stop
+/**
+ 
+  Turning function in degrees. Heading between -180 and 180. 0 is approximately north. Negative is counter clockwise / left.
+  Counter for number of steps with maximum
+  Additional check if heading changes enough or if possibly stuck with oldheadingDifference and turnCheckInterval
+**/
+void bodyControl::turn(int value) {
 
+  // vtask notifier to stop
+  uint32_t notifyStopValue;  
 
-  if (left) {
+  // Current heading from sensor
+  float currentHeading;
+  // Old heading from sensor
+  float oldCurrentHeading;
+  // Desiredheading
+  float desiredHeading = value;
 
-    Serial.println("left");
-    mcp1.digitalWrite(HIP_LEFT_PIN, 0);
-    mcp1.digitalWrite(HIP_RIGHT_PIN, 1);
-    bodyControl::leftLeg(0, 3);
-    bodyControl::rightLeg(1, 2);
+  // difference in heading between current heading and desired heading
+  float headingDifference = 0;
 
-    vTaskDelay(200);
+  // old heading difference for actual turning check. Init with high value to force check
+  float oldheadingDifference = 0;
+  // Turn check interval counter
+  int turnErrorCount = 0;
 
-    for (int x = 0; x < value; x = ++x) {
+  // Counter to prevent indefinite turning
+  int turncount = 0;
+  // Turning direction. 0=neutral, 1=right, 2=left
+  int turndirection = 0; 
+  // headingReadingWaitCounter
+  int headingReadingWaitCounter = 0; 
+  
+  // Set headings as start values
+  currentHeading = motion_detect.sensorData.yaw;
+  oldCurrentHeading = currentHeading;
 
+  while (true) {
+
+    currentHeading = motion_detect.sensorData.yaw;
+    while (currentHeading == oldCurrentHeading) {
+      currentHeading = motion_detect.sensorData.yaw;
+      vTaskDelay(200);
+      headingReadingWaitCounter++;
+      if (headingReadingWaitCounter > 30) {
+        sendMasterNotification("turn_sensor_error");
+        Serial.println("turn_sensor_error");
+        break;
+      }
+    }
+
+    oldCurrentHeading = currentHeading;
+    headingReadingWaitCounter = 0;
+
+    headingDifference = desiredHeading - currentHeading;
+    headingDifference = fmod(headingDifference + 180.0, 360.0) - 180.0;
+    
+    // Desired heading succesful reached
+    if (abs(headingDifference) < TURN_TOLERANCE_DEGREES) {
+      sendMasterNotification("turn_ended");
+      Serial.println("turn_ended");
+      break;
+    }
+
+    // Check for turn blocking
+    if ( (abs(headingDifference) < ( abs(oldheadingDifference) + 3 ) && abs(headingDifference) > abs(oldheadingDifference) - 3) || turncount == 0 ) {
+      turnErrorCount = turnErrorCount + 1;
+    } else {
+      turnErrorCount = 0;
+    }
+    
+    oldheadingDifference = headingDifference;
+
+    if (turnErrorCount > MAX_TURN_ERROR) {
+      Serial.println("turn_blocked");
+      sendMasterNotification("turn_blocked");
+      break; 
+    } 
+
+    // Max nr. of turn steps
+    if (turncount > MAX_TURN_COUNT) { 
+      Serial.println("turn_error");
+      sendMasterNotification("turn_error");
+      break; 
+    }  
+    turncount++;
+    
+    // Check for stop signal
+    if (xTaskNotifyWait(0x00, 0x00, &notifyStopValue, 0) == pdTRUE ) { 
+      Serial.println("turn_stopped");
+      sendMasterNotification("turn_stopped");
+      break; 
+    }
+
+    Serial.printf("Desired heading : %f  \n", desiredHeading );
+    Serial.printf("Current heading : %f  \n", currentHeading );
+    Serial.printf("Heading Difference : %f \n", headingDifference );
+    Serial.printf("Old heading Difference : %f \n", oldheadingDifference );
+    Serial.printf("Heading direction : %i \n", turndirection );
+    Serial.printf("Turn count : %i \n", turncount );
+    Serial.printf("Turn error count : %i \n", turnErrorCount );
+
+    // Direction change
+    if (headingDifference > 0.0 && turndirection != 1) {
+      
+      turndirection = 1;
+      // Initial step right
+      mcp1.digitalWrite(HIP_LEFT_PIN, 1);
+      mcp1.digitalWrite(HIP_RIGHT_PIN, 0);
+      bodyControl::rightLeg(0, 3);
+      bodyControl::leftLeg(1, 2);
+      vTaskDelay(100);
+
+    } else if (headingDifference < 0.0 && turndirection != 2) {        
+      
+      turndirection = 2;
+      // Initial step left
+      Serial.println("left");
+      mcp1.digitalWrite(HIP_LEFT_PIN, 0);
+      mcp1.digitalWrite(HIP_RIGHT_PIN, 1);
+      bodyControl::leftLeg(0, 3);
+      bodyControl::rightLeg(1, 2);
+      vTaskDelay(200);
+
+    }
+
+    if (turndirection == 1) {
+      // Turn right
+      mcp1.digitalWrite(HIP_LEFT_PIN, 1);
+      mcp1.digitalWrite(HIP_RIGHT_PIN, 0);
+      bodyControl::rightLeg(0, 3);
+      bodyControl::leftLeg(1, 2);
+
+      mcp1.digitalWrite(HIP_LEFT_PIN, 0);
+      mcp1.digitalWrite(HIP_RIGHT_PIN, 1);
+      bodyControl::rightLeg(0, 3);
+      bodyControl::leftLeg(1, 2);
+
+    } else if (turndirection == 2) {
+      // Turn left
       mcp1.digitalWrite(HIP_LEFT_PIN, 0);
       mcp1.digitalWrite(HIP_RIGHT_PIN, 1);
       bodyControl::leftLeg(0, 3);
@@ -517,36 +680,6 @@ void bodyControl::turn(bool left, int value) {
       bodyControl::leftLeg(0, 3);
       bodyControl::rightLeg(1, 2);
 
-      if (xTaskNotifyWait(0x00, 0x00, &notifyStopValue, 0) == pdTRUE) {
-        return;
-      }
-    }
-
-  } else {
-
-    Serial.println("right");
-
-    mcp1.digitalWrite(HIP_LEFT_PIN, 1);
-    mcp1.digitalWrite(HIP_RIGHT_PIN, 0);
-    bodyControl::rightLeg(0, 3);
-    bodyControl::leftLeg(1, 2);
-    vTaskDelay(100);
-
-    for (int x = 0; x < value; x = ++x) {
-
-      mcp1.digitalWrite(HIP_LEFT_PIN, 1);
-      mcp1.digitalWrite(HIP_RIGHT_PIN, 0);
-      bodyControl::rightLeg(0, 3);
-      bodyControl::leftLeg(1, 2);
-
-      mcp1.digitalWrite(HIP_LEFT_PIN, 0);
-      mcp1.digitalWrite(HIP_RIGHT_PIN, 1);
-      bodyControl::rightLeg(0, 3);
-      bodyControl::leftLeg(1, 2);
-
-      if (xTaskNotifyWait(0x00, 0x00, &notifyStopValue, 0) == pdTRUE) {
-        return;
-      }
     }
   }
 
@@ -557,4 +690,7 @@ void bodyControl::turn(bool left, int value) {
   mcp2.digitalWrite(RIGHTLEG_BACK_PIN, 0);
   mcp1.digitalWrite(LEFTLEG_FORWARD_PIN, 0);
   mcp1.digitalWrite(LEFTLEG_BACK_PIN, 0);
+
+  vTaskDelay(500);
+
 }

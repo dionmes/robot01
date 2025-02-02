@@ -1,22 +1,22 @@
 /**
- FACE Led screen helper class for robot01 
+ Display Led screen helper class for robot01 
  for Adafruit_SSD1306 OLED Driver
 **/
-#ifndef ROBOFACE_H
-#define ROBOFACE_H
+#ifndef ROBODisplay_H
+#define ROBODisplay_H
 
 #include <Wire.h>
 #include <Adafruit_GFX.h>
 #include <Adafruit_SSD1306.h>
-#include "roboFace.h"
+#include "roboDisplay.h"
 
 // Refer to initialized LED matrix in main
 extern Adafruit_SSD1306 ledMatrix;
 
 extern TwoWire wire;
 
-// faceAction Actions
-enum faceAction { 
+// DisplayAction Actions
+enum DisplayAction { 
   DISPLAYTEXTSMALL = 1, 
   DISPLAYTEXTLARGE = 2,
   NEUTRAL = 3, 
@@ -43,21 +43,21 @@ enum faceAction {
   DRAWBMP=25
 };
 
-enum roboFaceConstants {
-  BUFFER_SIZE = 1024
+enum roboDisplayConstants {
+  image_buffer_size = 1024
 };
 
 /*
-* roboFace class
+* roboDisplay class
 * Class for queuing and worker
 */
-class roboFace {
+class roboDisplay {
 
   public:
-    roboFace();
+    roboDisplay();
     void begin(int task_core = 1, int task_priority = 10);
 
-    // exec - enum faceAction, String - (optional text if Action requires it), Int - index of image or optional delay dependend on action.
+    // exec - enum DisplayAction, String - (optional text if Action requires it), Int - index of image or optional delay dependend on action.
     void exec( int action, String text = "", int intValue = 0);
     void imagetest(char *bmp_data);
 
@@ -65,7 +65,7 @@ class roboFace {
     static void text(const char *text, int size,int Duration = 0);
     //  Display text for amount of seconds
     static void scrollText(const char *text, int size);
-    // Set Face neutral. 
+    // Set Display neutral. 
     static void neutral();
     // Smile.
     static void smile();
@@ -99,13 +99,13 @@ class roboFace {
     static void animation(const byte frames[][512], int loop);
     // Chat animation
     static void chat();
-    // Small circle on face, part ofChat animation
+    // Small circle on Display, part ofChat animation
     static void mouth_small_circle();
-    // large circle on face, part ofChat animation
+    // large circle on Display, part ofChat animation
     static void mouth_large_circle();
-    // Small rounded rectangle on face, part ofChat animation
+    // Small rounded rectangle on Display, part ofChat animation
     static void mouth_small_rrect();
-    // Large rounded rectangle on face, part ofChat animation
+    // Large rounded rectangle on Display, part ofChat animation
     static void mouth_large_rrect();
 
     private:

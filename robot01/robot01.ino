@@ -2,7 +2,6 @@
 * Include
 */
 #include <Wire.h>
-#include <VL53L1X.h>
 #include <ESP_I2S.h>
 #include <FS.h>
 #include <SPIFFS.h>
@@ -10,9 +9,9 @@
 #include <ArduinoHttpClient.h>
 #include <ArduinoJson.h>
 #include "esp_http_server.h"
-#include <Adafruit_SSD1306.h>
+#include "DistanceSensor.h"
 #include "motiondetect.h"
-#include "roboFace.h"
+#include "roboDisplay.h"
 #include "bodyControl.h"
 
 #define FORMAT_SPIFFS_IF_FAILED false
@@ -27,13 +26,16 @@
 #define TCP_AUDIO_TASK_CORE 1
 #define TCP_AUDIO_TAK_PRIORITY 20
 
-#define motiondetect_TASK_CORE 1
-#define motiondetect_PRIORITY 5
+#define motion_detect_TASK_CORE 1
+#define motion_detect_PRIORITY 5
+
+#define distance_sensor_TASK_CORE 1
+#define distance_sensor_PRIORITY 5
 
 #define display_TASK_CORE 0
 #define display_TASK_PRIORITY 5
 
-#define body_TASK_CORE 0
+#define body_TASK_CORE 1
 #define body_TASK_PRIORITY 5
 
 // Master server or 'brain' 
@@ -55,10 +57,7 @@ TaskHandle_t tcpAudioTaskHandle;
 WiFiServer audioServer(AUDIO_TCP_PORT);
 WiFiClient tcpClientAudio;
 
-#define AUDIO_TCP_CHUNK_SIZE 6144 // TCP Buffer
-
-uint8_t *i2sbuffer = new uint8_t [AUDIO_TCP_CHUNK_SIZE]; 
-uint8_t tcp_audio_buffer[AUDIO_TCP_CHUNK_SIZE];
+#define AUDIO_TCP_CHUNK_SIZE 2048 // TCP Buffer
 
 #define robot01_I2S_BCK 14
 #define robot01_I2S_LRC 12
@@ -68,28 +67,28 @@ uint8_t tcp_audio_buffer[AUDIO_TCP_CHUNK_SIZE];
 bool audioStreamRunning = false;  // If Audio is listening on tcp
 I2SClass I2S;
 
-#define MAX_VOLUME 100
+#define MAX_VOLUME 50
 // default volume
-int audio_volume = 50;
+int audio_volume = 20;
 
-// Sensors assignments
-VL53L1X vl53l1x_sensor;
+// ToF sensor; Front facing distance
+DistanceSensor distance_sensor;
 
 // Movement sensor; Accelerometer, Orientation
-motiondetect motiondetect;
+motiondetect motion_detect;
 
-// LED Display for face
-Adafruit_SSD1306 ledMatrix(128, 64, &Wire, -1);
-
-// Instance of roboFace, for methods for display actions on LED display
-roboFace roboFace;
-#define FACE_MESSAGE_WAIT_TIME 20
+// Instance of roboDisplay, for methods for display actions on LED display
+roboDisplay roboDisplay;
+#define Display_MESSAGE_WAIT_TIME 20
 
 // Instance of bodyControl for movement actions & hand LEDs
 bodyControl bodyControl;
 
 // API Server
 httpd_handle_t server_httpd = NULL;
+
+// HTTP wifi client
+WiFiClient httpWifiInstance;
 
 /*
 * Initialization/setup
@@ -104,11 +103,12 @@ void setup() {
   Wire.begin();
   Wire.setClock(100000);
   Wire.setTimeout(10);
+
   //Random seed
   randomSeed(analogRead(GPIO_NUM_6));
 
-  roboFace.begin(display_TASK_CORE, display_TASK_PRIORITY);
-  roboFace.exec(faceAction::DISPLAYTEXTLARGE, "Boot");
+  roboDisplay.begin(display_TASK_CORE, display_TASK_PRIORITY);
+  roboDisplay.exec(DisplayAction::DISPLAYTEXTLARGE, "Boot");
 
   // XAIO Sense/Camera wake up pin assignment
   pinMode(25, OUTPUT);
@@ -116,12 +116,12 @@ void setup() {
   delay(100);
 
   // Body init.
-  roboFace.exec(faceAction::DISPLAYTEXTLARGE, "Body");
+  roboDisplay.exec(DisplayAction::DISPLAYTEXTLARGE, "Body");
   bodyControl.begin(body_TASK_CORE,body_TASK_PRIORITY);
   delay(100);
 
   // Wifi
-  roboFace.exec(faceAction::DISPLAYTEXTLARGE, "Wifi connecting");
+  roboDisplay.exec(DisplayAction::DISPLAYTEXTLARGE, "Wifi connecting");
   Serial.println("Wifi connecting");
 
   // load json config
@@ -153,7 +153,7 @@ void setup() {
   }
 
   // HTTP API server
-  roboFace.exec(faceAction::DISPLAYTEXTLARGE, "WebServer starting");
+  roboDisplay.exec(DisplayAction::DISPLAYTEXTLARGE, "WebServer starting");
   Serial.println("API server starting");
   start_apiserver();
 
@@ -163,46 +163,42 @@ void setup() {
 
   // Register with remote master
   Serial.printf("Remote master server IP: %s \n", config_master_ip);
-  roboFace.exec(faceAction::DISPLAYTEXTSMALL, "Registering with master");
-  WiFiClient httpWifiInstance;
+  roboDisplay.exec(DisplayAction::DISPLAYTEXTSMALL, "Registering with master");
+
   HttpClient master_http_client(httpWifiInstance, config_master_ip, 5000);
-  master_http_client.setConnectTimeout(10000);
   String httpPath = "http://" + String(config_master_ip) + "/api/setting?item=robot01_ip&value=" + WiFi.localIP().toString();
   int http_err = master_http_client.get(httpPath);
   if (http_err != 0) { Serial.println("Error registering at master"); };
 
-  // Starting VL53L1X
-  roboFace.exec(faceAction::DISPLAYTEXTLARGE, "VL53L1X");
-  Serial.println("Booting vl53l1x (range) sensor");
-
-  vl53l1x_sensor.setTimeout(50);
-  if (vl53l1x_sensor.init()) {
-    vl53l1x_sensor.setDistanceMode(VL53L1X::Short);
-    vl53l1x_sensor.setMeasurementTimingBudget(50000);
-    vl53l1x_sensor.startContinuous(50);
-  } else {
-    Serial.println("Failed to detect/initialize vl53l1x (range) sensor!");
-  }
-
-  delay(500);
-
-  roboFace.exec(faceAction::DISPLAYTEXTLARGE, "Tasks");
+  roboDisplay.exec(DisplayAction::DISPLAYTEXTSMALL, "Tasks&Sensors");
   // Starting tasks
   Serial.println("Tasks starting");
 
-  // Starting motiondetect
-  roboFace.exec(faceAction::DISPLAYTEXTLARGE, "BNO08x");
-  Serial.println("Booting motiondetect (gyro) sensor.");
-  if (!motiondetect.begin(motiondetect_TASK_CORE, motiondetect_PRIORITY)) {
-    Serial.println("Failed to detect and initialize motiondetect (gyro) sensor!");
+  // Starting Distance sensor
+  roboDisplay.exec(DisplayAction::DISPLAYTEXTSMALL, "Distance sensor");
+  Serial.println("Booting vl53l1x (range) sensor");
+
+  if (!distance_sensor.begin(distance_sensor_TASK_CORE, distance_sensor_PRIORITY)) {
+    Serial.println("Failed to detect and initialize distance sensor!");
   } else {
-    Serial.println("motiondetect update task starting");
+    Serial.println("Distance sensor update task starting");
+  }
+  delay(100);
+
+  // Starting motion_detect
+  roboDisplay.exec(DisplayAction::DISPLAYTEXTSMALL, "Motion sensor");
+  Serial.println("Booting motion_detect (gyro) sensor.");
+
+  if (!motion_detect.begin(motion_detect_TASK_CORE, motion_detect_PRIORITY)) {
+    Serial.println("Failed to detect and initialize motion_detect (gyro) sensor!");
+  } else {
+    Serial.println("motion_detect update task starting");
   }
   delay(100);
   
   // Audio / I2S init.
   Serial.println("Start audio");
-  roboFace.exec(faceAction::DISPLAYTEXTLARGE, "AUDIO/I2S");
+  roboDisplay.exec(DisplayAction::DISPLAYTEXTLARGE, "AUDIO/I2S");
 
   // Pin configuration
 	gpio_config_t io_conf;
@@ -214,7 +210,7 @@ void setup() {
   gpio_config(&io_conf); //configure GPIO with the given settings
 
   I2S.setPins(robot01_I2S_BCK, robot01_I2S_LRC, robot01_I2S_OUT, -1, -1); //SCK, WS, SDOUT, SDIN, MCLK
-  I2S.begin(I2S_MODE_STD, I2S_SAMPLE_RATE, I2S_DATA_BIT_WIDTH_16BIT, I2S_SLOT_MODE_STEREO, I2S_STD_SLOT_LEFT);
+  I2S.begin(I2S_MODE_TDM, I2S_SAMPLE_RATE, I2S_DATA_BIT_WIDTH_16BIT, I2S_SLOT_MODE_MONO, I2S_STD_SLOT_BOTH);
 
   // TCP Audio receive task
   xTaskCreatePinnedToCore(tcpReceiveAudioTask,"TCPReceiveAudioTask", 12288, NULL,TCP_AUDIO_TAK_PRIORITY ,&tcpAudioTaskHandle,TCP_AUDIO_TASK_CORE);
@@ -226,25 +222,16 @@ void setup() {
   delay(100);
 
   String register_string =  "Hello, I am Sappie @ " + WiFi.localIP().toString();
-  roboFace.exec(faceAction::SCROLLTEXT,register_string, 100);
+  roboDisplay.exec(DisplayAction::SCROLLTEXT,register_string, 100);
   delay(8000);  
-  roboFace.exec(faceAction::NEUTRAL);
-  
-  vTaskDelete(NULL);
-
+  roboDisplay.exec(DisplayAction::NEUTRAL);
 }
 
 /*
 * Main task
 */
 void loop() {
-
-  delay(10000);
-}
-
-// Send notification message to master
-void masterNotification(char message[255]) {
-  Serial.println(message);
+    delay(10000);
 }
 
 /*
@@ -258,8 +245,8 @@ void start_apiserver() {
   httpd_config.task_priority = HTTPD_TASK_PRIORITY;
 
   // Add request handlers to webserver
-  httpd_uri_t VL53L1X_url = { .uri = "/VL53L1X_Info", .method = HTTP_GET, .handler = webhandler_VL53L1X_Info, .user_ctx = NULL };
-  httpd_uri_t BNO08X_url = { .uri = "/BNO08X_Info", .method = HTTP_GET, .handler = webhandler_motiondetectInfo, .user_ctx = NULL };
+  httpd_uri_t distanceSensor_url = { .uri = "/distanceSensor_info", .method = HTTP_GET, .handler = webhandler_DistanceSensor_Info, .user_ctx = NULL };
+  httpd_uri_t motion_detect_url = { .uri = "/motionSensor_info", .method = HTTP_GET, .handler = webhandler_motion_detectInfo, .user_ctx = NULL };
   httpd_uri_t volume_url = { .uri = "/volume", .method = HTTP_GET, .handler = webhandler_volume, .user_ctx = NULL };
   httpd_uri_t bodyaction_url = { .uri = "/bodyaction", .method = HTTP_GET, .handler = webhandler_body_action, .user_ctx = NULL };
   httpd_uri_t displayaction_url = { .uri = "/displayaction", .method = HTTP_GET, .handler = webhandler_display_action, .user_ctx = NULL };
@@ -273,8 +260,8 @@ void start_apiserver() {
 
   // Start httpd server
   if (httpd_start(&server_httpd, &httpd_config) == ESP_OK) {
-    httpd_register_uri_handler(server_httpd, &VL53L1X_url);
-    httpd_register_uri_handler(server_httpd, &BNO08X_url);
+    httpd_register_uri_handler(server_httpd, &distanceSensor_url);
+    httpd_register_uri_handler(server_httpd, &motion_detect_url);
     httpd_register_uri_handler(server_httpd, &audiostream_url);
     httpd_register_uri_handler(server_httpd, &volume_url);
     httpd_register_uri_handler(server_httpd, &bodyaction_url);
@@ -293,21 +280,22 @@ void start_apiserver() {
 }
 
 /*
-* Handler to get vl53l1x values
+* Handler to get Disancesensor values
+*
+* url: /distanceSensor_info
+*
 */
-esp_err_t webhandler_VL53L1X_Info(httpd_req_t *request) {
+esp_err_t webhandler_DistanceSensor_Info(httpd_req_t *request) {
   
   httpd_resp_set_hdr(request, "Access-Control-Allow-Origin", "*");
   httpd_resp_set_type(request, HTTPD_TYPE_JSON);
 
   JsonDocument json_obj;
 
-  vl53l1x_sensor.read();
-
-  json_obj["range_mm"] = vl53l1x_sensor.ranging_data.range_mm;
-  json_obj["range_status"] = vl53l1x_sensor.ranging_data.range_status;
-  json_obj["peak_signal"] = vl53l1x_sensor.ranging_data.peak_signal_count_rate_MCPS;
-  json_obj["ambient_count"] = vl53l1x_sensor.ranging_data.ambient_count_rate_MCPS;
+  json_obj["range_mm"] = distance_sensor.sensorData.range_mm;
+  json_obj["range_status"] = distance_sensor.sensorData.range_status;
+  json_obj["peak_signal"] = distance_sensor.sensorData.peak_signal;
+  json_obj["ambient_count"] = distance_sensor.sensorData.ambient_count;
 
   size_t jsonSize = measureJson(json_obj);
   char json_response[jsonSize];
@@ -319,25 +307,29 @@ esp_err_t webhandler_VL53L1X_Info(httpd_req_t *request) {
 }
 
 /*
-* Handler to get bno08x values
+* Handler to get motion sensor values
+*
+* url: /motionSensor_info
+*
 */
-esp_err_t webhandler_motiondetectInfo(httpd_req_t *request) {
+esp_err_t webhandler_motion_detectInfo(httpd_req_t *request) {
 
   httpd_resp_set_hdr(request, "Access-Control-Allow-Origin", "*");
   httpd_resp_set_type(request, HTTPD_TYPE_JSON);
 
   JsonDocument json_obj;
 
-  json_obj["linearAcceleration_x"] = motiondetect.mData.linearAcceleration_x;
-  json_obj["linearAcceleration_y"] = motiondetect.mData.linearAcceleration_y;
-  json_obj["linearAcceleration_z"] = motiondetect.mData.linearAcceleration_z;
+  json_obj["linearAcceleration_x"] = motion_detect.sensorData.linearAcceleration_x;
+  json_obj["linearAcceleration_y"] = motion_detect.sensorData.linearAcceleration_y;
+  json_obj["linearAcceleration_z"] = motion_detect.sensorData.linearAcceleration_z;
   
-  json_obj["yaw"] = motiondetect.mData.yaw;
-  json_obj["pitch"] = motiondetect.mData.pitch;
-  json_obj["roll"] = motiondetect.mData.roll;
+  json_obj["yaw"] = motion_detect.sensorData.yaw;
+  json_obj["pitch"] = motion_detect.sensorData.pitch;
+  json_obj["roll"] = motion_detect.sensorData.roll;
+  json_obj["ypr_accuracy"] = motion_detect.sensorData.ypr_accuracy;
 
-  json_obj["accuracy"] = motiondetect.mData.accuracy;
-  json_obj["shake"] = motiondetect.mData.shake;
+  json_obj["accuracy"] = motion_detect.sensorData.accuracy;
+  json_obj["shake"] = motion_detect.sensorData.shake;
 
   size_t jsonSize = measureJson(json_obj);
   char json_response[jsonSize];
@@ -350,6 +342,9 @@ esp_err_t webhandler_motiondetectInfo(httpd_req_t *request) {
 
 /*
 * Handler to enable/disable audiostream
+*
+* url: GET /audiostream?on=0/1
+*
 */
 esp_err_t webhandler_audiostream(httpd_req_t *request) {
 
@@ -361,7 +356,7 @@ esp_err_t webhandler_audiostream(httpd_req_t *request) {
   
   if (param_value != "invalid") {
 
-    roboFace.exec(faceAction::DISPLAYTEXTSMALL, "Audio : " + param_value, FACE_MESSAGE_WAIT_TIME);
+    roboDisplay.exec(DisplayAction::DISPLAYTEXTSMALL, "Audio : " + param_value, Display_MESSAGE_WAIT_TIME);
     int value = param_value.toInt();
     
     if (value == 1 && !audioStreamRunning) {
@@ -392,6 +387,9 @@ esp_err_t webhandler_audiostream(httpd_req_t *request) {
 
 /*
 * Handler to adjust output volume
+*
+* url: GET /volume?power=(0-50)
+*
 */
 esp_err_t webhandler_volume(httpd_req_t *request) {
 
@@ -402,7 +400,7 @@ esp_err_t webhandler_volume(httpd_req_t *request) {
   String param_value = get_url_param(request,param_name, 4);
 
   if (param_value != "invalid") {
-    roboFace.exec(faceAction::DISPLAYTEXTSMALL, "Volume : " + param_value, FACE_MESSAGE_WAIT_TIME);
+    roboDisplay.exec(DisplayAction::DISPLAYTEXTSMALL, "Volume : " + param_value, Display_MESSAGE_WAIT_TIME);
 
     int value = param_value.toInt();
     if (value >= 0 && value <= MAX_VOLUME) {
@@ -422,6 +420,9 @@ esp_err_t webhandler_volume(httpd_req_t *request) {
 
 /*
 * Handler for body test task
+*
+* url: GET /bodyaction?action=n&direction=0/1&steps=i
+*
 */
 esp_err_t webhandler_body_action(httpd_req_t *request) {
 
@@ -450,7 +451,6 @@ esp_err_t webhandler_body_action(httpd_req_t *request) {
       size_t jsonSize = measureJson(json_obj);
       char json_response[jsonSize];
       serializeJson(json_obj, json_response, jsonSize );
-
       httpd_resp_send(request, json_response , jsonSize );
 
       bodyControl.exec(action, direction, value);
@@ -461,6 +461,9 @@ esp_err_t webhandler_body_action(httpd_req_t *request) {
 
 /*
 * Handler for display action
+*
+* url: GET /displayaction?action=n&index=I&text=“”
+*
 */
 esp_err_t webhandler_display_action(httpd_req_t *request) {
 
@@ -490,7 +493,7 @@ esp_err_t webhandler_display_action(httpd_req_t *request) {
     String text = "";
     text = param_text != "invalid" ? urlDecode(param_text) : "";
 
-    roboFace.exec(action, text, index);
+    roboDisplay.exec(action, text, index);
   }
 
   return ESP_OK;
@@ -498,14 +501,17 @@ esp_err_t webhandler_display_action(httpd_req_t *request) {
 
 /*
 * Handler for imagetest
+*
+* url: POST /drawbmp
+*
 */
 esp_err_t webhandler_drawbmp(httpd_req_t *req) {
 
-  size_t recv_size = (req->content_len < roboFaceConstants::BUFFER_SIZE ? req->content_len : roboFaceConstants::BUFFER_SIZE);
+  size_t recv_size = (req->content_len < roboDisplayConstants::image_buffer_size ? req->content_len : roboDisplayConstants::image_buffer_size);
   char content[recv_size];  
   int ret = httpd_req_recv(req, content, recv_size);
   
-  roboFace.drawbmp(content);
+  roboDisplay.drawbmp(content);
   
   /* Send a simple response */
   const char resp[] = "Imagetest received";
@@ -519,13 +525,16 @@ esp_err_t webhandler_drawbmp(httpd_req_t *req) {
 
 /*
 * Handler for waking up XAIO sense/camera from sleep
+*
+* url: GET /wakeupsense
+*
 */
 esp_err_t webhandler_wakeupsense(httpd_req_t *request) {
 
   httpd_resp_set_hdr(request, "Access-Control-Allow-Origin", "*");
   httpd_resp_set_type(request, HTTPD_TYPE_JSON);
 
-  roboFace.exec(faceAction::DISPLAYTEXTSMALL, "Wake up Sense", FACE_MESSAGE_WAIT_TIME);
+  roboDisplay.exec(DisplayAction::DISPLAYTEXTSMALL, "Wake up Sense", Display_MESSAGE_WAIT_TIME);
 
   JsonDocument json_obj;
   json_obj["command"] = "succes";
@@ -545,7 +554,8 @@ esp_err_t webhandler_wakeupsense(httpd_req_t *request) {
 /* 
 * health_handler for httpd
 *
-* Response with ok
+* url: GET /health
+*
 */
 esp_err_t webhandler_health(httpd_req_t *req) {
   
@@ -566,10 +576,11 @@ esp_err_t webhandler_health(httpd_req_t *req) {
 /*
 * webhandler_reset for httpd
 *
-* Restart ESP32
+* url: GET /reset
+*
 */
 static esp_err_t webhandler_reset(httpd_req_t *req) {
-  roboFace.exec(faceAction::DISPLAYTEXTSMALL, "Restart");
+  roboDisplay.exec(DisplayAction::DISPLAYTEXTSMALL, "Restart");
   delay(1000);
   Serial.print("Resetting on request.");
   
@@ -591,12 +602,13 @@ static esp_err_t webhandler_reset(httpd_req_t *req) {
 }
 
 /*
-* webhandler_wifimanager for httpd
+* Instant start wifimanager
 *
-* Wifimanager on demand
+* url: GET /wifimanager
+*
 */
 static esp_err_t webhandler_wifimanager(httpd_req_t *req) {
-  roboFace.exec(faceAction::DISPLAYTEXTSMALL, "Wifimanager");
+  roboDisplay.exec(DisplayAction::DISPLAYTEXTSMALL, "Wifimanager");
 
   wm.setDebugOutput(true, WM_DEBUG_VERBOSE);
   
@@ -623,12 +635,14 @@ static esp_err_t webhandler_wifimanager(httpd_req_t *req) {
 }
 
 /*
-* webhandler_config_erase for httpd
 *
 * Erase config and wifi settings and Restart ESP32
+*
+* url: GET /eraseconfig
+*
 */
 static esp_err_t webhandler_config_erase(httpd_req_t *req) {
-  roboFace.exec(faceAction::DISPLAYTEXTSMALL, "Config erase");
+  roboDisplay.exec(DisplayAction::DISPLAYTEXTSMALL, "Config erase");
   
   Serial.print("Config erase on request.");
   delay(2000);
@@ -706,6 +720,22 @@ String urlDecode(String input) {
   return decoded;
 }
 
+////////////////////////////////  Send notifications ////////////////////////////////////////////////////////
+
+/*
+* Send notification to master
+*/
+void sendMasterNotification(char *message) {
+
+  HttpClient master_http_client(httpWifiInstance, config_master_ip, 5000);
+  
+  std::string httpPath = std::string("http://") + config_master_ip + "/api/notification?message=" + message;
+  int http_err = master_http_client.get(httpPath.c_str());
+
+  if (http_err != 0) { Serial.println("Error sending notification to master"); };
+  Serial.println(message);
+}
+
 ////////////////////////////////  Audio  //////////////////////////////////////////////////////////////////////
 
 /*
@@ -723,11 +753,14 @@ void startAudio(bool start) {
 // Task function to handle incoming TCP data for Audio 
 IRAM_ATTR void tcpReceiveAudioTask(void *pvParameters) {
 
-    float sample;
-    uint8_t *sample_ptr = (uint8_t *)&sample;
-    uint32_t i2sValue;
-    uint16_t bytesReceived;
-    uint16_t i2s_written;
+    uint8_t tcp_audio_buffer[AUDIO_TCP_CHUNK_SIZE]; 
+
+    int16_t bytesReceived;
+    int16_t i2s_written;
+    size_t num_samples;
+    float gain;
+    int16_t *samples;
+    int32_t amplified;
 
     while (true) {
 
@@ -738,32 +771,34 @@ IRAM_ATTR void tcpReceiveAudioTask(void *pvParameters) {
       while (tcpClientAudio && tcpClientAudio.connected()) {
           
           bytesReceived = tcpClientAudio.read(tcp_audio_buffer, AUDIO_TCP_CHUNK_SIZE);
-          //Serial.println(bytesReceived);
 
           if (bytesReceived > 0) {
-            float adjusted_gain = audio_volume * 0.05;
-            // Convert samples
-            for (size_t i = 0; i <= bytesReceived; i = i + 4) {
+                    
+            num_samples = bytesReceived / 2; // 16-bit samples = 2 bytes per sample
+            gain = audio_volume / 10;
 
-              sample_ptr[0] = tcp_audio_buffer[i + 0];
-              sample_ptr[1] = tcp_audio_buffer[i + 1];
-              sample_ptr[2] = tcp_audio_buffer[i + 2];
-              sample_ptr[3] = tcp_audio_buffer[i + 3];
-              
-              i2sValue = static_cast<int32_t>(sample * (32767.0f * adjusted_gain) ) ;
-              //i2sValue = static_cast<int32_t>(0) ;
+            // Volume adjustment
+            samples = (int16_t *)tcp_audio_buffer;
 
-              i2sbuffer[i] = static_cast<uint8_t>(i2sValue & 0xFF);
-              i2sbuffer[i + 1] = static_cast<uint8_t>((i2sValue >> 8) & 0xFF);
-              i2sbuffer[i + 2] = static_cast<uint8_t>((i2sValue >> 16) & 0xFF);
-              i2sbuffer[i + 3] = static_cast<uint8_t>((i2sValue >> 24) & 0xFF);
+            for (size_t i = 0; i < num_samples; i++) {
+                // Amplify the sample
+                amplified = (int32_t)(samples[i] * gain);
+                // Clamp the value to the 16-bit range to avoid clipping
+                if (amplified > 32767) {
+                    amplified = 32767;
+                } else if (amplified < -32768) {
+                    amplified = -32768;
+                }
+                // Store the amplified value back into the buffer
+                samples[i] = (int16_t)amplified;
+            }
 
-            };
-
-            i2s_written = I2S.write((uint8_t *)i2sbuffer, bytesReceived);
+            i2s_written = I2S.write((uint8_t *)samples, bytesReceived);
+            
             if (i2s_written < bytesReceived) {
               Serial.println("I2S Buffer overflow");
             }
+
           } else {
               I2S.flush();
               vTaskDelay(30);

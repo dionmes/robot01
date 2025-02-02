@@ -1,4 +1,5 @@
-#include <sys/_stdint.h>
+#include <stdint.h>
+//
 // Wrapper for Adafruit_BNO08x
 //
 #include <Adafruit_BNO08x.h>
@@ -21,16 +22,17 @@ class motiondetect {
       float yaw = 0;
       float pitch = 0;
       float roll = 0;
+      float ypr_accuracy = 0;
 
       uint8_t accuracy = 0;
       uint16_t shake = 0;
 
     } motiondetectData_t;
 
-    motiondetectData_t mData;
+    motiondetectData_t sensorData;
 
   private:
-    static void motionsensorUpdateTask(void *pvParameters);
+    static void sensorUpdateTask(void *pvParameters);
 
 };
 

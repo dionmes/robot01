@@ -8,8 +8,15 @@ Also handles the switches and leds in the Robosapien body.
 #include <Wire.h>
 #include <MCP23017.h>
 #include "bodyControl.h"
+#include "DistanceSensor.h"
+#include "motiondetect.h"
+#include <ArduinoHttpClient.h>
 
+// Global objects and functions needed
 extern TwoWire wire;
+extern DistanceSensor distance_sensor;
+extern motiondetect motion_detect;
+extern void sendMasterNotification(char *message);
 
 // Body Actions
 enum bodyAction {
@@ -66,8 +73,8 @@ public:
   static void leftHandLight(bool on, int value = 0);
   // right Hand ligt, params: on = true, value not used
   static void rightHandLight(bool on, int value = 0);
-  // Turn body , params: left = true for turning left
-  static void turn(bool left, int value);
+  // Turn body , params: direction in degrees (-180 - 180 degrees.)
+  static void turn(int value);
   // Shake body , params: left and value not used
   static void shake(bool left, int value);
   // Back and Forth, params: left and value not used
@@ -77,11 +84,12 @@ public:
   // Walk backward, params: left not used
   static void walk_backward(int value);
 
+  // Worker task taskhandle
+  TaskHandle_t bodyTaskHandle;
+
 private:
   // Queue worker for handling display actions
   static void worker(void *pvParameters);
-  // Worker task taskhandle
-  TaskHandle_t bodyTaskHandle;
 };
 
 #endif
