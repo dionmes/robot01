@@ -9,7 +9,7 @@ import numpy as np
 
 from ping3 import ping, verbose_ping
 
-from tts_speecht5 import TTS
+from tts_engine import TTS
 from display import DISPLAY
 from sense import SENSE
 
@@ -329,15 +329,11 @@ class ROBOT:
 
 		if "sad" in emotion:
 			self.display.action(12,1,8)
-
 			self.bodyaction(16,d1,30)
-			self.bodyaction(17,d2,30)
 			
 			return
 		elif "happy" in emotion:
 			self.display.action(12,1,5)
-
-			self.bodyaction(16,d1,30)
 			self.bodyaction(17,d2,30)
 
 			return
@@ -367,8 +363,6 @@ class ROBOT:
 			return
 		elif "interesting" in emotion:
 			self.display.action(12,1,9)
-
-			self.bodyaction(16,d1,30)
 			self.bodyaction(17,d2,30)
 
 			return
