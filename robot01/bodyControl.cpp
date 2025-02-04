@@ -14,7 +14,7 @@
 #define STEPWAIT 50
 
 // mm before blocking forward walk
-#define FW_DISTANCE_TO_STOP 300
+#define FW_DISTANCE_TO_STOP 350
 // Tolerance for heading while turning
 #define TURN_TOLERANCE_DEGREES 3
 // Max turn error count

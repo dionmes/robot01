@@ -1,8 +1,9 @@
 /*
 * Include
 */
+
 #include <Wire.h>
-#include <ESP_I2S.h>
+#include "driver/i2s_std.h"
 #include <FS.h>
 #include <SPIFFS.h>
 #include <WiFiManager.h>
@@ -57,15 +58,15 @@ TaskHandle_t tcpAudioTaskHandle;
 WiFiServer audioServer(AUDIO_TCP_PORT);
 WiFiClient tcpClientAudio;
 
-#define AUDIO_TCP_CHUNK_SIZE 2048 // TCP Buffer
-
-#define robot01_I2S_BCK 14
-#define robot01_I2S_LRC 12
-#define robot01_I2S_OUT 11
+#define AUDIO_TCP_CHUNK_SIZE 4096 // TCP Buffer
+#define robot01_I2S_BCK GPIO_NUM_14
+#define robot01_I2S_WS GPIO_NUM_12
+#define robot01_I2S_OUT GPIO_NUM_11
 
 #define I2S_SAMPLE_RATE 16000
 bool audioStreamRunning = false;  // If Audio is listening on tcp
-I2SClass I2S;
+
+i2s_chan_handle_t i2s_tx_handle;  // I2S TX channel handle
 
 #define MAX_VOLUME 50
 // default volume
@@ -97,8 +98,8 @@ void setup() {
   
   // Serial
   Serial.begin(115200);
-  Serial.println("Booting robot01");
-
+  delay(1000);
+  
   // Wire init.
   Wire.begin();
   Wire.setClock(100000);
@@ -209,8 +210,30 @@ void setup() {
   io_conf.pull_up_en = GPIO_PULLUP_DISABLE; //disable pull-up mode
   gpio_config(&io_conf); //configure GPIO with the given settings
 
-  I2S.setPins(robot01_I2S_BCK, robot01_I2S_LRC, robot01_I2S_OUT, -1, -1); //SCK, WS, SDOUT, SDIN, MCLK
-  I2S.begin(I2S_MODE_TDM, I2S_SAMPLE_RATE, I2S_DATA_BIT_WIDTH_16BIT, I2S_SLOT_MODE_MONO, I2S_STD_SLOT_BOTH);
+  i2s_chan_config_t chan_cfg = {
+      .id = I2S_NUM_0,
+      .role = I2S_ROLE_MASTER,
+      .dma_desc_num = 64,     //  Max number of DMA buffers (64)
+      .dma_frame_num = 1024,  //Frames per buffer (higher = more buffering)
+      .auto_clear = true
+  };
+
+  i2s_new_channel(&chan_cfg, &i2s_tx_handle, NULL); // Create TX channel
+
+  i2s_std_config_t i2s_std_cfg = {
+      .clk_cfg  = I2S_STD_CLK_DEFAULT_CONFIG(I2S_SAMPLE_RATE),
+      .slot_cfg = I2S_STD_PCM_SLOT_DEFAULT_CONFIG(I2S_DATA_BIT_WIDTH_16BIT, I2S_SLOT_MODE_MONO),
+      .gpio_cfg = {
+          .mclk = I2S_GPIO_UNUSED,
+          .bclk = robot01_I2S_BCK,
+          .ws   = robot01_I2S_WS,
+          .dout = robot01_I2S_OUT,
+          .din  = I2S_GPIO_UNUSED
+      }
+  };
+
+  i2s_channel_init_std_mode(i2s_tx_handle, &i2s_std_cfg);  
+  i2s_channel_enable(i2s_tx_handle);
 
   // TCP Audio receive task
   xTaskCreatePinnedToCore(tcpReceiveAudioTask,"TCPReceiveAudioTask", 12288, NULL,TCP_AUDIO_TAK_PRIORITY ,&tcpAudioTaskHandle,TCP_AUDIO_TASK_CORE);
@@ -400,11 +423,11 @@ esp_err_t webhandler_volume(httpd_req_t *request) {
   String param_value = get_url_param(request,param_name, 4);
 
   if (param_value != "invalid") {
-    roboDisplay.exec(DisplayAction::DISPLAYTEXTSMALL, "Volume : " + param_value, Display_MESSAGE_WAIT_TIME);
 
     int value = param_value.toInt();
     if (value >= 0 && value <= MAX_VOLUME) {
       audio_volume = value;
+      roboDisplay.exec(DisplayAction::DISPLAYTEXTSMALL, "Volume : " + param_value, Display_MESSAGE_WAIT_TIME);
     } 
   }
   
@@ -755,8 +778,8 @@ IRAM_ATTR void tcpReceiveAudioTask(void *pvParameters) {
 
     uint8_t tcp_audio_buffer[AUDIO_TCP_CHUNK_SIZE]; 
 
-    int16_t bytesReceived;
-    int16_t i2s_written;
+    size_t bytesReceived;
+    size_t i2s_written;
     size_t num_samples;
     float gain;
     int16_t *samples;
@@ -773,10 +796,8 @@ IRAM_ATTR void tcpReceiveAudioTask(void *pvParameters) {
           bytesReceived = tcpClientAudio.read(tcp_audio_buffer, AUDIO_TCP_CHUNK_SIZE);
 
           if (bytesReceived > 0) {
-                    
             num_samples = bytesReceived / 2; // 16-bit samples = 2 bytes per sample
             gain = audio_volume / 10;
-
             // Volume adjustment
             samples = (int16_t *)tcp_audio_buffer;
 
@@ -793,17 +814,12 @@ IRAM_ATTR void tcpReceiveAudioTask(void *pvParameters) {
                 samples[i] = (int16_t)amplified;
             }
 
-            i2s_written = I2S.write((uint8_t *)samples, bytesReceived);
-            
+            i2s_channel_write(i2s_tx_handle, (uint8_t *)samples, bytesReceived, &i2s_written, portMAX_DELAY);
+
             if (i2s_written < bytesReceived) {
               Serial.println("I2S Buffer overflow");
             }
-
-          } else {
-              I2S.flush();
-              vTaskDelay(30);
-          }
-
+          } 
           // Delay to prevent CPU overload
           vTaskDelay(5);
       }
