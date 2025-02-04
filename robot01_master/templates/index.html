@@ -154,6 +154,23 @@ function change_llm_mode() {
 	});
 }
 
+function stop() {
+	$("#loader").attr("aria-busy", "true");
+	var mode = $('#llm_mode').val();
+	
+	$.ajax({
+		url: "/api/stop",
+		type: 'GET',
+		async: true
+	})
+	.fail(function (xhr, status, errorThrown) {
+		alert(errorThrown);
+	})
+	.always(function() {
+		$("#loader").attr("aria-busy", "false");
+	});
+}
+
 window.onload = function() {
 	health_update();
 	setInterval("health_update()",5000);
@@ -268,8 +285,11 @@ window.onload = function() {
 				<div class="grid">
 					<button type="submit" class="secondary"> Ask </button>
 					</label>
-				</div>
+				</div >
 			</form> 
+			<div class="container-fluid">
+				<button class="outline" style="width:100%;" onClick="stop();">stop</button>
+			</div>
 			<hr>
 			<div class="grid" style="margin: var(--pico-spacing);">
 				<select name="LLM_Mode" aria-label="llm_mode" id="llm_mode" required onchange="change_llm_mode();">
@@ -295,7 +315,6 @@ window.onload = function() {
 			<div class="container-fluid"">
 				<h6>Robot01 <div id="robot01status" class="roundred"></div></h6>
 				<h7><div id="robot01latency"></div></h7>
-				<hr>
 			</div>
 			<div class="container-fluid"">
 				<h6>Sense <div id="sensestatus" class="roundred"></div></h6>

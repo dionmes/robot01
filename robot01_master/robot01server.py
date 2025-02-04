@@ -167,16 +167,13 @@ def ask_robot01():
 		print(e)
 		abort(500, description=str(e))
 	
-	if not brain.busybrain:
-		print("start processing")
-		try:
-			# Start the background task
-			prompt_task = threading.Thread(target=brain.prompt, args=([prompt]))
-			prompt_task.start()
-		except Exception as e:
-			print("Prompt error : ", e)
-	else:
-		abort(500,"Busy brain")
+	print("start processing")
+	try:
+		# Start the background task
+		prompt_task = threading.Thread(target=brain.prompt, args=([prompt]))
+		prompt_task.start()
+	except Exception as e:
+		print("Prompt error : ", e)
 		
 	api_response = { 'status': 'ok' }
 
@@ -210,6 +207,19 @@ def tts_api():
 
 	api_response = { 'status': 'ok' }
 
+	return jsonify(api_response)
+
+#
+# Robot brain and body stop
+# GET: /api/stop
+#
+# Return json response
+#
+@app.route('/api/stop', methods=['GET'])
+def stop():
+
+	brain.stop()
+	api_response = { 'status': 'ok' }
 	return jsonify(api_response)
 
 #
@@ -411,7 +421,7 @@ def wakeupsense():
 
 #
 # Send Sense to sleep
-# GET: /api/wakeupsense
+# GET: /api/go2sleep_sense
 #
 # Return "ok"
 #
@@ -484,7 +494,6 @@ def sense_reset():
 def robot01_eraseconfig():
 	api_response = brain.robot.erase_config()
 	return jsonify(api_response)
-
 
 #
 # Sense erase config

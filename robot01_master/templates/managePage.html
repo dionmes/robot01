@@ -164,7 +164,7 @@ function clearips() {
 function override_busy() {
 	$("#loader").attr("aria-busy", "true");	
 	$.ajax({
-		url: "/api/setting?item=busybrain&value=True",
+		url: "/api/setting?item=busybrain&value=False",
 		type: 'GET',
 		dataType: 'json',
 		async: true
@@ -271,11 +271,6 @@ function override_busy() {
 			</div>
 		</div>
 	<hr>
-		<div class="grid">
-			<div>
-				<button onClick="override_busy();">Override busybrain</button>
-			</div>
-		</div>
 	</div>
 	<hr>
 	<div class="container">

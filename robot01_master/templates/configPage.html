@@ -24,6 +24,7 @@
 			config = result;
 			$('#llm_system').val(config.llm_system);
 			$('#agent_system').val(config.agent_system);
+			$('#openAI_api_key').val(config.openAI_api_key);
 			$('#weather_api_key').val(config.weather_api_key);
 		})
 		.fail(function (xhr, status,errorThrown) {
@@ -39,8 +40,9 @@
 	
 		config.llm_system = $('#llm_system').val();
 		config.agent_system = $('#agent_system').val();
+		config.openAI_api_key = $('#openAI_api_key').val();
 		config.weather_api_key = $('#weather_api_key').val();
-	
+
 		$.ajax({
 			url: '/api/save_config',
 			type: 'POST',
@@ -109,6 +111,8 @@
 	<textarea name="system" id="llm_system" aria-label="llm system"></textarea>	
 	<h6>Agent System message</h6>
 	<textarea name="system" id="agent_system" aria-label="agent system"></textarea>	
+	<h6>OpenAI API Key</h6>
+	<input type="password" id="openAI_api_key" aria-label="openAI_api_key">
 	<h6>Weather API Key</h6>
 	<input type="password" id="weather_api_key" aria-label="weather_api_key">
 	</div>

@@ -30,6 +30,7 @@ HEALTH_CHECK_INTERVAL = 5
 
 # Class robot for managing the robot motors, audio and sensors
 # Uses threading for http call to make it non-blocking
+#
 class ROBOT:
 	def __init__(self, ip, sense_ip):
 
@@ -78,8 +79,10 @@ class ROBOT:
 		# tts engine
 		self.tts_engine = TTS(self.ip, self.output_q)
 		self.tts_engine.start()
-		
+	
+	#	
 	# Health check worker (ping robot)
+	#
 	def health_check_worker(self):
 		print("Robot health check worker started.")	
 		while True:
@@ -100,7 +103,9 @@ class ROBOT:
 	
 			time.sleep(HEALTH_CHECK_INTERVAL)		
 
-	# Generate Display worker : Actions from queue : display_q
+	#
+	# Bodyactions workerGenerate Process body_q queue items
+	#
 	def bodyactions_worker(self):
 		print("Robot worker started.")	
 		while self.robot_actions:	
@@ -114,6 +119,9 @@ class ROBOT:
 			if not self.body_q.empty():
 				self.body_q.task_done()			
 
+	#
+	# Bodyactions set state of worker
+	#
 	def bodyactions_set_state(self, running):
 		if running:
 			self.body_q = queue.Queue(maxsize=BODY_Q_SIZE)
@@ -129,8 +137,10 @@ class ROBOT:
 	
 			print("Robot body actions stopped")				
 	
+	#
+	# Bodyaction : Put bodyaction in queue. Action 12 - immediate stop
+	#
 	def bodyaction(self, action, direction, value):
-
 		# stop immediately
 		if action == 12:
 			print("Robot bodyactions immediate stop.")
@@ -150,6 +160,9 @@ class ROBOT:
 			except Exception as e:
 				print("Robot bodyactions queue error : ", type(e).__name__ )
 
+	#
+	# Set/get Output worker status
+	#
 	def output(self, state = -1)->bool:
 		# Get output status
 		if state == -1:			
@@ -194,9 +207,10 @@ class ROBOT:
 
 		return False
 
-	# Send output worker : Gets output action from queue : output_q
+	#
+	# Output worker : Gets output action from queue : output_q
 	# Checks for TTS action, include emotion response
-	# sends audio (16khz mono f32le) over UDP to robot01 ip port 9000
+	# sends audio over TCP
 	#
 	def output_worker(self):
 		print("Output worker started.")
@@ -230,9 +244,12 @@ class ROBOT:
 						self.audio_socket.close()
 						break
 
-					time.sleep(0.015) # Rate limiter
 					if not self.output_worker_running:
 						break
+
+				# Flush buffer with empty packets
+				for x in range(0, 4):
+					self.audio_socket.sendall( bytes(1024) )
 	
 			if "text" in output_action:
 				threading.Thread(target=self.express_emotion,args=[output_action['text']],daemon=True).start()
@@ -242,7 +259,9 @@ class ROBOT:
 			if self.output_q.empty():
 				self.output_stopped()
 
-	# Connect to TCP audio
+	#
+	# Connect TCP audio
+	#
 	def connect_tcp_audio(self)->bool:
 		# Check if connection is open,
 		try:
@@ -267,7 +286,9 @@ class ROBOT:
 			return False
 
 
+	#
 	# Callback : Started output state 
+	#
 	def output_started(self):
 		self.output_busy = True
 		if not self.sense.mic: 
@@ -275,7 +296,9 @@ class ROBOT:
 			
 		self.display.state(23)
 
+	#
 	# Callback : Stopped output
+	#
 	def output_stopped(self):
 		self.display.state(3)
 		self.bodyaction(16,0,30)
@@ -286,6 +309,9 @@ class ROBOT:
 
 		self.output_busy = False
 
+	#
+	# Set/Get volume
+	#
 	def volume(self, set_volume = -1):
 		if set_volume == -1 :			
 			response = self.robot_http_call('/volume')
@@ -320,7 +346,7 @@ class ROBOT:
 		)
 		
 		emotion =  response['message']['content'].lower()
-
+		
 		print("Robot expression: " + emotion)
 		
 		# Random motion directions
@@ -374,10 +400,16 @@ class ROBOT:
 
 			return
 
+	#
+	# wakeupsense : Give signal to io pin for waking up sense device
+	#
 	def wakeupsense(self):
 		threading.Thread(target=self.robot_http_call, args=[('/wakeupsense')]).start()
 		print("Sense Wake up signal send.")
 		
+	#
+	# distanceSensor_info : Get distance / ToF sensor info
+	#
 	def distanceSensor_info(self)->dict:
 		response = self.robot_http_call('/distanceSensor_info')
 		if self.health:	
@@ -385,10 +417,13 @@ class ROBOT:
 				self.distance_sensor = response.json()
 			except Exception as e:
 				print("distanceSensor_info : ",e)
-				return ""
+				return 0
 		
 		return self.distance_sensor
 	
+	#
+	# motionSensor_info : Get motion/gyro sensor data
+	#
 	def motionSensor_info(self)->dict:
 		response = self.robot_http_call('/motionSensor_info')
 		if self.health:	
@@ -396,21 +431,30 @@ class ROBOT:
 				self.motionsensor = response.json()
 			except Exception as e:
 				print("motionSensor_info : ",e)
-				return ""
+				return 0
 			return self.motionsensor
 
+	#
+	# Reset robot
+	#
 	def reset(self):
 		threading.Thread(target=self.robot_http_call, args=[('/reset')]).start()
 		print("Robot01 reset send")
 		reset = {"reset":"ok"}
 		return
 		
+	#
+	# Erase/wipe config of robot
+	#
 	def erase_config(self):
 		threading.Thread(target=self.robot_http_call, args=[('/eraseconfig')]).start()
 		print("Robot01 erase config send")
 		reset = {"erase":"ok"}
 		return
 
+	#
+	# Safe http call to robot
+	#
 	def robot_http_call(self, url)-> any:
 		if self.health:
 			try:

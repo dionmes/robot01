@@ -2,7 +2,7 @@ import numpy as np
 import time
 import threading
 import queue
-from tts_kokura import ROBOT_TTS_MODEL
+from tts_speecht5 import ROBOT_TTS_MODEL
 
 # queue sizes
 TEXT_Q_SIZE = 15
