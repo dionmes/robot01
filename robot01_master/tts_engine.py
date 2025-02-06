@@ -27,16 +27,22 @@ class TTS:
 	# puts audio (16khz mono f32le) into output_q
 	#
 	def generate_speech(self):
+		
 		print("TTS Speech synthesizer worker started.")	
+		
 		while self.running:
 			text = self.text_q.get()
+			if not self.running:
+				break
 			audio = self.tts_model.synthesize(text)
 			try:
 				self.output_q.put_nowait({"type" : "speech", "text" : text, "audio" : audio})
 			except Exception as e:
-				print("Audio queue error : ", type(e).__name__ )
+				print("Output queue error : ", type(e).__name__ )
 			
 			self.text_q.task_done()
+		
+		print("TTS Speech synthesizer worker stopped.")	
 
 	# returns text_q size
 	def queue_size(self)->int:
@@ -51,5 +57,6 @@ class TTS:
 	# Stop workers
 	def stop(self):
 		self.running = False
+		self.text_q.put("") # dummy value
 		# Wait for save shutdown of threads and queues
 		time.sleep(1)

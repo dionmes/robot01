@@ -42,13 +42,13 @@ class SENSE:
 	def micstreaming(self, state = -1)->bool:
 	
 		if state == -1:
-			response = self.sense_http_call("/control?setting=micstreaming")
 			try:
+				response = self.sense_http_call("/control?setting=micstreaming")
 				json_obj = response.json()
 				self.mic = json_obj['micstreaming']
 
 			except Exception as e:
-				print("Request - micstatus error : ",e)
+				print("Request - micstreaming error : ",e)
 				self.mic = False
 		else:
 			threading.Thread(target=self.sense_http_call, args=["/control?setting=micstreaming&param=" + str(state)]).start()
@@ -59,8 +59,8 @@ class SENSE:
 	def camstreaming(self, state = -1)->bool:
 	
 		if state == -1:
-			response = self.sense_http_call("/control?setting=camstreaming")
 			try:
+				response = self.sense_http_call("/control?setting=camstreaming")
 				json_obj = response.json()
 				return json_obj['camstreaming']
 				

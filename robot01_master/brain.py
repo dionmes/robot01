@@ -50,16 +50,12 @@ CONFIG_FILE = "config.json"
 
 # Default configuration
 default_config = {
-"robot01_ip" : "",
-"sense_ip" : "",
-"llm_system":  """
-""",
-"agent_system": """ You are the brain of a robot. As a robot you have different tools available.
-These tools allow you to take action and gather information.
-Only respond with numbers in a written out format. Do not use digits as output. This also applies to date and time.
-""",
-"openAI_api_key": "",
-"weather_api_key": "",
+	"robot01_ip" : "",
+	"sense_ip" : "",
+	"llm_system":  "",
+	"agent_system": "",
+	"openAI_api_key": "",
+	"weather_api_key": ""
 }
 
 # Max tokens to TTS
@@ -308,14 +304,38 @@ class BRAIN:
 
 	#
 	# TTS output.
-	# Puts text in tts_engine queue
+	# Puts text in tts_engine queue in chunks. Also used in Agentic AI as a tool
 	#
-	def speak(self,param1 : str):
+	def speak(self, param1 : str):
 		try:
 			if self.robot.output_worker_running:
-				self.robot.tts_engine.text_q.put_nowait(param1)
+			
+				words_and_delimiters = re.split(r".,?!...;:])", text)
+				words_and_delimiters = list(filter(None, words_and_delimiters))
+				
+				message = ""
+				n = 0
+				for token in words_and_delimiters:
+					if token in ".,?!...;:])" or n > TTS_MAX_SENTENCE_LENGHT:
+						message = message + token
+						if not message.strip() == "" and len(message) > 1:
+							print("From LLM (Speak chunked response): " + message)
+							# Put text in output queue
+							try:
+								self.robot.tts_engine.text_q.put(message)
+							except Exception as e:
+								print("Speak: TTS text_q queue error : ", type(e).__name__ )
+							
+						message = ""
+						n = 0
+					else:
+						message = message + token
+						n = n + 1
+		
 		except Exception as e:
 			print("Text queue error : ",type(e).__name__ )
+
+		return
 
 	#
 	#STT worker
@@ -339,9 +359,7 @@ class BRAIN:
 			print(e)
 			return False			
 
-###############
-############### AI ############### 
-###############
+############################## AI ##############################
 	
 	#
 	# Prompt input for chat and Agent AI
@@ -350,10 +368,9 @@ class BRAIN:
 		
 		# Cancel previous actions
 		self.stop();
-
-		# Show gear animation in display				
+	
 		self.robot.display.state(18)
-		
+
 		# Chat
 		if self.llm_mode == "chat mode":
 			self.chat_interaction(text)
@@ -371,7 +388,6 @@ class BRAIN:
 		
 		self.chat_running = True
 		self.chat_interrupt = False
-		
 				
 		stream = ollama.chat(
 			model = LLM_MODEL,
@@ -387,14 +403,16 @@ class BRAIN:
 			token = chunk['message']['content']
 			
 			# print(token)
-			if token in ".,?!...;:" or n > TTS_MAX_SENTENCE_LENGHT:
+			if token in ".,?!...;:])" or n > TTS_MAX_SENTENCE_LENGHT:
 				message = message + token
 				if not message.strip() == "" and len(message) > 1:
 					print("From LLM (chat): " + message)
-					self.speak(message)
-					# Slow down if tts queue gets larger
-					time.sleep(self.robot.tts_engine.queue_size() * 0.700)
-	
+
+					try:
+						self.robot.tts_engine.text_q.put(message)
+					except Exception as e:
+						print("Chat: TTS text_q queue error : ", type(e).__name__ )
+						
 				message = ""
 				n = 0
 			else:
@@ -564,9 +582,7 @@ class BRAIN:
 										return_intermediate_value=True, verbose=True)
 
 
-###############
-############### Agentic Tools ############### 
-###############
+############################## Agentic Tools ##############################
 		
 	#
 	# Current Heading tool
@@ -784,33 +800,6 @@ class BRAIN:
 				
 		return
 
-###############
-############### End of Agentic Tools ############### 
-###############
-	
-	#
-	# Streamed/chunked text output before sending to TTS
-	#
-	def tts_output_chunked(self,text):
-		
-		words_and_delimiters = re.split(r"([.,?!...;:])", text)
-		words_and_delimiters = list(filter(None, words_and_delimiters))
-		
-		message = ""
-		n = 0
-		for token in words_and_delimiters:
-			if token in ".,?!...;:" or n > TTS_MAX_SENTENCE_LENGHT:
-				message = message + token
-				if not message.strip() == "" and len(message) > 1:
-					print("From LLM (chunked response): " + message)
-					self.speak(message)
-	
-				message = ""
-				n = 0
-			else:
-				message = message + token
-				n = n + 1
-
-		return
-		
+############################## End of Agentic Tools ##############################
+			
 		

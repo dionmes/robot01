@@ -1,5 +1,8 @@
 import os
 from flask import Flask, send_from_directory, render_template, jsonify, request, abort
+import logging
+from werkzeug.serving import WSGIRequestHandler
+
 import ipaddress
 import requests
 import json
@@ -10,6 +13,10 @@ import base64
 from datetime import datetime
 
 from brain import BRAIN
+
+# Flask logging
+log = logging.getLogger('werkzeug')
+log.setLevel(logging.WARNING)
 
 # Set static_folder to serve static files from 'static' directory
 app = Flask(__name__, static_folder='static')
@@ -95,13 +102,46 @@ def serve_images(filename):
 	except Exception as e:
 		abort(500, description=str(e))
 
-###############	 API Endpoints ############### 
+###################################	 API Endpoints ##########################################
+
+
+#
+# Text and image to robot post request
+# POST: /api/ask_robot01 {"text" : string }
+#
+# Return json response
+#
+@app.route('/api/ask_robot01', methods=['POST'])
+def ask_robot01():
+	try:
+		data = request.get_json()
+		prompt = data["text"]
+	except Exception as e:
+		print(e)
+		abort(500, description=str(e))
+	
+	print("start processing")
+	# Show hour glass animation in display				
+	brain.robot.display.state(20)
+		
+	try:
+		# Start the background task
+		prompt_task = threading.Thread(target=brain.prompt, args=([prompt]))
+		prompt_task.start()
+	except Exception as e:
+		print("Prompt error : ", e)
+		
+	api_response = { 'status': 'ok' }
+
+	return jsonify(api_response)
+
 #
 # Load config
 # GET: /api/load_config {config}
 #
 # Return json response
 #
+
 @app.route('/api/load_config', methods=['GET'])
 def load_config():
 	try:
@@ -149,33 +189,6 @@ def restart_master():
 		abort(500, description=str(e))
 	
 	api_response = { 'restart': 'ok' }
-
-	return jsonify(api_response)
-
-#
-# Text and image to robot post request
-# POST: /api/ask_robot01 {"text" : string }
-#
-# Return json response
-#
-@app.route('/api/ask_robot01', methods=['POST'])
-def ask_robot01():
-	try:
-		data = request.get_json()
-		prompt = data["text"]
-	except Exception as e:
-		print(e)
-		abort(500, description=str(e))
-	
-	print("start processing")
-	try:
-		# Start the background task
-		prompt_task = threading.Thread(target=brain.prompt, args=([prompt]))
-		prompt_task.start()
-	except Exception as e:
-		print("Prompt error : ", e)
-		
-	api_response = { 'status': 'ok' }
 
 	return jsonify(api_response)
 

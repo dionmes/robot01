@@ -43,7 +43,9 @@ class DISPLAY:
 		# Start Queue worker
 		threading.Thread(target=self.handle_actions, daemon=True).start()
 
+	#
 	# Generate Display worker : Actions from queue : display_q
+	#
 	def handle_actions(self):
 		print("DISPLAY worker started.")	
 
@@ -86,8 +88,12 @@ class DISPLAY:
 			# Reset to latest state
 			if self.display_q.empty() and task['type'] == "action":
 				self.display_q.put_nowait(self.latest_state)
+		
+		print("DISPLAY worker stopped.")	
 
+	#
 	# set state of display
+	#
 	def state(self, action, img_index = 0, text = ""):
 		task = {"type": "state", "action" : action, "img_index" : img_index, "text" : text}
 		
@@ -101,7 +107,9 @@ class DISPLAY:
 		except Exception as e:
 			print("Display queue error : ", type(e).__name__ )
 
+	#
 	# set temporary state of display
+	#
 	def action(self, action, reset=0, img_index = 0, text=""):
 		task = {"type": "action", "action" : action, "reset" : reset, "img_index" : img_index, "text" : text}
 		try:
@@ -110,8 +118,10 @@ class DISPLAY:
 		except Exception as e:
 			print("Display queue error : ", type(e).__name__ )
 
+	#
 	# Image test
 	# Convert imagedata with https://javl.github.io/image2cpp/ (plain bytes in hex, Remove '0x' and commas from output)
+	#
 	def imagetest(self, imagedata):
 
 		try:
@@ -134,6 +144,9 @@ class DISPLAY:
 			
 		return
 		
+	#
+	# Safe http call to display
+	#
 	def safe_http_call(self, url):
 		if self.health:
 			try:

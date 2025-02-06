@@ -2,6 +2,8 @@ import threading
 import requests
 import time
 import queue
+from queue import PriorityQueue
+
 import socket
 import random
 import ollama
@@ -103,13 +105,17 @@ class ROBOT:
 	
 			time.sleep(HEALTH_CHECK_INTERVAL)		
 
+		print("Robot health check worker started.")	
+
 	#
 	# Bodyactions workerGenerate Process body_q queue items
 	#
 	def bodyactions_worker(self):
-		print("Robot worker started.")	
+		print("Body actions worker started.")	
 		while self.robot_actions:	
 			task = self.body_q.get()
+			if not self.robot_actions:
+				break
 			print("Robot action : " + str(task['action']) )
 
 			url = "/bodyaction?action=" + str(task['action']) + "&direction=" + str(task['direction']) + "&value=" + str(task['value'])
@@ -119,6 +125,8 @@ class ROBOT:
 			if not self.body_q.empty():
 				self.body_q.task_done()			
 
+		print("Body actions worker stopped.")	
+
 	#
 	# Bodyactions set state of worker
 	#
@@ -127,16 +135,14 @@ class ROBOT:
 			self.body_q = queue.Queue(maxsize=BODY_Q_SIZE)
 			self.robot_actions = True
 			threading.Thread(target=self.bodyactions_worker, daemon=True).start()
-			print("Robot body actions enabled")
 		else:
-			self.robot_actions = False		
+			self.robot_actions = False
+			self.body_q.put({}) # dummy value	
 			# Stop action to robot
 			url = "/bodyaction?action=13&direction=0&value=0"
 	
 			response = self.robot_http_call(url)
-	
-			print("Robot body actions stopped")				
-	
+		
 	#
 	# Bodyaction : Put bodyaction in queue. Action 12 - immediate stop
 	#
@@ -185,24 +191,21 @@ class ROBOT:
 				self.tts_engine.start()
 
 			if not self.output_worker_running :
-				self.output_worker_running = True
-				threading.Thread(target=self.output_worker, daemon=True).start()
 				self.output_q = queue.Queue(maxsize=OUTPUT_Q_SIZE)
 				self.tts_engine.output_q = self.output_q # Reestablish reference
-				print("Robot output engine started")			
+				self.output_worker_running = True
+				threading.Thread(target=self.output_worker, daemon=True).start()
 				
 			return True
 		
 		# Stio output
 		elif state == 0:
 			self.output_worker_running = False
+			self.output_q.put({}) # dummy value
 			threading.Thread(target=self.robot_http_call, args=[('/audiostream?on=0' )]).start()
-			self.output_q = queue.Queue(maxsize=OUTPUT_Q_SIZE)
-			self.tts_engine.output_q = self.output_q # Reestablish reference
 			self.tts_engine.stop()
 			self.audio_socket.close()
 
-			print("Robot output engine stopped")			
 			time.sleep(1)		
 
 		return False
@@ -213,7 +216,7 @@ class ROBOT:
 	# sends audio over TCP
 	#
 	def output_worker(self):
-		print("Output worker started.")
+		print("Robot output engine started")			
 		while self.output_worker_running:
 			
 			# Try to connect
@@ -221,10 +224,9 @@ class ROBOT:
 				return
 						
 			output_action = self.output_q.get()
-
-			if "speech" in output_action['type'] and not self.output_busy:
-				self.output_started()
-				
+			
+			if not self.output_worker_running:
+				break
 			
 			if "audio" in output_action:
 				audio = output_action['audio']
@@ -234,6 +236,9 @@ class ROBOT:
 
 				for x in range(0, audio.shape[0],1024):
 				
+					if "speech" in output_action['type'] and not self.output_busy:
+						self.output_started()
+							
 					start = x
 					end = x + 1024
 
@@ -252,12 +257,15 @@ class ROBOT:
 					self.audio_socket.sendall( bytes(1024) )
 	
 			if "text" in output_action:
+				print("From output worker : " + output_action['text'])
 				threading.Thread(target=self.express_emotion,args=[output_action['text']],daemon=True).start()
 			
 			self.output_q.task_done()
 			
 			if self.output_q.empty():
 				self.output_stopped()
+
+		print("Robot output engine stopped")			
 
 	#
 	# Connect TCP audio
@@ -370,7 +378,7 @@ class ROBOT:
 			return
 		elif "difficult" in emotion:
 			self.display.action(12,1,9)
-			self.bodyaction(12,1,20)
+			self.bodyaction(16,1,20)
 
 			return
 		elif "love" in emotion:
@@ -384,7 +392,7 @@ class ROBOT:
 			return
 		elif "dislike" in emotion:
 			self.display.action(12,1,3)
-			self.bodyaction(17,d1,30)
+			self.bodyaction(16,d1,30)
 
 			return
 		elif "interesting" in emotion:
