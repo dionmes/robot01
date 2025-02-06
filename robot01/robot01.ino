@@ -27,10 +27,10 @@
 #define TCP_AUDIO_TASK_CORE 1
 #define TCP_AUDIO_TAK_PRIORITY 20
 
-#define motion_detect_TASK_CORE 1
+#define motion_detect_TASK_CORE 0
 #define motion_detect_PRIORITY 5
 
-#define distance_sensor_TASK_CORE 1
+#define distance_sensor_TASK_CORE 0
 #define distance_sensor_PRIORITY 5
 
 #define display_TASK_CORE 0
@@ -88,7 +88,7 @@ bodyControl bodyControl;
 // API Server
 httpd_handle_t server_httpd = NULL;
 
-// HTTP wifi client
+// HTTP wifi Client
 WiFiClient httpWifiInstance;
 
 /*
@@ -213,8 +213,8 @@ void setup() {
   i2s_chan_config_t chan_cfg = {
       .id = I2S_NUM_0,
       .role = I2S_ROLE_MASTER,
-      .dma_desc_num = 64,     //  Max number of DMA buffers (64)
-      .dma_frame_num = 1024,  //Frames per buffer (higher = more buffering)
+      .dma_desc_num = 32,    
+      .dma_frame_num = 1024,  
       .auto_clear = true
   };
 
@@ -815,13 +815,10 @@ IRAM_ATTR void tcpReceiveAudioTask(void *pvParameters) {
             }
 
             i2s_channel_write(i2s_tx_handle, (uint8_t *)samples, bytesReceived, &i2s_written, portMAX_DELAY);
-
-            if (i2s_written < bytesReceived) {
-              Serial.println("I2S Buffer overflow");
-            }
-          } 
-          // Delay to prevent CPU overload
-          vTaskDelay(5);
+          } else {
+            // Delay to prevent CPU overload
+            vTaskDelay(100);
+          }
       }
 
       if (tcpClientAudio && !tcpClientAudio.connected()) {
