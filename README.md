@@ -54,6 +54,8 @@ The hardware has some API calls via rest (no ssl, no authentication) that can be
 Via Ollama Nvidia AGX Xavier is running the LLM and vision models. The 32GB in the Xavier makes this possible.
 It has two modes to control the Robot (called Sappie / robot01). Chat mode and Agentic mode.
 
+![The brain image](./img/xavier.jpg)
+
 In chat mode it acts like a normal chat llm but during output interprets the text.
 This interpretation will display an emotion on the display and a movement of the body to establish some level of Anthropomorphism.
 
