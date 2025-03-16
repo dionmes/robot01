@@ -4,10 +4,10 @@ This is a hobby project to try out ESP32 microcontrollers while at the same time
 
 ![Robot image](./img/robot01.png)
 
-### Repo code Index 
-- robot01 - C++/Arduino code for controlling robot hardware and sensors (ESP32)
-- robot01_master - Python server code for providing the brain(LLM/Langchain) and the Webinterface (Flask)
-- robot01sense - C++/Arduino code for providing remote access and streaming of Camera/Mic hardware (ESP32)
+##### Repo code Index 
+	- robot01 - C++/Arduino code for controlling robot hardware and sensors (ESP32)
+	- robot01_master - Python server code for providing the brain(LLM/Langchain) and the Webinterface (Flask)
+	- robot01sense - C++/Arduino code for providing remote access and streaming of Camera/Mic hardware (ESP32)
 
 - **Hardware used**
 	- Robosapien V1 (replaced all electronics, including motor control)
