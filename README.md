@@ -19,7 +19,7 @@ This is a hobby project on trying out ESP32 microcontrollers while at the same t
 		- LD293D (Dual H-Bridge Motor Driver) x 4
 
 ![Early development](./img/breadboards.jpg)
-
+Early development
 
 - **ESP32 usage**  
 	- Main : body movement, display, sensors and speaker (udp streaming).
@@ -43,6 +43,7 @@ This is a hobby project on trying out ESP32 microcontrollers while at the same t
 	- Simple HTML frontend based on PicoCSS and jQuery
 
 ![Robot image](./img/webinterface1.png)
+Web interface.
 
 ## Intro
 
