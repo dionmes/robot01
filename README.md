@@ -18,6 +18,9 @@ This is a hobby project on trying out ESP32 microcontrollers while at the same t
 		- MCP23017 ( input/output expander ) x 2
 		- LD293D (Dual H-Bridge Motor Driver) x 4
 
+![Early development](./img/breadboards.jpg)
+
+
 - **ESP32 usage**  
 	- Main : body movement, display, sensors and speaker (udp streaming).
 	- Sense : the camera and mic (udp streaming).
@@ -56,8 +59,7 @@ It has two modes to control the Robot (called Sappie / robot01). Chat mode and A
 
 ![The brain image](./img/xavier.jpg)
 
-In chat mode it acts like a normal chat llm but during output interprets the text.
-This interpretation will display an emotion on the display and a movement of the body to establish some level of Anthropomorphism.
+In chat mode it acts like a normal chat llm, during output the brain interprets the text and translates it to an emotion, this will display an facial expression on the display and a movement of the body to establish some level of Anthropomorphism.
 
 In Agent mode it uses Langchain to make the robot being able to complete goals and/or provide information.
 It has several tools to its availability in Agentic mode which allows the roboto to walk around, vision (via iets camera) and provide some basic information:
@@ -80,5 +82,6 @@ Langchain is either powered by the local LLM LLama3.2 or via an external LLM (Op
 - toolMoveLeftLowerArm - Arm movement
 - toolMoveRightUpperArm - Arm movement
 - toolMoveLeftUpperArm - Arm movement
+
 
 
