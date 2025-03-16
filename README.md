@@ -19,7 +19,7 @@ This is a hobby project on trying out ESP32 microcontrollers while at the same t
 		- LD293D (Dual H-Bridge Motor Driver) x 4
 
 ![Early development](./img/breadboards.jpg)
-Early development
+*Early development*
 
 - **ESP32 usage**  
 	- Main : body movement, display, sensors and speaker (udp streaming).
@@ -43,7 +43,7 @@ Early development
 	- Simple HTML frontend based on PicoCSS and jQuery
 
 ![Robot image](./img/webinterface1.png)
-Web interface.
+*Web interface.*
 
 ## Intro
 
@@ -59,6 +59,7 @@ Via Ollama Nvidia AGX Xavier is running the LLM and vision models. The 32GB in t
 It has two modes to control the Robot (called Sappie / robot01). Chat mode and Agentic mode.
 
 ![The brain image](./img/xavier.jpg)
+*The brain*
 
 In chat mode it acts like a normal chat llm, during output the brain interprets the text and translates it to an emotion, this will display an facial expression on the display and a movement of the body to establish some level of Anthropomorphism.
 
