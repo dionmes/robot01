@@ -18,7 +18,7 @@ This is a hobby project on trying out ESP32 microcontrollers while at the same t
 		- MCP23017 ( input/output expander ) x 2
 		- LD293D (Dual H-Bridge Motor Driver) x 4
 
-![Early development](./img/breadboards.jpg)
+![Early development](./robot01_movies/IMG_3982.gif)
 *Early development*
 
 - **ESP32 usage**  
