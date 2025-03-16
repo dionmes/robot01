@@ -73,68 +73,27 @@ function health_update() {
 		
 }
 
-function output_control() {
+
+function set_item(item) {
 	$("#loader").attr("aria-busy", "true");
-	var checked = $('input[name="output"]').is(':checked');
-	$("#output").attr("disabled", true);
+	var checked = $('input[name="' + item + '"]').is(':checked');
+	$("#"+ item).attr("disabled", true);
 	var on = checked ? 1 : 0;
 	$.ajax({
-		url: "/api/setting?item=output&value=" + on,
+		url: "/api/setting?item=" + item + "&value=" + on,
 		type: 'GET',
 		dataType: 'json',
 		async: true
 		})
 	.fail(function (xhr, status, errorThrown) {
-		$("#output").attr("checked", false);
 		alert(errorThrown);
 	})
 	.always(function() {
-		$("#output").attr("disabled", false);
+		$("#" + item).attr("disabled", false);
 		$("#loader").attr("aria-busy", "false");
 	});
 }
 
-function body_control() {
-	$("#loader").attr("aria-busy", "true");
-	var checked = $('input[name="bodyactions"]').is(':checked');
-	$("#bodyactions").attr("disabled", true);
-	var on = checked ? 1 : 0;
-	$.ajax({
-		url: "/api/setting?item=bodyactions&value=" + on,
-		type: 'GET',
-		dataType: 'json',
-		async: true
-		})
-	.fail(function (xhr, status, errorThrown) {
-		$("#bodyactions").attr("checked", false);
-		alert(errorThrown);
-	})
-	.always(function() {
-		$("#bodyactions").attr("disabled", false);
-		$("#loader").attr("aria-busy", "false");
-	});
-}
-
-function mic_stream() {
-	$("#loader").attr("aria-busy", "true");
-	var checked = $('input[name="micstream"]').is(':checked');
-	$("#micstream").attr("disabled", true);
-	var on = checked ? 1 : 0;
-	$.ajax({
-		url: "/api/setting?item=micstreaming&value=" + on,
-		type: 'GET',
-		dataType: 'json',
-		async: true
-	})
-	.fail(function (xhr, status, errorThrown) {
-		$("#micstream").attr("checked", false);
-		alert(errorThrown);
-	})
-	.always(function() {
-		$("#micstream").attr("disabled", false);
-		$("#loader").attr("aria-busy", "false");
-	});
-}
 
 function change_llm_mode() {
 	$("#loader").attr("aria-busy", "true");
@@ -175,7 +134,7 @@ window.onload = function() {
 	health_update();
 	setInterval("health_update()",5000);
 	
-	// Get udp micstream status
+	// Get udp micstreaming status
 	$.ajax({
 		url: "/api/get_setting?item=micstreaming",
 		type: 'GET',
@@ -184,11 +143,11 @@ window.onload = function() {
 	})
 	.done(function (result) {
 		console.log(result);
-		$("#micstream").removeAttr("disabled");
+		$("#micstreaming").removeAttr("disabled");
 		if (result.value) {
-			$("#micstream").attr("checked", true);
+			$("#micstreaming").attr("checked", true);
 		} else {
-			$("#micstream").attr("checked", false);
+			$("#micstreaming").attr("checked", false);
 		}
 	})
 	
@@ -222,6 +181,23 @@ window.onload = function() {
 		  $("#bodyactions").attr("checked", true);
 		 } else {
 		  $("#bodyactions").attr("checked", false);
+		 }
+		 console.log( result);
+	})
+
+	// Get agent_walking status
+	$.ajax({
+		url: "/api/get_setting?item=agent_walking",
+		type: 'GET',
+		dataType: 'json',
+		async: true
+	})
+	.done(function (result) {
+		 $("#agent_walking").removeAttr("disabled");
+		 if (result.value ) {
+		  $("#agent_walking").attr("checked", true);
+		 } else {
+		  $("#agent_walking").attr("checked", false);
 		 }
 		 console.log( result);
 	})
@@ -297,16 +273,20 @@ window.onload = function() {
 					  <option>agent mode</option>
 				</select>
 				<label>
-				<input id="output" onchange="output_control();" name="output" type="checkbox" role="switch" disabled/>
-				Audio / Speech Output
+				<input id="output" onchange="set_item('output');" name="output" type="checkbox" role="switch" disabled/>
+				AudioOutput
 				</label>
 				<label>
-				<input id="bodyactions" onchange="body_control();" name="bodyactions" type="checkbox" role="switch" disabled/>
-				Body Actions
+				<input id="bodyactions" onchange="set_item('bodyactions');" name="bodyactions" type="checkbox" role="switch" disabled/>
+				BodyActions
 				</label>
 				<label>
-				<input id="micstream" onchange="mic_stream();" name="micstream" type="checkbox" role="switch" disabled/>
-				Mic. / Voice control
+				<input id="agent_walking" onchange="set_item('agent_walking');" name="agent_walking" type="checkbox" role="switch" disabled/>
+				Agent walking
+				</label>
+				<label>
+				<input id="micstreaming" onchange="set_item('micstreaming');" name="micstreaming" type="checkbox" role="switch" disabled/>
+				Miccontrol
 				</label>
 			</div>	
 		</div>

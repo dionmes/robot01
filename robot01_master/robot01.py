@@ -71,6 +71,9 @@ class ROBOT:
 		self.robot_actions = True
 		threading.Thread(target=self.bodyactions_worker, daemon=True).start()
 
+		# If allowed to walk
+		self.agent_walking = False
+		
 		# Start output send worker
 		self.output_worker_running = True
 		threading.Thread(target=self.output_worker, daemon=True).start()
@@ -97,6 +100,11 @@ class ROBOT:
 						self.display.health = False
 				else:
 					self.health_error = 0
+					if not self.health:
+						# Restart output
+						self.output(0) # Stop output
+						time.sleep(1)
+						self.output(1) # Start output
 					self.health = True
 					self.display.health = True
 
@@ -116,9 +124,10 @@ class ROBOT:
 			task = self.body_q.get()
 			if not self.robot_actions:
 				break
-			print("Robot action : " + str(task['action']) )
 
 			url = "/bodyaction?action=" + str(task['action']) + "&direction=" + str(task['direction']) + "&value=" + str(task['value'])
+			print("Robot action : " + url )
+
 			response = self.robot_http_call(url)
 
 			time.sleep(MINIMAL_SLEEP)	
@@ -139,7 +148,7 @@ class ROBOT:
 			self.robot_actions = False
 			self.body_q.put({}) # dummy value	
 			# Stop action to robot
-			url = "/bodyaction?action=13&direction=0&value=0"
+			url = "/bodyaction?action=12&direction=0&value=0"
 	
 			response = self.robot_http_call(url)
 		
@@ -158,7 +167,7 @@ class ROBOT:
 			self.bodyactions_set_state(True)
 						
 			return
-			
+
 		if self.robot_actions:
 			try:
 				task = { "action" : action, "direction" : direction, "value" : value }
@@ -167,24 +176,27 @@ class ROBOT:
 				print("Robot bodyactions queue error : ", type(e).__name__ )
 
 	#
+	# Get Output worker status
+	#
+	def get_output(self)->bool:
+		response = self.robot_http_call('/audiostream')
+		try: 
+			json_obj = response.json()
+		except Exception as e:
+			print("audiostream : ",e)
+			return ""
+		if json_obj['audiostream'] and self.output_worker_running:
+			return True
+		else:
+			return False
+
+	#
 	# Set/get Output worker status
 	#
-	def output(self, state = -1)->bool:
-		# Get output status
-		if state == -1:			
-			response = self.robot_http_call('/audiostream')
-			try: 
-				json_obj = response.json()
-			except Exception as e:
-				print("audiostream : ",e)
-				return ""
-			if json_obj['audiostream'] and self.output_worker_running:
-				return True
-			else:
-				return False
+	def output(self, on)->bool:
 
 		# Start output
-		elif state == 1:
+		if on:
 			threading.Thread(target=self.robot_http_call, args=[('/audiostream?on=1')]).start()
 
 			if not self.tts_engine.running:
@@ -199,7 +211,7 @@ class ROBOT:
 			return True
 		
 		# Stio output
-		elif state == 0:
+		else:
 			self.output_worker_running = False
 			self.output_q.put({}) # dummy value
 			threading.Thread(target=self.robot_http_call, args=[('/audiostream?on=0' )]).start()
@@ -251,18 +263,23 @@ class ROBOT:
 
 					if not self.output_worker_running:
 						break
-
-				# Flush buffer with empty packets
-				for x in range(0, 4):
-					self.audio_socket.sendall( bytes(1024) )
 	
 			if "text" in output_action:
 				print("From output worker : " + output_action['text'])
 				threading.Thread(target=self.express_emotion,args=[output_action['text']],daemon=True).start()
-			
+
 			self.output_q.task_done()
 			
 			if self.output_q.empty():
+				# Flush buffer with empty packets
+				for i in range(0, 4):
+					try :
+						self.audio_socket.sendall( bytes(1024) )
+					except Exception as e:
+						print("Sending TCP audio error : " + self.ip + ":" + str(AUDIO_TCP_PORT) + " " + str(e))
+						self.audio_socket.close()
+						break
+			
 				self.output_stopped()
 
 		print("Robot output engine stopped")			
@@ -308,14 +325,20 @@ class ROBOT:
 	# Callback : Stopped output
 	#
 	def output_stopped(self):
-		self.display.state(3)
-		self.bodyaction(16,0,30)
-		self.bodyaction(17,0,30)
+		n = 0
+		while self.output_q.empty() and n < 3:
+			time.sleep(1);
+			n += 1
+		
+		if self.output_q.empty():
+			self.display.state(3)
+			self.bodyaction(16,0,30)
+			self.bodyaction(17,0,30)
+		
+			if self.sense.mic: 
+				self.sense.micstreaming(1)
 
-		if self.sense.mic: 
-			self.sense.micstreaming(1)
-
-		self.output_busy = False
+			self.output_busy = False
 
 	#
 	# Set/Get volume
@@ -326,7 +349,7 @@ class ROBOT:
 			try: 
 				json_obj = response.json()
 			except Exception as e:
-				print("Volune : ",e)
+				print("Volume : ",e)
 				return ""
 			return json_obj['volume']
 		else:
@@ -343,8 +366,9 @@ class ROBOT:
 		if len(text) < 30:
 			return
 			
-		prompt = """Categorize the following text with one of these words, and only that word:
-		sad, happy, excited, difficult, love, like, dislike, interesting or neutral.
+		prompt = """Try to match the emotion or expression in the text as much as possible with of one the following words:
+		sad, happy, excited, difficult, love, like, dislike, interesting, relieved, embarrassed, fear or neutral. 
+		Your results should only be that word, no explanation.
 		The text is : """ + text
 
 		response = ollama.chat(
@@ -363,7 +387,7 @@ class ROBOT:
 
 		if "sad" in emotion:
 			self.display.action(12,1,8)
-			self.bodyaction(16,d1,30)
+			self.bodyaction(16,d1,20)
 			
 			return
 		elif "happy" in emotion:
@@ -373,36 +397,56 @@ class ROBOT:
 			return
 		elif "excited" in emotion:
 			self.display.action(12,1,2)
-			self.bodyaction(11,0,5)
+			self.bodyaction(11,0,4)
 
 			return
 		elif "difficult" in emotion:
 			self.display.action(12,1,9)
-			self.bodyaction(16,1,20)
+			self.bodyaction(16,1,15)
 
 			return
 		elif "love" in emotion:
 			self.display.action(12,1,6)
-			self.bodyaction(17,d1,30)
+			self.bodyaction(17,d1,20)
 
 		elif "like" in emotion:
 			self.display.action(12,1,2)
-			self.bodyaction(17,d1,30)
+			self.bodyaction(17,d1,20)
 
 			return
 		elif "dislike" in emotion:
 			self.display.action(12,1,3)
-			self.bodyaction(16,d1,30)
+			self.bodyaction(16,d1,20)
 
 			return
 		elif "interesting" in emotion:
 			self.display.action(12,1,9)
-			self.bodyaction(17,d2,30)
+			self.bodyaction(17,d2,15)
+
+			return
+
+		elif "fear" in emotion:
+			self.display.action(12,1,13)
+			self.bodyaction(16,d2,10)
+
+			return
+
+		elif "embarrassed" in emotion:
+			self.display.action(12,1,12)
+			self.bodyaction(17,d2,10)
+
+			return
+
+		elif "relieved" in emotion:
+			self.display.action(12,1,11)
+			self.bodyaction(17,d2,10)
 
 			return
 
 		elif "neutral" in emotion:
-		
+			self.bodyactions_set_state(False)
+			time.sleep(2)
+			self.bodyactions_set_state(True)
 			self.bodyaction(16,0,30)
 			self.bodyaction(17,0,30)
 

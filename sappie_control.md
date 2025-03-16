@@ -1,4 +1,4 @@
-# SAPPIE Control
+# SAPPIE enum values for API control
 
 ## robot01
 

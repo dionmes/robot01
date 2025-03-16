@@ -40,6 +40,8 @@ class SENSE:
 			time.sleep(HEALTH_CHECK_INTERVAL)		
 		
 	def micstreaming(self, state = -1)->bool:
+		
+		print("Micstreaming state : " + str(state))
 	
 		if state == -1:
 			try:
@@ -51,6 +53,7 @@ class SENSE:
 				print("Request - micstreaming error : ",e)
 				self.mic = False
 		else:
+	
 			threading.Thread(target=self.sense_http_call, args=["/control?setting=micstreaming&param=" + str(state)]).start()
 			self.mic = True if state == 1 else False
 

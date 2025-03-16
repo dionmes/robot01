@@ -59,7 +59,7 @@ default_config = {
 }
 
 # Max tokens to TTS
-TTS_MAX_SENTENCE_LENGHT = 20
+TTS_MAX_SENTENCE_LENGHT = 30
 
 #
 # Class brain for robot01
@@ -117,7 +117,6 @@ class BRAIN:
 	# Stop AI Agent
 	#
 	def stop(self):
-
 		self.robot.bodyaction(12, 0, 0)
 		
 		# Cancel chat task
@@ -165,7 +164,6 @@ class BRAIN:
 	# Report health satus
 	#
 	def health_status(self):
-		
 		status = {}
 		status["robot01"] = self.robot.health
 		status["robot01_latency"] = self.robot.latency
@@ -182,7 +180,7 @@ class BRAIN:
 	# Settings handler
 	#
 	def setting(self,item,value)->bool:
-		if item in "robot01_ip robot01sense_ip output micstreaming cam_resolution camstreaming micgain llm_mode bodyactions volume":	
+		if item in "robot01_ip robot01sense_ip output micstreaming cam_resolution camstreaming micgain llm_mode bodyactions volume agent_walking":	
 
 			if item == "robot01_ip":
 				if	self.validate_ip_address(value):
@@ -192,6 +190,7 @@ class BRAIN:
 					# update config ip					
 					self.config["robot01_ip"] = value
 					self.save_config()
+											
 				else:
 					print("Error updating robot01_ip : ", value)
 
@@ -209,11 +208,16 @@ class BRAIN:
 				self.robot.volume(value)
 
 			if item == "output":
-				self.robot.output(int(value))
+				on = True if value == "1" else False
+				self.robot.output(on)
 
 			if item == "bodyactions":
-				running = True if value == "1" else False
-				self.robot.bodyactions_set_state(running)
+				on = True if value == "1" else False
+				self.robot.bodyactions_set_state(on)
+
+			if item == "agent_walking":
+				on = True if value == "1" else False
+				self.robot.agent_walking = on
 
 			if item == "llm_mode":
 				if value == "chat mode":
@@ -224,8 +228,9 @@ class BRAIN:
 					self.llm_mode = value
 
 			if item == "micstreaming":
-				self.robot.sense.micstreaming(value)
-				if value == 1:
+				on = int(value)
+				self.robot.sense.micstreaming(on)
+				if on == 1:
 					self.stt_engine.start()
 				else:
 					self.stt_engine.stop()
@@ -250,7 +255,7 @@ class BRAIN:
 	# Settings info handler
 	#
 	def get_setting(self,item)->str:
-		if item in "robot01_ip robot01sense_ip output cam_resolution micstreaming camstreaming micgain llm_mode bodyactions volume":	
+		if item in "robot01_ip robot01sense_ip output cam_resolution micstreaming camstreaming micgain llm_mode bodyactions volume agent_walking":	
 			if item == "robot01_ip":
 				return self.robot.ip
 	
@@ -263,6 +268,9 @@ class BRAIN:
 			if item == "bodyactions":
 				return self.robot.robot_actions
 
+			if item == "agent_walking":
+				return self.robot.agent_walking
+
 			if item == "volume":
 				return self.robot.volume()
 				
@@ -270,7 +278,7 @@ class BRAIN:
 				return self.robot.sense.micgain()
 				
 			if item == "output":
-				return self.robot.output()
+				return self.robot.get_output()
 	
 			if item == "micstreaming":
 				self.mic = self.robot.sense.micstreaming()
@@ -307,35 +315,21 @@ class BRAIN:
 	# Puts text in tts_engine queue in chunks. Also used in Agentic AI as a tool
 	#
 	def speak(self, param1 : str):
-		try:
-			if self.robot.output_worker_running:
-			
-				words_and_delimiters = re.split(r".,?!...;:])", text)
-				words_and_delimiters = list(filter(None, words_and_delimiters))
-				
-				message = ""
-				n = 0
-				for token in words_and_delimiters:
-					if token in ".,?!...;:])" or n > TTS_MAX_SENTENCE_LENGHT:
-						message = message + token
-						if not message.strip() == "" and len(message) > 1:
-							print("From LLM (Speak chunked response): " + message)
-							# Put text in output queue
-							try:
-								self.robot.tts_engine.text_q.put(message)
-							except Exception as e:
-								print("Speak: TTS text_q queue error : ", type(e).__name__ )
-							
-						message = ""
-						n = 0
-					else:
-						message = message + token
-						n = n + 1
+		if self.robot.output_worker_running:
 		
-		except Exception as e:
-			print("Text queue error : ",type(e).__name__ )
+			words_and_delimiters = re.split(r"[.,?!;:\])]", param1)
+			words_and_delimiters = list(filter(None, words_and_delimiters))
+			
+			message = ""
 
-		return
+			for message in words_and_delimiters:
+				if not message.strip() == "" and len(message) > 1:
+					print("From LLM (Speak chunked response): " + message)
+					# Put text in output queue
+					try:
+						self.robot.tts_engine.text_q.put(message)
+					except Exception as e:
+						print("Speak: TTS text_q queue error : ", type(e).__name__ )
 
 	#
 	#STT worker
@@ -439,7 +433,9 @@ class BRAIN:
 			if self.agent_interrupt:
 				print("Agent interrupted!!!")
 				break;
+			#print(event)
 
+		print("Agentic Action(s) ended.")
 		self.agent_running = False
 
 	#
@@ -511,11 +507,9 @@ class BRAIN:
 
 		toolTurn = StructuredTool.from_function(func=self.turn, name="Turn", description=
 		"""
-		Use this tool to turn the robot towards the specified heading in degrees.
-		The heading is in degrees from -180 degrees to 180 degrees.
+		Use this tool to turn the robot in degrees.
 		A negative number of degrees is left/counter clockwise and a positive number of degrees right/clockwise.
-		Heading 0 is North. Heading 180 is South.
-		The function takes as input the desired heading in degrees as a number (integer).
+		The function takes as input the degrees as a number (integer).
 		""",args_schema=toolIntInput)
 
 		toolShake = StructuredTool.from_function(func=self.shake, name="shake", description=
@@ -589,13 +583,13 @@ class BRAIN:
 	#
 	def current_heading(self)->str:
 		motionsensor = self.robot.motionSensor_info()
-		heading = motionsensor['yaw']
+		heading = int(motionsensor['yaw'])
 		return "Current heading is " + str(heading) + " degrees."
 		
 	#
 	# describe_view tool
 	#
-	def describe_view(self)->str :		
+	def describe_view(self, param1: str)->str :		
 		self.robot.display.state(13)
 		print("Tool : describe_view.")
 		image = self.robot.sense.capture()
@@ -609,9 +603,10 @@ class BRAIN:
 				model = VISION_MODEL,
 				keep_alive = OLLAMA_KEEP_ALIVE,
 				prompt = """
+				Describe what you see in the image, and only what is in the image.
 				Limit any interpretation in your respond, be concise. 
 				Do not describe any person/human as old or worn, describe them in a flattering and positive way. 
-				""",
+				""" +  param1,
 				images = [image]			 
 			)
 			if description['response'] == "":
@@ -620,7 +615,6 @@ class BRAIN:
 				description = description['response']
 		
 		print(description)
-		self.robot.display.state(3)
 		return description
 
 	#
@@ -649,7 +643,6 @@ class BRAIN:
 				description = description['response']
 		
 		print("VISION MODEL : " + description)		
-		self.robot.display.state(3)
 		return description
 		
 	#
@@ -699,61 +692,81 @@ class BRAIN:
 	#
 	# Walk forward tool
 	#
-	def walk_forward(self, param1: int):
+	def walk_forward(self, param1: int)->str:
 		print("Tool : walk forward " + str(param1))
 		self.robot.bodyaction(14,0,param1)
 		result = ""
 		
-		while not "walking" in result:
-			time.sleep(1)
-			result = self.last_notification
+		if self.robot.agent_walking:
+			while not "walking" in result:
+				time.sleep(1)
+				result = self.last_notification
+	
+			if "walking_stopped" in result:
+				result = "Stopped by request."
+	
+			if "walking_blocked" in result:
+				self.robot.bodyaction(15,0,10)
+				result = "Walking was blocked, took 10 steps backwards to clear path, turning needed."
+				
+			if "walking_ended" in result:
+				result = "Succesfully walked " + str(param1) + " steps."
 
-		if "walking_stopped" in result:
-			result = "Stopped by request."
-
-		if "walking_blocked" in result:
-			self.robot.bodyaction(15,0,10)
-			result = "Walking was blocked, took 10 steps backwards to clear path, turning needed."
+		else:
+			result = "You do not want to walk forward."
 			
-		if "walking_ended" in result:
-			result = "Succesfully walked " + str(param1) + " steps."
-
 		self.last_notification = ""
 		return result + ". " + self.current_heading()
 
 	#
 	# Walk backwards tool
 	#
-	def walk_backward(self,  param1: int):
-		print("Tool : walk backwards " + str(param1))
-		self.robot.bodyaction(15,0,param1)
-		time.sleep(param1) # Sleep for duration of steps
-		return
+	def walk_backward(self,  param1: int)->str:
+	
+		if self.robot.agent_walking:
+			print("Tool : walk backwards " + str(param1))
+			self.robot.bodyaction(15,0,param1)
+			time.sleep(param1) # Sleep for duration of steps
+			result = "You have walked backward."
+
+		else:
+			result = "You do not want to walk backward."
+		
+		return result
 
 	#
 	# Turn  tool
 	#
 	def turn(self, param1: int)->str:
-		print("Tool : Turn " + str(param1))
-		self.robot.bodyaction(10,0,param1)
 
-		result = ""
-		while not "turn" in result:
-			time.sleep(1)
-			result = self.last_notification
-			
-		if "turn_stopped" in result:
-			result = "Stopped by request."
+		motionsensor = self.robot.motionSensor_info()
+		heading = int(motionsensor['yaw'])
+		turn = heading + param1
+		print("Tool : Turn " + str(turn))
 
-		if "turn_error" in result:
-			result = "Error while turning."
+		if self.robot.agent_walking:
+			self.robot.bodyaction(10,0,turn)
+	
+			result = ""
+			while not "turn" in result:
+				time.sleep(1)
+				result = self.last_notification
+				
+			if "turn_stopped" in result:
+				result = "Stopped by request."
+	
+			if "turn_error" in result:
+				result = "Error while turning."
+	
+			if "turn_blocked" in result:
+				self.robot.bodyaction(15,0,10)
+				result = "Turning was blocked, took 10 steps back to clear."
+	
+			if "walking_ended" in result:
+				result = "Succesfully turned."
 
-		if "turn_blocked" in result:
-			self.robot.bodyaction(15,0,10)
-			result = "Turning was blocked, took 10 steps back to clear."
-
-		if "walking_ended" in result:
-			result = "Succesfully turned."
+		else:
+			result = "You did not want to turn."
 
 		self.last_notification = ""
 		return result + "." + self.current_heading()
@@ -761,44 +774,45 @@ class BRAIN:
 	#
 	# Shake tool
 	#
-	def shake(self, param1: int):
+	def shake(self, param1: int)->str:
 		print("Tool : Shake " + str(param1))
+		
 		self.robot.bodyaction(11,0, param1)
 		time.sleep(param1)
-		return
+
+		return "You have been shaking."
 
 	#
 	# Move right lower arm tool
 	#
-	def move_right_lower_arm(self, param1: int):
+	def move_right_lower_arm(self, param1: int)->str:
 		print("Tool : Move right lower arm  " + str(param1))
 		self.robot.bodyaction(4, param1, 15)
-		return
+		return "You moved right lower arm."
 
 	#
 	# Move left lower arm tool
 	#
-	def move_left_lower_arm(self, param1: int):
+	def move_left_lower_arm(self, param1: int)->str:
 		print("Tool : Move left lower arm " + str(param1))
 		self.robot.bodyaction(3, param1, 15)		
-		return
+		return "You moved left lower arm."
 
 	#
 	# Move right upper arm tool
 	#
-	def move_right_upper_arm(self, param1: int):
+	def move_right_upper_arm(self, param1: int)->str:
 		print("Tool : Move right upper " + str(param1))
-		self.robot.bodyaction(2, param1, 25)
-		return
+		self.robot.bodyaction(2, param1, 25)		
+		return "You moved right upper arm."
 
 	#
 	# Move left upper arm tool
 	#
-	def move_left_upper_arm(self, param1: int):
+	def move_left_upper_arm(self, param1: int)->str:
 		print("Tool : Move left upper arm " + str(param1))
 		self.robot.bodyaction(1, param1, 25)
-				
-		return
+		return "You moved left upper arm."
 
 ############################## End of Agentic Tools ##############################
 			
