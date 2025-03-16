@@ -18,7 +18,7 @@
 // Tolerance for heading while turning
 #define TURN_TOLERANCE_DEGREES 3
 // Max turn error count
-#define MAX_TURN_ERROR 5
+#define MAX_TURN_ERROR 3
 // Max turn count
 #define MAX_TURN_COUNT 160
 
@@ -82,6 +82,7 @@ void bodyControl::begin(int task_core, int task_priority) {
 void bodyControl::exec(int action, bool direction, int value) {
 
   bodyactionTaskData_t bodyactionTaskData;
+  xTaskNotifyStateClear(bodyTaskHandle);
 
   bodyactionTaskData.action = action;
   bodyactionTaskData.direction = direction;
@@ -182,8 +183,16 @@ void bodyControl::worker(void *pvParameters) {
           break;
       };
     }
+
+    mcp1.writeRegister(MCP23017Register::GPIO_A, 0x00);  //Reset port A
+    mcp1.writeRegister(MCP23017Register::GPIO_B, 0x00);  //Reset port B
+
+    mcp2.writeRegister(MCP23017Register::GPIO_A, 0x00);  //Reset port A
+    mcp2.writeRegister(MCP23017Register::GPIO_B, 0x00);  //Reset port B
+
     vTaskDelay(250);
   }
+
 };
 
 // leftLowerArm
@@ -354,6 +363,7 @@ void bodyControl::rightHandLight(bool on, int value) {
 // shake
 void bodyControl::shake(bool left, int value) {
   uint32_t notifyStopValue;  // vtask notifier to stop
+  
 
   for (int x = 0; x < value; x = ++x) {
 
@@ -538,33 +548,20 @@ void bodyControl::walk_backward(int value) {
 **/
 void bodyControl::turn(int value) {
 
-  // vtask notifier to stop
-  uint32_t notifyStopValue;  
-
-  // Current heading from sensor
-  float currentHeading;
-  // Old heading from sensor
-  float oldCurrentHeading;
-  // Desiredheading
-  float desiredHeading = value;
-
-  // difference in heading between current heading and desired heading
-  float headingDifference = 0;
-
-  // old heading difference for actual turning check. Init with high value to force check
-  float oldheadingDifference = 0;
-  // Turn check interval counter
-  int turnErrorCount = 0;
-
-  // Counter to prevent indefinite turning
-  int turncount = 0;
-  // Turning direction. 0=neutral, 1=right, 2=left
-  int turndirection = 0; 
-  // headingReadingWaitCounter
-  int headingReadingWaitCounter = 0; 
   
-  // Set headings as start values
-  currentHeading = motion_detect.sensorData.yaw;
+  uint32_t notifyStopValue;  // vtask notifier to stop
+  float currentHeading; // Current heading from sensor
+  float oldCurrentHeading;   // Old heading from sensor
+  float desiredHeading = value;   // Desiredheading
+  float headingDifference = 0;   // difference in heading between current heading and desired heading
+  float oldheadingDifference = 0;   // old heading difference for actual turning check. Init with high value to force check
+  int turnErrorCount = 0;   // Turn check interval counter
+  int turncount = 0;   // Counter to prevent indefinite turning
+  int turndirection = 0;   // Turning direction. 0=neutral, 1=right, 2=left
+  int headingReadingWaitCounter = 0;    // headingReadingWaitCounter
+  int turnSpeed = 0; // Turn speed 
+
+  currentHeading = motion_detect.sensorData.yaw;   // Set headings as start values
   oldCurrentHeading = currentHeading;
 
   while (true) {
@@ -599,8 +596,7 @@ void bodyControl::turn(int value) {
       turnErrorCount = turnErrorCount + 1;
     } else {
       turnErrorCount = 0;
-    }
-    
+    }    
     oldheadingDifference = headingDifference;
 
     if (turnErrorCount > MAX_TURN_ERROR) {
@@ -632,7 +628,7 @@ void bodyControl::turn(int value) {
     Serial.printf("Turn count : %i \n", turncount );
     Serial.printf("Turn error count : %i \n", turnErrorCount );
 
-    // Direction change
+    // Direction change, first step
     if (headingDifference > 0.0 && turndirection != 1) {
       
       turndirection = 1;
@@ -655,31 +651,47 @@ void bodyControl::turn(int value) {
       vTaskDelay(200);
 
     }
+ 
+    turnSpeed = abs(headingDifference) / 5;
+    if (turnSpeed > 10) {
+      turnSpeed=10;
+    }
 
     if (turndirection == 1) {
-      // Turn right
-      mcp1.digitalWrite(HIP_LEFT_PIN, 1);
-      mcp1.digitalWrite(HIP_RIGHT_PIN, 0);
-      bodyControl::rightLeg(0, 3);
-      bodyControl::leftLeg(1, 2);
 
-      mcp1.digitalWrite(HIP_LEFT_PIN, 0);
-      mcp1.digitalWrite(HIP_RIGHT_PIN, 1);
-      bodyControl::rightLeg(0, 3);
-      bodyControl::leftLeg(1, 2);
+      for (int t = 0; t < turnSpeed; t = ++t) {
+
+        // Turn right
+        mcp1.digitalWrite(HIP_LEFT_PIN, 1);
+        mcp1.digitalWrite(HIP_RIGHT_PIN, 0);
+        bodyControl::rightLeg(0, 3);
+        bodyControl::leftLeg(1, 2);
+        vTaskDelay(70);
+        mcp1.digitalWrite(HIP_LEFT_PIN, 0);
+        mcp1.digitalWrite(HIP_RIGHT_PIN, 1);
+        bodyControl::rightLeg(0, 3);
+        bodyControl::leftLeg(1, 2);
+        //vTaskDelay(50);
+
+      }
 
     } else if (turndirection == 2) {
-      // Turn left
-      mcp1.digitalWrite(HIP_LEFT_PIN, 0);
-      mcp1.digitalWrite(HIP_RIGHT_PIN, 1);
-      bodyControl::leftLeg(0, 3);
-      bodyControl::rightLeg(1, 2);
-      vTaskDelay(50);
-      mcp1.digitalWrite(HIP_LEFT_PIN, 1);
-      mcp1.digitalWrite(HIP_RIGHT_PIN, 0);
-      bodyControl::leftLeg(0, 3);
-      bodyControl::rightLeg(1, 2);
 
+      for (int t = 0; t < turnSpeed; t = ++t) {
+
+          // Turn left
+          mcp1.digitalWrite(HIP_LEFT_PIN, 0);
+          mcp1.digitalWrite(HIP_RIGHT_PIN, 1);
+          bodyControl::leftLeg(0, 3);
+          bodyControl::rightLeg(1, 2);
+          vTaskDelay(70);
+          mcp1.digitalWrite(HIP_LEFT_PIN, 1);
+          mcp1.digitalWrite(HIP_RIGHT_PIN, 0);
+          bodyControl::leftLeg(0, 3);
+          bodyControl::rightLeg(1, 2);
+          //vTaskDelay(50);
+
+      }
     }
   }
 

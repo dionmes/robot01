@@ -23,7 +23,8 @@ bool motiondetect::begin(int task_core, int task_priority) {
     n++;
     if (n > SENSOR_INIT_RETRIES) {
       Serial.println("BNO08X init failed.");
-      return false;
+      esp_restart();
+      // return false;
     }
     Serial.println("BNO08X reset. Init retry.");
     vTaskDelay(500);

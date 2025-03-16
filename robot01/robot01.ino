@@ -3,17 +3,18 @@
 */
 
 #include <Wire.h>
-#include "driver/i2s_std.h"
+#include <ArduinoJson.h>
 #include <FS.h>
 #include <SPIFFS.h>
 #include <WiFiManager.h>
 #include <ArduinoHttpClient.h>
-#include <ArduinoJson.h>
+#include "driver/i2s_std.h"
 #include "esp_http_server.h"
 #include "DistanceSensor.h"
 #include "motiondetect.h"
 #include "roboDisplay.h"
 #include "bodyControl.h"
+#include "tcp2audio.h"
 
 #define FORMAT_SPIFFS_IF_FAILED false
 
@@ -21,23 +22,29 @@
 * Define CPU cores and priority for vtasks
 * defined with 24 as configMAX_PRIORITIES
 */
-#define HTTPD_TASK_CORE 0
+#define HTTPD_TASK_CORE 1
 #define HTTPD_TASK_PRIORITY 20
 
 #define TCP_AUDIO_TASK_CORE 1
-#define TCP_AUDIO_TAK_PRIORITY 20
+#define TCP_AUDIO_TASK_PRIORITY 10
 
-#define motion_detect_TASK_CORE 0
-#define motion_detect_PRIORITY 5
+#define I2S_AUDIO_TASK_CORE 0
+#define I2S_AUDIO_TAK_PRIORITY 20
 
-#define distance_sensor_TASK_CORE 0
+#define motion_detect_TASK_CORE 1
+#define motion_detect_PRIORITY 15
+
+#define distance_sensor_TASK_CORE 1
 #define distance_sensor_PRIORITY 5
 
-#define display_TASK_CORE 0
-#define display_TASK_PRIORITY 5
+#define display_TASK_CORE 1
+#define display_TASK_PRIORITY 10
 
 #define body_TASK_CORE 1
 #define body_TASK_PRIORITY 5
+
+// TCP Audio sample rate
+#define I2S_SAMPLE_RATE 16000
 
 // Master server or 'brain' 
 char config_master_ip[40];
@@ -48,29 +55,6 @@ char config_master_ip[40];
 WiFiManager wm;
 WiFiManagerParameter custom_masterserver("server", "Master server IP", config_master_ip, 40);
 bool shouldSaveConfig = false;
-
-/*
-*  Audio existing of I2S & TCP Streaming
-*/
-#define AUDIO_TCP_PORT 9000 // TCP port for audio 
-TaskHandle_t tcpAudioTaskHandle;
-
-WiFiServer audioServer(AUDIO_TCP_PORT);
-WiFiClient tcpClientAudio;
-
-#define AUDIO_TCP_CHUNK_SIZE 4096 // TCP Buffer
-#define robot01_I2S_BCK GPIO_NUM_14
-#define robot01_I2S_WS GPIO_NUM_12
-#define robot01_I2S_OUT GPIO_NUM_11
-
-#define I2S_SAMPLE_RATE 16000
-bool audioStreamRunning = false;  // If Audio is listening on tcp
-
-i2s_chan_handle_t i2s_tx_handle;  // I2S TX channel handle
-
-#define MAX_VOLUME 50
-// default volume
-int audio_volume = 20;
 
 // ToF sensor; Front facing distance
 DistanceSensor distance_sensor;
@@ -84,6 +68,9 @@ roboDisplay roboDisplay;
 
 // Instance of bodyControl for movement actions & hand LEDs
 bodyControl bodyControl;
+
+// Instance of tcp2audio for receiving audio
+tcp2audio tcp_2_audio;
 
 // API Server
 httpd_handle_t server_httpd = NULL;
@@ -153,24 +140,6 @@ void setup() {
     Serial.println("WIFI connected... :)");
   }
 
-  // HTTP API server
-  roboDisplay.exec(DisplayAction::DISPLAYTEXTLARGE, "WebServer starting");
-  Serial.println("API server starting");
-  start_apiserver();
-
-  delay(100);
-  Serial.print("Robot01 API IP : ");
-  Serial.println(WiFi.localIP());
-
-  // Register with remote master
-  Serial.printf("Remote master server IP: %s \n", config_master_ip);
-  roboDisplay.exec(DisplayAction::DISPLAYTEXTSMALL, "Registering with master");
-
-  HttpClient master_http_client(httpWifiInstance, config_master_ip, 5000);
-  String httpPath = "http://" + String(config_master_ip) + "/api/setting?item=robot01_ip&value=" + WiFi.localIP().toString();
-  int http_err = master_http_client.get(httpPath);
-  if (http_err != 0) { Serial.println("Error registering at master"); };
-
   roboDisplay.exec(DisplayAction::DISPLAYTEXTSMALL, "Tasks&Sensors");
   // Starting tasks
   Serial.println("Tasks starting");
@@ -200,54 +169,37 @@ void setup() {
   // Audio / I2S init.
   Serial.println("Start audio");
   roboDisplay.exec(DisplayAction::DISPLAYTEXTLARGE, "AUDIO/I2S");
+  tcp_2_audio.begin(I2S_SAMPLE_RATE,TCP_AUDIO_TASK_CORE,TCP_AUDIO_TASK_PRIORITY,I2S_AUDIO_TASK_CORE,I2S_AUDIO_TAK_PRIORITY);  
+  tcp_2_audio.start();
+  delay(100);
 
-  // Pin configuration
-	gpio_config_t io_conf;
-  io_conf.intr_type = GPIO_INTR_DISABLE; //disable interrupt
-  io_conf.mode = GPIO_MODE_OUTPUT; //set as output mode
-  io_conf.pin_bit_mask = GPIO_NUM_1 | GPIO_NUM_2 | GPIO_NUM_3; //bit mask of the pins that you want to set,e.g.GPIO21/22
-  io_conf.pull_down_en = GPIO_PULLDOWN_DISABLE; //disable pull-down mode
-  io_conf.pull_up_en = GPIO_PULLUP_DISABLE; //disable pull-up mode
-  gpio_config(&io_conf); //configure GPIO with the given settings
-
-  i2s_chan_config_t chan_cfg = {
-      .id = I2S_NUM_0,
-      .role = I2S_ROLE_MASTER,
-      .dma_desc_num = 32,    
-      .dma_frame_num = 1024,  
-      .auto_clear = true
-  };
-
-  i2s_new_channel(&chan_cfg, &i2s_tx_handle, NULL); // Create TX channel
-
-  i2s_std_config_t i2s_std_cfg = {
-      .clk_cfg  = I2S_STD_CLK_DEFAULT_CONFIG(I2S_SAMPLE_RATE),
-      .slot_cfg = I2S_STD_PCM_SLOT_DEFAULT_CONFIG(I2S_DATA_BIT_WIDTH_16BIT, I2S_SLOT_MODE_MONO),
-      .gpio_cfg = {
-          .mclk = I2S_GPIO_UNUSED,
-          .bclk = robot01_I2S_BCK,
-          .ws   = robot01_I2S_WS,
-          .dout = robot01_I2S_OUT,
-          .din  = I2S_GPIO_UNUSED
-      }
-  };
-
-  i2s_channel_init_std_mode(i2s_tx_handle, &i2s_std_cfg);  
-  i2s_channel_enable(i2s_tx_handle);
-
-  // TCP Audio receive task
-  xTaskCreatePinnedToCore(tcpReceiveAudioTask,"TCPReceiveAudioTask", 12288, NULL,TCP_AUDIO_TAK_PRIORITY ,&tcpAudioTaskHandle,TCP_AUDIO_TASK_CORE);
-  audioServer.begin();
-  startAudio(true);
+  // HTTP API server
+  roboDisplay.exec(DisplayAction::DISPLAYTEXTLARGE, "WebServer starting");
+  Serial.println("API server starting");
+  start_apiserver();
 
   // Boot complete
-  Serial.println("Boot complete...");
+  Serial.println("Systems Boot complete...");
+
   delay(100);
+  Serial.print("Robot01 API IP : ");
+  Serial.println(WiFi.localIP());
+
+  // Register with remote master
+  Serial.printf("Remote master server IP: %s \n", config_master_ip);
+  roboDisplay.exec(DisplayAction::DISPLAYTEXTSMALL, "Registering with master");
+
+  HttpClient master_http_client(httpWifiInstance, config_master_ip, 5000);
+  String httpPath = "http://" + String(config_master_ip) + "/api/setting?item=robot01_ip&value=" + WiFi.localIP().toString();
+  int http_err = master_http_client.get(httpPath);
+  if (http_err != 0) { Serial.println("Error registering at master"); };
 
   String register_string =  "Hello, I am Sappie @ " + WiFi.localIP().toString();
   roboDisplay.exec(DisplayAction::SCROLLTEXT,register_string, 100);
   delay(8000);  
   roboDisplay.exec(DisplayAction::NEUTRAL);
+
+
 }
 
 /*
@@ -382,22 +334,19 @@ esp_err_t webhandler_audiostream(httpd_req_t *request) {
     roboDisplay.exec(DisplayAction::DISPLAYTEXTSMALL, "Audio : " + param_value, Display_MESSAGE_WAIT_TIME);
     int value = param_value.toInt();
     
-    if (value == 1 && !audioStreamRunning) {
-      Serial.println("Audio streaming starting.");
-      startAudio(true);
+    if (value == 1 && !tcp_2_audio._running) {
+      tcp_2_audio.start();
     }
-
-    if (value == 0 && audioStreamRunning) {
-      Serial.println("Audio streaming stopping.");
-      startAudio(false);
+    if (value == 0 && tcp_2_audio._running) {
+      tcp_2_audio.stop();
     }
   }
   
   JsonDocument json_obj;
-  json_obj["audiostream"] = audioStreamRunning;
+  json_obj["audiostream"] = tcp_2_audio._running;
   
   Serial.print("Audio streaming :");
-  Serial.println(String(audioStreamRunning));
+  Serial.println(String(tcp_2_audio._running));
 
   size_t jsonSize = measureJson(json_obj);
   char json_response[jsonSize];
@@ -425,14 +374,14 @@ esp_err_t webhandler_volume(httpd_req_t *request) {
   if (param_value != "invalid") {
 
     int value = param_value.toInt();
-    if (value >= 0 && value <= MAX_VOLUME) {
-      audio_volume = value;
+    if (value >= 0) {
+      tcp_2_audio.setvolume(value);
       roboDisplay.exec(DisplayAction::DISPLAYTEXTSMALL, "Volume : " + param_value, Display_MESSAGE_WAIT_TIME);
     } 
   }
   
   JsonDocument json_obj;
-  json_obj["volume"] = audio_volume;
+  json_obj["volume"] = tcp_2_audio.getvolume();
   size_t jsonSize = measureJson(json_obj);
   char json_response[jsonSize];
   serializeJson(json_obj, json_response, jsonSize );
@@ -475,7 +424,7 @@ esp_err_t webhandler_body_action(httpd_req_t *request) {
       char json_response[jsonSize];
       serializeJson(json_obj, json_response, jsonSize );
       httpd_resp_send(request, json_response , jsonSize );
-
+  
       bodyControl.exec(action, direction, value);
     } 
   }
@@ -757,77 +706,6 @@ void sendMasterNotification(char *message) {
 
   if (http_err != 0) { Serial.println("Error sending notification to master"); };
   Serial.println(message);
-}
-
-////////////////////////////////  Audio  //////////////////////////////////////////////////////////////////////
-
-/*
-* Start / Stop Audio TCP listening
-*/
-void startAudio(bool start) {
-  if (start) {
-    audioStreamRunning = true;
-  } else {
-    tcpClientAudio.stop();
-    audioStreamRunning = false;
-  }
-}
-
-// Task function to handle incoming TCP data for Audio 
-IRAM_ATTR void tcpReceiveAudioTask(void *pvParameters) {
-
-    uint8_t tcp_audio_buffer[AUDIO_TCP_CHUNK_SIZE]; 
-
-    size_t bytesReceived;
-    size_t i2s_written;
-    size_t num_samples;
-    float gain;
-    int16_t *samples;
-    int32_t amplified;
-
-    while (true) {
-
-      if (!tcpClientAudio || !tcpClientAudio.connected()) {
-          tcpClientAudio = audioServer.accept();  // Check for new clients
-      }
-
-      while (tcpClientAudio && tcpClientAudio.connected()) {
-          
-          bytesReceived = tcpClientAudio.read(tcp_audio_buffer, AUDIO_TCP_CHUNK_SIZE);
-
-          if (bytesReceived > 0) {
-            num_samples = bytesReceived / 2; // 16-bit samples = 2 bytes per sample
-            gain = audio_volume / 10;
-            // Volume adjustment
-            samples = (int16_t *)tcp_audio_buffer;
-
-            for (size_t i = 0; i < num_samples; i++) {
-                // Amplify the sample
-                amplified = (int32_t)(samples[i] * gain);
-                // Clamp the value to the 16-bit range to avoid clipping
-                if (amplified > 32767) {
-                    amplified = 32767;
-                } else if (amplified < -32768) {
-                    amplified = -32768;
-                }
-                // Store the amplified value back into the buffer
-                samples[i] = (int16_t)amplified;
-            }
-
-            i2s_channel_write(i2s_tx_handle, (uint8_t *)samples, bytesReceived, &i2s_written, portMAX_DELAY);
-          } else {
-            // Delay to prevent CPU overload
-            vTaskDelay(100);
-          }
-      }
-
-      if (tcpClientAudio && !tcpClientAudio.connected()) {
-        Serial.println("tcpClientAudio disconnected.");
-        tcpClientAudio.stop();
-      }
-
-      vTaskDelay(200);
-    }
 }
 
 ////////////////////////////////  Config methods  //////////////////////////////////////////////////////////////////////
