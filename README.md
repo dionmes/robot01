@@ -2,8 +2,8 @@
 
 ![Robot image](./img/robot01.png)
 
-A ripped Robosapien Agentic / LLM powered robot.
-This is a hobby project on trying out ESP32 microcontrollers while at the same time looking at possibilities of hooking up (local) LLM's to control hardware.
+A customized Robosapien Agentic / LLM powered robot.
+This is a hobby project on trying out ESP32 microcontrollers while at the same time looking at possibilities for hooking up (local) LLM's to control hardware via Agentic software (Langchain).
 
 - **Hardware**
 	- Robosapien V1
