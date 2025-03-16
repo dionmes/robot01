@@ -64,19 +64,19 @@ Langchain is either powered by the local LLM LLama3.2 or via an external LLM (Op
 
 ### Agent Tools
 
-toolSpeak - Allows voice responses during Agentic execution
-toolCurrentHeading - Retrieves the current heading of the robot for orientation
-toolDescribeView - Uses the vision model to describe what the camera registers
-toolFindInView - Uses the vision model to find objects in the current camera view
-toolcurrentDateAndTime - Retrieves the current date and time
-toolWeatherForecast - Retrieves the weather forecast.
-toolWalkForward - Makes the robot walk forward
-toolWalkBackward - Makes the robot walk backwards
-toolTurn - Turns the robot to a specific heading.
-toolShake - Shakes the robot.
-toolMoveRightLowerArm - Arm movement
-toolMoveLeftLowerArm - Arm movement
-toolMoveRightUpperArm - Arm movement
-toolMoveLeftUpperArm - Arm movement
+- toolSpeak - Allows voice responses during Agentic execution
+- toolCurrentHeading - Retrieves the current heading of the robot for orientation
+- toolDescribeView - Uses the vision model to describe what the camera registers
+- toolFindInView - Uses the vision model to find objects in the current camera view
+- toolcurrentDateAndTime - Retrieves the current date and time
+- toolWeatherForecast - Retrieves the weather forecast.
+- toolWalkForward - Makes the robot walk forward
+- toolWalkBackward - Makes the robot walk backwards
+- toolTurn - Turns the robot to a specific heading.
+- toolShake - Shakes the robot.
+- toolMoveRightLowerArm - Arm movement
+- toolMoveLeftLowerArm - Arm movement
+- toolMoveRightUpperArm - Arm movement
+- toolMoveLeftUpperArm - Arm movement
 
 
