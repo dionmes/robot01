@@ -28,9 +28,9 @@ This is a hobby project on trying out ESP32 microcontrollers while at the same t
 	- All models run locally (tts, stt, llm, agentic)
 	- LLM : Ollama engine
 		- LLM_MODEL: llama3.2 (can change)
-		- AGENT_MODEL: qwen2.5:32b (can change)
+		- AGENT_MODEL: llama3.2 (can change)
 		- LLM_EXPRESSION_MODEL: gemma2:2b (can change)
-		- VISION_MODEL: llava (can change)
+		- VISION_MODEL: minicpm-v (can change)
 	- Agentic: Langchain
 	- TTS: speecht5_tts
 	- STT: distil-large-v3, VAD: silero_vad  
@@ -41,8 +41,40 @@ This is a hobby project on trying out ESP32 microcontrollers while at the same t
 
 ## Intro
 
-I am not a hardware guy, so the Hardware is really a mess. 
+I am not a hardware guy, so the hardware is really a mess.
 It just a bunch of sensors and other peripherals hooked up to two esp32 boards.
+The programming started with Arduino but for performance issues I needed to do some RTOS task management.
 Use it for inspiration not implementation.
+The hardware has some API calls via rest (no ssl, no authentication) that can be controlled via the Web interface.
+
+## AI
+
+Via Ollama Nvidia AGX Xavier is running the LLM and vision models. The 32GB in the Xavier makes this possible.
+It has two modes to control the Robot (called Sappie / robot01). Chat mode and Agentic mode.
+
+In chat mode it acts like a normal chat llm but during output interprets the text.
+This interpretation will display an emotion on the display and a movement of the body to establish some level of Anthropomorphism.
+
+In Agent mode it uses Langchain to make the robot being able to complete goals and/or provide information.
+It has several tools to its availability in Agentic mode which allows the roboto to walk around, vision (via iets camera) and provide some basic information:
+
+Langchain is either powered by the local LLM LLama3.2 or via an external LLM (OpenAI GPT4)
+
+### Agent Tools
+
+toolSpeak - Allows voice responses during Agentic execution
+toolCurrentHeading - Retrieves the current heading of the robot for orientation
+toolDescribeView - Uses the vision model to describe what the camera registers
+toolFindInView - Uses the vision model to find objects in the current camera view
+toolcurrentDateAndTime - Retrieves the current date and time
+toolWeatherForecast - Retrieves the weather forecast.
+toolWalkForward - Makes the robot walk forward
+toolWalkBackward - Makes the robot walk backwards
+toolTurn - Turns the robot to a specific heading.
+toolShake - Shakes the robot.
+toolMoveRightLowerArm - Arm movement
+toolMoveLeftLowerArm - Arm movement
+toolMoveRightUpperArm - Arm movement
+toolMoveLeftUpperArm - Arm movement
 
 
