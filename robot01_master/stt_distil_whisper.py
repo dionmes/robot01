@@ -33,7 +33,6 @@ class STT:
 		# Engine State flags, loaded = model(s)
 		self.loaded = False
 		self.running = False
-		
 		self.brain = brain
 
 		# VAD Parameters
@@ -49,7 +48,7 @@ class STT:
 			print("Loading STT models")
 			
 			# Forcing the whole VAD model to CPU as ONNX and input are mixed
-			self.vad_model, _ = torch.hub.load(repo_or_dir="snakers4/silero-vad", model="silero_vad", force_reload=False,onnx=True,)
+			self.vad_model, _ = torch.hub.load(repo_or_dir="snakers4/silero-vad", model="silero_vad", force_reload=False, onnx=True)
 			
 			self.stt_model = AutoModelForSpeechSeq2Seq.from_pretrained(model_id, torch_dtype=torch_dtype, low_cpu_mem_usage=True, use_safetensors=True).to(device)
 			self.stt_model.to(device)
@@ -76,8 +75,16 @@ class STT:
 		speech_detected = False
 		
 		self.vad_model.reset_states() 
+	
+		# 25 samples to establish baseline	
+		for i in range(25):
+			data1, addr = sock.recvfrom(1024)  # Buffer size is 1024 bytes
+			data2, addr = sock.recvfrom(1024)  # Buffer size is 1024 bytes
+			raw_data = data1 + data2
+			np_data = np.frombuffer(raw_data, dtype=np.float32)
+			speech_probability = self.vad_model(torch.tensor(np_data).cpu(), 16000).cpu().item()
 
-		print("Ready to listen...")
+		print("Ready to listen...")		
 		
 		while self.running:
 			speech_probability = 0
@@ -92,7 +99,7 @@ class STT:
 				
 				# VAD
 				speech_probability = self.vad_model(torch.tensor(np_data).cpu(), 16000).cpu().item()
-				#print(speech_probability)
+				print(speech_probability)
 				
 			except Exception as e:
 				print("UDP audio receive & analysis error : ",type(e).__name__ )
@@ -123,7 +130,7 @@ class STT:
 					print("STT Detection ended")
 					speech_detected = False
 					nonsilence_counter = 0
-					#self.vad_model.reset_states() 
+					self.vad_model.reset_states() 
 
 					#Send robot.display action 
 					self.brain.robot.display.state(3)
@@ -144,6 +151,8 @@ class STT:
 			
 			pred_ids = self.stt_model.generate(input_features, **gen_kwargs)
 			transcription = self.processor.batch_decode(pred_ids, skip_special_tokens=True, decode_with_timestamps=gen_kwargs["return_timestamps"])
+
+			print(transcription)
 
 			try:
 				self.brain.stt_q.put_nowait(transcription)

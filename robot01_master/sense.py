@@ -54,8 +54,8 @@ class SENSE:
 				self.mic = False
 		else:
 	
-			threading.Thread(target=self.sense_http_call, args=["/control?setting=micstreaming&param=" + str(state)]).start()
 			self.mic = True if state == 1 else False
+			threading.Thread(target=self.sense_http_call, args=["/control?setting=micstreaming&param=" + str(state)]).start()
 
 		return self.mic
 							

@@ -37,6 +37,7 @@ class ROBOT:
 	def __init__(self, ip, sense_ip):
 
 		self.ip = ip
+		
 		# Prepare socket
 		self.audio_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
 		self.audio_socket.settimeout(5)
@@ -48,7 +49,10 @@ class ROBOT:
 		self.latency = 999
 		self.health = False
 		self.health_error = 0
-		
+
+		# Health check worker
+		threading.Thread(target=self.health_check_worker, daemon=True).start()
+
 		# Sense engine
 		self.sense = SENSE(sense_ip)
 
@@ -77,9 +81,6 @@ class ROBOT:
 		# Start output send worker
 		self.output_worker_running = True
 		threading.Thread(target=self.output_worker, daemon=True).start()
-
-		# Health check worker
-		threading.Thread(target=self.health_check_worker, daemon=True).start()
 
 		# tts engine
 		self.tts_engine = TTS(self.ip, self.output_q)

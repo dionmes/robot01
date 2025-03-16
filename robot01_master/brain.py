@@ -228,11 +228,11 @@ class BRAIN:
 					self.llm_mode = value
 
 			if item == "micstreaming":
-				on = int(value)
-				self.robot.sense.micstreaming(on)
-				if on == 1:
+				if value == 1:
+					self.robot.sense.micstreaming(1)
 					self.stt_engine.start()
 				else:
+					self.robot.sense.micstreaming(0)
 					self.stt_engine.stop()
 
 			if item == "micgain":
