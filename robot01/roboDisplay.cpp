@@ -452,7 +452,7 @@ void roboDisplay::chat() {
   roboDisplay::neutral();
   
   int randomNumber = random(chat_ani_LEN);
-  int speed = 150; // Higher is slower
+  int speed = 200; // Higher is slower
 
   while(true) {
     if (uxQueueMessagesWaiting(displayQueue) > 0 ) { return; }

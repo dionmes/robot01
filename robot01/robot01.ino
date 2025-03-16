@@ -25,7 +25,7 @@
 #define HTTPD_TASK_CORE 1
 #define HTTPD_TASK_PRIORITY 20
 
-#define TCP_AUDIO_TASK_CORE 1
+#define TCP_AUDIO_TASK_CORE 0
 #define TCP_AUDIO_TASK_PRIORITY 10
 
 #define I2S_AUDIO_TASK_CORE 0
@@ -37,7 +37,7 @@
 #define distance_sensor_TASK_CORE 1
 #define distance_sensor_PRIORITY 5
 
-#define display_TASK_CORE 1
+#define display_TASK_CORE 0
 #define display_TASK_PRIORITY 10
 
 #define body_TASK_CORE 1

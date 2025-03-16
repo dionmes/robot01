@@ -18,7 +18,7 @@
 #define I2S_WS GPIO_NUM_12
 #define I2S_OUT GPIO_NUM_11
 
-#define I2S_DMA_DESC_NUM 8
+#define I2S_DMA_DESC_NUM 6
 #define I2S_DMA_FRAME_NUM 256
 
 #define AUDIO_TCP_PORT 9000 // TCP port for audio 
@@ -199,19 +199,22 @@ IRAM_ATTR void tcp2audio::tcpReceiveAudioTask(void *pvParameters) {
         // Dynamically adjust delay/bandwidth based on free buffer space
         size_t free_size = xRingbufferGetCurFreeSize(audioRingBuffer);
         
-        Serial.printf("TCP Audio Ring buffer free space : %zu\n", free_size );
+        //Serial.printf("TCP Audio Ring buffer free space : %zu\n", free_size );
         TickType_t delay;
 
         if (free_size > (AUDIO_RINGBUFFER_SIZE * 0.90)) {
             delay = 5;  
         } else if (free_size > (AUDIO_RINGBUFFER_SIZE * 0.75)) {
+            delay = 10;  
+        } else if (free_size > (AUDIO_RINGBUFFER_SIZE * 0.50)) {
             delay = 25;  
         } else if (free_size < (AUDIO_RINGBUFFER_SIZE * 0.25)) {
             delay = 500; 
         } else {
             delay = 100; 
         }
-        Serial.printf("TCP Audio network delay : %zu\n", delay );
+        
+        //Serial.printf("TCP Audio network delay : %zu\n", delay );
       
         vTaskDelay(delay); 
 
