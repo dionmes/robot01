@@ -39,6 +39,8 @@ This is a hobby project on trying out ESP32 microcontrollers while at the same t
 - **Frontend**
 	- Simple HTML frontend based on PicoCSS and jQuery
 
+![Robot image](./img/webinterface1.png)
+
 ## Intro
 
 I am not a hardware guy, so the hardware is really a mess.
