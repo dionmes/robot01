@@ -6,7 +6,7 @@ A customized Robosapien Agentic / LLM powered robot.
 This is a hobby project on trying out ESP32 microcontrollers while at the same time looking at possibilities for hooking up (local) LLM's to control hardware via Agentic software (Langchain).
 
 - **Hardware**
-	- Robosapien V1
+	- Robosapien V1 (replaced all electronics, including motor control)
 	- Nvidia AGX Xavier 32GB (the brain)
 	- Unexpected Maker Feather S3 ESP32 (Main board)
 	- XIAO ESP32S3 Sense (camera/mic)
