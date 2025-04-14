@@ -1,6 +1,9 @@
 # Robot01
 A customized Robosapien Agentic / LLM powered robot.
 This is a hobby project to try out ESP32 microcontrollers while at the same time looking at possibilities for hooking up (local) LLM's to control hardware via Agentic software (Langchain).
+
+The result: https://www.youtube.com/channel/UCFBlAkuLyFENqB_hYmHARRQ
+
 ### Capabilities
 - Agentic AI control, can determine its own actions and movements based on the request.
 - Text to Speech / Speech to text
